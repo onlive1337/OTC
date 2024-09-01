@@ -15,8 +15,8 @@ Onlive Twilight Convert Bot - это мощный и удобный Telegram б�
 
 1. Клонируйте репозиторий:
    ```
-   git clone https://github.com/your-username/onlive-twilight-convert-bot.git
-   cd onlive-twilight-convert-bot
+   git clone https://github.com/onlive1337/OTC.git
+   cd OTC
    ```
 
 2. Создайте виртуальное окружение и активируйте его:

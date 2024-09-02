@@ -359,14 +359,24 @@ async def process_howto(callback_query: CallbackQuery):
     await callback_query.answer()
     user_lang = user_data.get_user_language(callback_query.from_user.id)
     howto_message = LANGUAGES[user_lang]['help'] + ', '.join(ACTIVE_CURRENCIES + user_data.get_user_crypto(callback_query.from_user.id))
-    await callback_query.message.answer(howto_message)
+    
+    kb = InlineKeyboardBuilder()
+    kb.button(text=LANGUAGES[user_lang]['back'], callback_data='back_to_main')
+    kb.adjust(1)
+    
+    await callback_query.message.edit_text(howto_message, reply_markup=kb.as_markup())
 
 async def process_feedback(callback_query: CallbackQuery):
     user_data.update_user_data(callback_query.from_user.id)
     await callback_query.answer()
     user_lang = user_data.get_user_language(callback_query.from_user.id)
     feedback_message = LANGUAGES[user_lang]['feedback']
-    await callback_query.message.answer(feedback_message)
+    
+    kb = InlineKeyboardBuilder()
+    kb.button(text=LANGUAGES[user_lang]['back'], callback_data='back_to_main')
+    kb.adjust(1)
+    
+    await callback_query.message.edit_text(feedback_message, reply_markup=kb.as_markup())
 
 async def process_settings(callback_query: CallbackQuery, state: FSMContext):
     try:
@@ -379,6 +389,7 @@ async def process_settings(callback_query: CallbackQuery, state: FSMContext):
         kb.button(text=LANGUAGES[user_lang]['cryptocurrencies'], callback_data="show_crypto")
         kb.button(text=LANGUAGES[user_lang]['language'], callback_data="change_language")
         kb.button(text=LANGUAGES[user_lang]['save_button'], callback_data="save_settings")
+        kb.button(text=LANGUAGES[user_lang]['back'], callback_data="back_to_main")
         kb.adjust(2, 1, 1)
         
         await callback_query.message.edit_text(LANGUAGES[user_lang]['settings'], reply_markup=kb.as_markup())
@@ -855,7 +866,20 @@ async def view_changelog(callback_query: CallbackQuery):
 
 
 async def back_to_main(callback_query: CallbackQuery):
-    await cmd_start(callback_query.message)
+    user_data.update_user_data(callback_query.from_user.id)
+    user_lang = user_data.get_user_language(callback_query.from_user.id)
+    
+    kb = InlineKeyboardBuilder()
+    kb.button(text=LANGUAGES[user_lang]['help_button'], callback_data='howto')
+    kb.button(text=LANGUAGES[user_lang]['news_button'], url="https://t.me/onswixdev")
+    kb.button(text=LANGUAGES[user_lang]['feedback_button'], callback_data='feedback')
+    kb.button(text=LANGUAGES[user_lang]['settings_button'], callback_data='settings')
+    kb.button(text=LANGUAGES[user_lang]['about_button'], callback_data='about')
+    kb.adjust(2)
+    
+    welcome_message = LANGUAGES[user_lang]['welcome']
+    
+    await callback_query.message.edit_text(welcome_message, reply_markup=kb.as_markup())
 
 
 async def main():

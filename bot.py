@@ -110,7 +110,7 @@ load_dotenv()
 BOT_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')
 ADMIN_IDS = [810587766] 
 USER_DATA_FILE = 'user_data.json'
-CURRENT_VERSION = "0.1.0    "
+CURRENT_VERSION = "0.2.0    "
 
 
 ALL_CURRENCIES = {

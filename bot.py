@@ -165,7 +165,7 @@ class UserData:
                 return defaultdict(lambda: {
                     "interactions": 0,
                     "last_seen": None,
-                    "selected_crypto": CRYPTO_CURRENCIES,  # Initialize with all cryptocurrencies
+                    "selected_crypto": CRYPTO_CURRENCIES,  
                     "selected_currencies": ACTIVE_CURRENCIES[:5],
                     "language": "ru",
                     "first_seen": self.bot_launch_date
@@ -174,7 +174,7 @@ class UserData:
             return defaultdict(lambda: {
                 "interactions": 0,
                 "last_seen": None,
-                "selected_crypto": CRYPTO_CURRENCIES,  # Initialize with all cryptocurrencies
+                "selected_crypto": CRYPTO_CURRENCIES,  
                 "selected_currencies": ACTIVE_CURRENCIES[:5],
                 "language": "ru",
                 "first_seen": self.bot_launch_date
@@ -261,13 +261,11 @@ async def get_exchange_rates() -> Dict[str, float]:
 
         rates = {}
         async with aiohttp.ClientSession() as session:
-            # Fetch fiat rates from ExchangeRate-API
             async with session.get('https://open.er-api.com/v6/latest/USD') as response:
                 fiat_data = await response.json()
             if fiat_data['result'] == 'success':
                 rates.update(fiat_data['rates'])
 
-            # Fetch crypto rates from CoinGecko
             crypto_ids = "bitcoin,ethereum,tether,binancecoin,ripple,cardano,solana,polkadot,dogecoin,matic-network,the-open-network"
             async with session.get(f'https://api.coingecko.com/api/v3/simple/price?ids={crypto_ids}&vs_currencies=usd') as response:
                 crypto_data = await response.json()
@@ -281,21 +279,18 @@ async def get_exchange_rates() -> Dict[str, float]:
                 if id in crypto_data:
                     rates[crypto] = 1 / crypto_data[id]['usd']
 
-            # Fetch additional crypto rates from CryptoCompare
             async with session.get('https://min-api.cryptocompare.com/data/pricemulti?fsyms=NOT,DUREV&tsyms=USD') as response:
                 additional_crypto_data = await response.json()
             for crypto in ['NOT', 'DUREV']:
                 if crypto in additional_crypto_data:
                     rates[crypto] = 1 / additional_crypto_data[crypto]['USD']
 
-        # Check for missing currencies and fetch from alternative sources if needed
         all_currencies = set(ACTIVE_CURRENCIES + CRYPTO_CURRENCIES)
         missing_currencies = all_currencies - set(rates.keys())
         
         if missing_currencies:
             logger.warning(f"Missing currencies: {missing_currencies}. Attempting to fetch from alternative sources.")
             
-            # Attempt to fetch missing fiat currencies from an alternative API (e.g., ExchangeRates API)
             missing_fiat = missing_currencies.intersection(set(ACTIVE_CURRENCIES))
             if missing_fiat:
                 async with session.get(f'https://api.exchangerate-api.com/v4/latest/USD') as response:
@@ -304,7 +299,6 @@ async def get_exchange_rates() -> Dict[str, float]:
                     if currency in alt_fiat_data['rates']:
                         rates[currency] = alt_fiat_data['rates'][currency]
             
-            # Attempt to fetch missing crypto currencies from an alternative API (e.g., CoinCap)
             missing_crypto = missing_currencies.intersection(set(CRYPTO_CURRENCIES))
             if missing_crypto:
                 for crypto in missing_crypto:
@@ -347,7 +341,7 @@ async def cmd_start(message: Message):
     kb.button(text=LANGUAGES[user_lang]['news_button'], url="https://t.me/onswixdev")
     kb.button(text=LANGUAGES[user_lang]['feedback_button'], callback_data='feedback')
     kb.button(text=LANGUAGES[user_lang]['settings_button'], callback_data='settings')
-    kb.button(text=LANGUAGES[user_lang]['about_button'], callback_data='about')  # Новая кнопка
+    kb.button(text=LANGUAGES[user_lang]['about_button'], callback_data='about')
     kb.adjust(2)
     
     welcome_message = LANGUAGES[user_lang]['welcome']
@@ -444,7 +438,7 @@ async def show_crypto(callback_query: CallbackQuery):
         kb.button(text=f"{ALL_CURRENCIES[crypto]} {crypto} {status}", callback_data=f"toggle_crypto_{crypto}")
     
     kb.button(text=LANGUAGES[user_lang]['back_to_settings'], callback_data="back_to_settings")
-    kb.adjust(2)  # Adjust to show two buttons per row
+    kb.adjust(2)
     
     await callback_query.message.edit_text(LANGUAGES[user_lang]['cryptocurrencies'], reply_markup=kb.as_markup())
 
@@ -706,7 +700,6 @@ async def handle_message(message: types.Message):
             await cmd_stats(message)
         return
 
-    # Try to extract amount and currency using regular expression
     match = re.match(r'^(\d+(?:\.\d+)?)\s*([A-Z]{3}|\$|€|£|¥|₽|₸|₣|₹|₺|₴|₿)$', message.text.upper())
     if match:
         try:
@@ -717,7 +710,6 @@ async def handle_message(message: types.Message):
             await message.answer(LANGUAGES[user_lang].get('number_too_large', "The number is too large to process."))
             return
     else:
-        # If no match, try to parse the message using W2N and M2N
         try:
             parsed = m2n(message.text)
             amount = parsed['amount']
@@ -740,16 +732,16 @@ async def handle_message(message: types.Message):
         logger.info(f"No valid currency conversion request found: {message.text} from user {user_id}")
 
 def format_large_number(number, is_crypto=False):
-    if abs(number) > 1e100:  # Проверка на слишком большие числа
+    if abs(number) > 1e100:  
         return "Число слишком большое"
     
     if is_crypto:
         if abs(number) < 1e-8:
-            return f"{number:.8e}"  # Научная нотация для очень маленьких чисел
+            return f"{number:.8e}"
         elif abs(number) < 1:
-            return f"{number:.8f}".rstrip('0').rstrip('.')  # До 8 знаков после запятой, убираем лишние нули
+            return f"{number:.8f}".rstrip('0').rstrip('.')  
         elif abs(number) < 1000:
-            return f"{number:.4f}".rstrip('0').rstrip('.')  # До 4 знаков после запятой
+            return f"{number:.4f}".rstrip('0').rstrip('.')  
         elif abs(number) >= 1e15:
             exponent = int(math.log10(abs(number)))
             mantissa = number / (10 ** exponent)
@@ -758,7 +750,7 @@ def format_large_number(number, is_crypto=False):
             return f"{number:,.2f}"
     else:
         if abs(number) < 0.01:
-            return f"{number:.4f}".rstrip('0').rstrip('.')  # До 4 знаков после запятой, убираем лишние нули
+            return f"{number:.4f}".rstrip('0').rstrip('.')  
         elif abs(number) >= 1e15:
             exponent = int(math.log10(abs(number)))
             mantissa = number / (10 ** exponent)

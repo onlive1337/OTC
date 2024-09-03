@@ -123,5 +123,6 @@ logs/
 *.log
 
 # Bot-specific files
+chat_data.json
 user_data.json
 logs.txt

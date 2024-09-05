@@ -178,14 +178,15 @@ async def get_exchange_rates() -> Dict[str, float]:
             if fiat_data['result'] == 'success':
                 rates.update(fiat_data['rates'])
 
-            crypto_ids = "bitcoin,ethereum,tether,binancecoin,ripple,cardano,solana,polkadot,dogecoin,matic-network,the-open-network"
+            crypto_ids = "bitcoin,ethereum,tether,binancecoin,ripple,cardano,solana,polkadot,dogecoin,matic-network,the-open-network,litecoin"
             async with session.get(f'https://api.coingecko.com/api/v3/simple/price?ids={crypto_ids}&vs_currencies=usd') as response:
                 crypto_data = await response.json()
             
             crypto_mapping = {
                 'BTC': 'bitcoin', 'ETH': 'ethereum', 'USDT': 'tether', 'BNB': 'binancecoin',
                 'XRP': 'ripple', 'ADA': 'cardano', 'SOL': 'solana', 'DOT': 'polkadot',
-                'DOGE': 'dogecoin', 'MATIC': 'matic-network', 'TON': 'the-open-network'
+                'DOGE': 'dogecoin', 'MATIC': 'matic-network', 'TON': 'the-open-network',
+                'LTC': 'litecoin'
             }
             for crypto, id in crypto_mapping.items():
                 if id in crypto_data:

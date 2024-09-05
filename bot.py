@@ -670,9 +670,11 @@ async def inline_query_handler(query: InlineQuery):
         
 
 def parse_amount_and_currency(text: str) -> Tuple[Optional[float], Optional[str]]:
-    text = text.lower().replace(',', '.')
+    text = text.lower().replace(',', '.').replace('$', 'usd').replace('€', 'eur').replace('₽', 'rub')
     
     multipliers = {
+        'к': 1000,
+        'kk': 1000000,
         'к': 1000,
         'кк': 1000000,
         'м': 1000000,
@@ -680,26 +682,35 @@ def parse_amount_and_currency(text: str) -> Tuple[Optional[float], Optional[str]
         'млрд': 1000000000
     }
     
-    pattern = r'^(\d+(?:\.\d+)?)\s*(к|кк|м|млн|млрд)?\s*(.+)?$'
+    pattern = r'^(\d+(?:\.\d+)?)\s*(к|кк|м|млн|млрд)?\s*([a-zA-Zа-яА-Я]+)$|^([a-zA-Zа-яА-Я]+)\s*(\d+(?:\.\d+)?)\s*(к|кк|м|млн|млрд)?$'
     match = re.match(pattern, text)
     
     if not match:
         return None, None
     
-    amount_str, multiplier, currency_str = match.groups()
+    groups = match.groups()
+    if groups[0] is not None:
+        amount_str, multiplier, currency_str = groups[:3]
+    else:
+        currency_str, amount_str, multiplier = groups[3:]
+    
     amount = float(amount_str)
     
     if multiplier:
         amount *= multipliers.get(multiplier, 1)
     
-    if not currency_str:
-        return amount, None
-    
+    currency = None
     for abbr, code in CURRENCY_ABBREVIATIONS.items():
         if abbr in currency_str:
-            return amount, code
+            currency = code
+            break
     
-    return amount, currency_str.strip().upper()
+    if not currency:
+        currency = currency_str.strip().upper()
+        if currency not in ALL_CURRENCIES:
+            return None, None
+    
+    return amount, currency
 
 async def handle_all_messages(message: types.Message, bot: Bot):
     logger.info(f"Received message: {message.text} from user {message.from_user.id} in chat {message.chat.id}")
@@ -753,17 +764,9 @@ async def handle_message(message: types.Message):
 
     amount, currency = parse_amount_and_currency(message.text)
 
-    if amount is not None:
-        if currency is not None:
-            if currency in ALL_CURRENCIES:
-                logger.info(f"Valid conversion request: {amount} {currency} from user {user_id}")
-                await process_conversion(message, amount, currency)
-            else:
-                logger.info(f"Invalid currency: {currency} from user {user_id}")
-                await message.reply(LANGUAGES[user_lang]['invalid_currency'].format(currency=currency))
-        else:
-            logger.info(f"Missing currency in request: {message.text} from user {user_id}")
-            await message.reply(LANGUAGES[user_lang]['invalid_input'])
+    if amount is not None and currency is not None:
+        logger.info(f"Valid conversion request: {amount} {currency} from user {user_id}")
+        await process_conversion(message, amount, currency)
     else:
         logger.info(f"Ignored message: {message.text} from user {user_id}")
 

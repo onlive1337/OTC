@@ -6,7 +6,7 @@ load_dotenv()
 BOT_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')
 ADMIN_IDS = [810587766]
 USER_DATA_FILE = 'user_data.json'
-CURRENT_VERSION = "0.9.3"
+CURRENT_VERSION = "0.9.4"
 
 CACHE_EXPIRATION_TIME = 600
 
@@ -40,5 +40,4 @@ CURRENCY_ABBREVIATIONS = {
     'доллар': 'USD',
     'долларов': 'USD',
     'доллары': 'USD',
-    '$': 'USD'
 }

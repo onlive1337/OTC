@@ -1,14 +1,13 @@
 
 
-[0.9.3] - 2024-09-05
+[0.9.4] - 2024-09-05
 RU:
 
-Добавлено:
+Исправлено: 
 
-Кнопка удаления как и в лс бота так и в чатах
+Тригер бота на сообщения по типу "10 денег"
 
 EN:
 
-Added:
-
-Delete button in both bot dm and chat
+Fixed: 
+Bot Trigger on “10 money” type messages

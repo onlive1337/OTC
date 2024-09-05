@@ -860,8 +860,11 @@ async def process_conversion(message: types.Message, amount: float, from_currenc
             response += f"{LANGUAGES[user_lang]['cryptocurrencies_output']}\n"
             response += "\n".join(crypto_conversions)
         
+        kb = InlineKeyboardBuilder()
+        kb.button(text=LANGUAGES[user_lang].get('delete_button', "Delete"), callback_data="delete_conversion")
+        
         logger.info(f"Sending conversion response for {amount} {from_currency} to user {user_id} in chat {chat_id}")
-        await message.answer(response)
+        await message.answer(response, reply_markup=kb.as_markup())
     except OverflowError:
         await message.answer(LANGUAGES[user_lang].get('number_too_large', "The number is too large to process."))
     except Exception as e:
@@ -869,6 +872,9 @@ async def process_conversion(message: types.Message, amount: float, from_currenc
         logger.exception("Full traceback:")
         await message.answer(LANGUAGES[user_lang]['error'])
 
+async def delete_conversion_message(callback_query: CallbackQuery):
+    await callback_query.message.delete()
+    await callback_query.answer()
 
 async def process_about(callback_query: CallbackQuery):
     user_data.update_user_data(callback_query.from_user.id)
@@ -987,6 +993,9 @@ async def process_callback(callback_query: CallbackQuery, state: FSMContext):
         await process_about(callback_query)
     elif action == 'view':
         await view_changelog(callback_query)
+    elif action == 'delete':
+        if callback_query.data == 'delete_conversion':
+            await delete_conversion_message(callback_query)
 
 async def main():
     bot = Bot(token=BOT_TOKEN)
@@ -1020,6 +1029,7 @@ async def main():
     dp.callback_query.register(save_chat_settings, F.data.startswith("save_chat_settings_"))
     dp.callback_query.register(back_to_settings, F.data == "back_to_settings")
     dp.callback_query.register(back_to_chat_settings, F.data.startswith("back_to_chat_settings_"))
+    dp.callback_query.register(delete_conversion_message, F.data == "delete_conversion")
     dp.callback_query.register(process_callback)
     
     dp.inline_query.register(inline_query_handler)

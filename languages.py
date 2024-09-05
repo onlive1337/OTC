@@ -72,6 +72,7 @@ LANGUAGES = {
         'current_version': "Текущая версия:",
         'view_changelog': "Посмотреть список изменений",
         'invalid_currency': "Извините, я не могу распознать валюту '{currency}'. Пожалуйста, используйте стандартные коды валют, например: USD, EUR, RUB.",
+        'delete_button': "Удалить",
     },
     'en': {
 'welcome': """Hello! I'm a currency conversion bot. 🌍💱
@@ -146,5 +147,6 @@ If you have any questions, feel free to contact us via feedback!""",
         'current_version': "Current version:",
         'view_changelog': "View changelog",
         'invalid_currency': "Sorry, I can't recognize the currency '{currency}'. Please use standard currency codes, for example: USD, EUR, RUB.",
+        'delete_button': "Delete",
     }
 }

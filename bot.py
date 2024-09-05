@@ -765,8 +765,7 @@ async def handle_message(message: types.Message):
             logger.info(f"Missing currency in request: {message.text} from user {user_id}")
             await message.reply(LANGUAGES[user_lang]['invalid_input'])
     else:
-        logger.info(f"No valid currency conversion request found: {message.text} from user {user_id}")
-        await message.reply(LANGUAGES[user_lang]['invalid_input'])
+        logger.info(f"Ignored message: {message.text} from user {user_id}")
 
 def format_large_number(number, is_crypto=False):
     if abs(number) > 1e100:  

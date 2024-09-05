@@ -1,7 +1,45 @@
 LANGUAGES = {
     'ru': {
-        'welcome': "Добро пожаловать в Onlive Twilight Convert bot! 🌍💱\n\nДля конвертации валюты просто введите сумму и код валюты. Например:\n100 USD\n5000 RUB\n750 EUR\n\nВы также можете использовать этот бот inline в любом чате, набрав @onlive_twilight_bot, за которым следует сумма и валюта.\n\nИспользуйте кнопки ниже для получения дополнительной информации или настройки бота.",
-        'help': "🤖 Как использовать бота:\n\n1. Для простой конвертации введите сумму и код валюты, например: 100 USD\n2. Для конвертации между двумя конкретными валютами используйте формат: 100 USD EUR\n3. Вы можете использовать бота inline в любом чате, набрав @onlive_twilight_bot 100 USD\n\nПоддерживаемые валюты: ",
+'welcome': """Привет! Я бот для конвертации валют. 🌍💱
+
+Вот что я умею:
+- Конвертировать валюты: просто напишите сумму и код валюты (например, 100 USD, 5000 RUB, 750 EUR)
+- Работаю с фиатными валютами и криптовалютами
+- Работаю в инлайн-режиме: просто упомяните меня в любом чате @your_bot_username
+- Поддерживаю групповые чаты: добавьте меня в группу для быстрой конвертации (нужно выдать права администратора)
+- Настройка валют: выберите валюты, которые вы хотите видеть в результатах
+- Мультиязычность: поддержка русского и английского языков
+
+Используйте кнопки ниже для дополнительной информации и настройки.""",
+
+'help': """Как пользоваться ботом:
+
+1. Конвертация валют:
+   • Напишите сумму и код валюты, например: 100 USD, 5000 RUB, 750 EUR
+
+2. Поддерживаемые валюты:
+   • Фиатные валюты: USD, EUR, RUB, GBP, JPY, CNY, и другие
+   • Криптовалюты: BTC, ETH, USDT, BNB, XRP, и другие
+
+3. Инлайн-режим:
+   • Упомяните бота в любом чате: @your_bot_username 100 USD
+
+4. Групповые чаты:
+   • Добавьте бота в группу для быстрой конвертации (нужно выдать права администратора)
+   • Настройте валюты для группы с помощью команды /settings (только администратор может менять)
+
+5. Настройки:
+   • Используйте /settings или кнопку "Настройки" в главном меню
+   • Выберите предпочитаемые валюты для отображения
+   • Измените язык интерфейса
+
+6. Дополнительно:
+   • Новости и обновления: подпишитесь на наш канал
+   • Обратная связь: используйте кнопку "Обратная связь"
+   • Информация о боте: кнопка "О боте" в главном меню
+
+Если у вас остались вопросы, не стесняйтесь обращаться к нам через обратную связь!""",
+
         'feedback': "📬 Обратная связь:\n\nМы всегда рады вашим предложениям и замечаниям!\nCвяжитесь со мной в Telegram: @onswix",
         'settings': "Выберите раздел настроек:",
         'currencies': "Выберите валюты:",
@@ -33,10 +71,49 @@ LANGUAGES = {
         'about_message': "Информация о боте Onlive Twilight Convert",
         'current_version': "Текущая версия:",
         'view_changelog': "Посмотреть список изменений",
+        'invalid_currency': "Извините, я не могу распознать валюту '{currency}'. Пожалуйста, используйте стандартные коды валют, например: USD, EUR, RUB.",
     },
     'en': {
-        'welcome': "Welcome to Onlive Twilight Convert bot! 🌍💱\n\nTo convert currency, simply enter an amount and currency code. For example:\n100 USD\n5000 RUB\n750 EUR\n\nYou can also use this bot inline in any chat by typing @onlive_twilight_bot followed by an amount and currency.\n\nUse the buttons below for more information or to configure the bot.",
-        'help': "🤖 How to use the bot:\n\n1. For simple conversion, enter an amount and currency code, e.g.: 100 USD\n2. To convert between two specific currencies, use the format: 100 USD EUR\n3. You can use the bot inline in any chat by typing @onlive_twilight_bot 100 USD\n\nSupported currencies: ",
+'welcome': """Hello! I'm a currency conversion bot. 🌍💱
+
+Here's what I can do:
+- Convert currencies: just type an amount and currency code (e.g., 100 USD, 5000 RUB, 750 EUR)
+- Work with fiat currencies and cryptocurrencies
+- Work in inline mode: just mention me in any chat @your_bot_username
+- Support group chats: add me to a group for quick conversions (need to give admin rights)
+- Currency settings: choose which currencies you want to see in results
+- Multilingual: support for Russian and English languages
+
+Use the buttons below for more information and settings.""",
+
+'help': """How to use the bot:
+
+1. Currency conversion:
+   • Type an amount and currency code, e.g.: 100 USD, 5000 RUB, 750 EUR
+
+2. Supported currencies:
+   • Fiat currencies: USD, EUR, RUB, GBP, JPY, CNY, and others
+   • Cryptocurrencies: BTC, ETH, USDT, BNB, XRP, and others
+
+3. Inline mode:
+   • Mention the bot in any chat: @your_bot_username 100 USD
+
+4. Group chats:
+   • Add the bot to a group for quick conversions and give admin rights (need to give admin rights)
+   • Configure currencies for the group using the /settings command (only administrator can do this)
+
+5. Settings:
+   • Use /settings or the "Settings" button in the main menu
+   • Select preferred currencies to display
+   • Change the interface language
+
+6. Additional features:
+   • News and updates: subscribe to our channel
+   • Feedback: use the "Feedback" button
+   • Bot information: "About" button in the main menu
+
+If you have any questions, feel free to contact us via feedback!""",
+
         'feedback': "📬 Feedback:\n\nWe always appreciate your suggestions and comments!\nContact me on Telegram: @onswix",
         'settings': "Choose a settings section:",
         'currencies': "Select currencies:",
@@ -68,5 +145,6 @@ LANGUAGES = {
         'about_message': "About Onlive Twilight Convert bot",
         'current_version': "Current version:",
         'view_changelog': "View changelog",
+        'invalid_currency': "Sorry, I can't recognize the currency '{currency}'. Please use standard currency codes, for example: USD, EUR, RUB.",
     }
 }

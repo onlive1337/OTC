@@ -28,3 +28,13 @@ CURRENCY_SYMBOLS = {
     '$': 'USD', '€': 'EUR', '£': 'GBP', '¥': 'JPY', '₽': 'RUB', '₣': 'CHF', '₹': 'INR', '₺': 'TRY',
     '₴': 'UAH', '₿': 'BTC', 'сум': 'UZS', 'грн': 'UAH', '₸': 'KZT'
 }
+
+CURRENCY_ABBREVIATIONS = {
+    'сум': 'UZS',
+    'лир': 'TRY',
+    'лиры': 'TRY',
+    'лира': 'TRY',
+    'гривны': 'UAH',
+    'грн': 'UAH',
+    'тон': 'TON',
+}

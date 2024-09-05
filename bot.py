@@ -18,9 +18,10 @@ from aiogram.fsm.state import State, StatesGroup
 from aiogram.filters import Command, CommandStart
 from word2number import w2n
 from money2number import m2n
+from typing import Tuple, Optional
 from config import (
     BOT_TOKEN, ADMIN_IDS, USER_DATA_FILE, CURRENT_VERSION, CACHE_EXPIRATION_TIME,
-    ALL_CURRENCIES, CRYPTO_CURRENCIES, ACTIVE_CURRENCIES, CURRENCY_SYMBOLS
+    ALL_CURRENCIES, CRYPTO_CURRENCIES, ACTIVE_CURRENCIES, CURRENCY_SYMBOLS, CURRENCY_ABBREVIATIONS
 )
 from languages import LANGUAGES
 
@@ -354,6 +355,9 @@ async def toggle_chat_crypto(callback_query: CallbackQuery):
         chat_crypto.append(crypto)
     
     user_data.set_chat_crypto(chat_id, chat_crypto)
+    
+    user_data.save_chat_data()
+    
     await show_chat_crypto(callback_query)
 
 async def save_chat_settings(callback_query: CallbackQuery):
@@ -367,7 +371,8 @@ async def process_howto(callback_query: CallbackQuery):
     user_data.update_user_data(callback_query.from_user.id)
     await callback_query.answer()
     user_lang = user_data.get_user_language(callback_query.from_user.id)
-    howto_message = LANGUAGES[user_lang]['help'] + ', '.join(ACTIVE_CURRENCIES + user_data.get_user_crypto(callback_query.from_user.id))
+    
+    howto_message = LANGUAGES[user_lang]['help']
     
     kb = InlineKeyboardBuilder()
     kb.button(text=LANGUAGES[user_lang]['back'], callback_data='back_to_main')
@@ -664,6 +669,37 @@ async def inline_query_handler(query: InlineQuery):
         await query.answer(results=[error_result], cache_time=1)
         
 
+def parse_amount_and_currency(text: str) -> Tuple[Optional[float], Optional[str]]:
+    text = text.lower().replace(',', '.')
+    
+    multipliers = {
+        'к': 1000,
+        'кк': 1000000,
+        'м': 1000000,
+        'млн': 1000000,
+        'млрд': 1000000000
+    }
+    
+    pattern = r'^(\d+(?:\.\d+)?)\s*(к|кк|м|млн|млрд)?\s*(.+)?$'
+    match = re.match(pattern, text)
+    
+    if not match:
+        return None, None
+    
+    amount_str, multiplier, currency_str = match.groups()
+    amount = float(amount_str)
+    
+    if multiplier:
+        amount *= multipliers.get(multiplier, 1)
+    
+    if not currency_str:
+        return amount, None
+    
+    for abbr, code in CURRENCY_ABBREVIATIONS.items():
+        if abbr in currency_str:
+            return amount, code
+    
+    return amount, currency_str.strip().upper()
 
 async def handle_all_messages(message: types.Message, bot: Bot):
     logger.info(f"Received message: {message.text} from user {message.from_user.id} in chat {message.chat.id}")
@@ -715,36 +751,22 @@ async def handle_message(message: types.Message):
             await cmd_stats(message)
         return
 
-    match = re.match(r'^(\d+(?:\.\d+)?)\s*([A-Z]{3}|\$|€|£|¥|₽|₸|₣|₹|₺|₴|₿)$', message.text.upper())
-    if match:
-        try:
-            amount = float(match.group(1))
-            currency_input = match.group(2)
-            from_currency = CURRENCY_SYMBOLS.get(currency_input, currency_input)
-        except ValueError:
-            await message.answer(LANGUAGES[user_lang].get('number_too_large', "The number is too large to process."))
-            return
-    else:
-        try:
-            parsed = m2n(message.text)
-            amount = parsed['amount']
-            from_currency = parsed['currency']
-        except:
-            try:
-                words = message.text.split()
-                amount = w2n.word_to_num(' '.join(words[:-1]))
-                from_currency = words[-1].upper()
-                if from_currency not in ALL_CURRENCIES:
-                    raise ValueError("Invalid currency")
-            except:
-                logger.info(f"No valid currency conversion request found: {message.text} from user {user_id}")
-                return
+    amount, currency = parse_amount_and_currency(message.text)
 
-    if amount and from_currency and from_currency in ALL_CURRENCIES:
-        logger.info(f"Valid conversion request: {amount} {from_currency} from user {user_id}")
-        await process_conversion(message, amount, from_currency)
+    if amount is not None:
+        if currency is not None:
+            if currency in ALL_CURRENCIES:
+                logger.info(f"Valid conversion request: {amount} {currency} from user {user_id}")
+                await process_conversion(message, amount, currency)
+            else:
+                logger.info(f"Invalid currency: {currency} from user {user_id}")
+                await message.reply(LANGUAGES[user_lang]['invalid_currency'].format(currency=currency))
+        else:
+            logger.info(f"Missing currency in request: {message.text} from user {user_id}")
+            await message.reply(LANGUAGES[user_lang]['invalid_input'])
     else:
         logger.info(f"No valid currency conversion request found: {message.text} from user {user_id}")
+        await message.reply(LANGUAGES[user_lang]['invalid_input'])
 
 def format_large_number(number, is_crypto=False):
     if abs(number) > 1e100:  

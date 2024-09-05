@@ -37,4 +37,6 @@ CURRENCY_ABBREVIATIONS = {
     'гривны': 'UAH',
     'грн': 'UAH',
     'тон': 'TON',
+    'доллар': 'USD',
+    'долларов': 'USD',
 }

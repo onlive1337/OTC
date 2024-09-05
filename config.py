@@ -39,5 +39,6 @@ CURRENCY_ABBREVIATIONS = {
     'тон': 'TON',
     'доллар': 'USD',
     'долларов': 'USD',
-    'доллары': 'USD'
+    'доллары': 'USD',
+    '$': 'USD'
 }

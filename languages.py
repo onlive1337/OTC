@@ -5,7 +5,7 @@ LANGUAGES = {
 Вот что я умею:
 - Конвертировать валюты: просто напишите сумму и код валюты (например, 100 USD, 5000 RUB, 750 EUR)
 - Работаю с фиатными валютами и криптовалютами
-- Работаю в инлайн-режиме: просто упомяните меня в любом чате @your_bot_username
+- Работаю в инлайн-режиме: просто упомяните меня в любом чате @onlive_twilight_bot
 - Поддерживаю групповые чаты: добавьте меня в группу для быстрой конвертации (нужно выдать права администратора)
 - Настройка валют: выберите валюты, которые вы хотите видеть в результатах
 - Мультиязычность: поддержка русского и английского языков
@@ -22,7 +22,7 @@ LANGUAGES = {
    • Криптовалюты: BTC, ETH, USDT, BNB, XRP, и другие
 
 3. Инлайн-режим:
-   • Упомяните бота в любом чате: @your_bot_username 100 USD
+   • Упомяните бота в любом чате: @onlive_twilight_bot 100 USD
 
 4. Групповые чаты:
    • Добавьте бота в группу для быстрой конвертации (нужно выдать права администратора)
@@ -79,7 +79,7 @@ LANGUAGES = {
 Here's what I can do:
 - Convert currencies: just type an amount and currency code (e.g., 100 USD, 5000 RUB, 750 EUR)
 - Work with fiat currencies and cryptocurrencies
-- Work in inline mode: just mention me in any chat @your_bot_username
+- Work in inline mode: just mention me in any chat @onlive_twilight_bot
 - Support group chats: add me to a group for quick conversions (need to give admin rights)
 - Currency settings: choose which currencies you want to see in results
 - Multilingual: support for Russian and English languages
@@ -96,7 +96,7 @@ Use the buttons below for more information and settings.""",
    • Cryptocurrencies: BTC, ETH, USDT, BNB, XRP, and others
 
 3. Inline mode:
-   • Mention the bot in any chat: @your_bot_username 100 USD
+   • Mention the bot in any chat: @onlive_twilight_bot 100 USD
 
 4. Group chats:
    • Add the bot to a group for quick conversions and give admin rights (need to give admin rights)

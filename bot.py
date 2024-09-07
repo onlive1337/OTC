@@ -46,6 +46,22 @@ class UserData:
         except (FileNotFoundError, json.JSONDecodeError):
             return {}
 
+    def get_user_quote_format(self, user_id):
+        return self.user_data[str(user_id)].get("use_quote_format", True)
+
+    def set_user_quote_format(self, user_id, use_quote):
+        self.user_data[str(user_id)]["use_quote_format"] = use_quote
+        self.save_user_data()
+
+    def get_chat_quote_format(self, chat_id):
+        return self.chat_data.get(str(chat_id), {}).get("use_quote_format", True)
+
+    def set_chat_quote_format(self, chat_id, use_quote):
+        if str(chat_id) not in self.chat_data:
+            self.chat_data[str(chat_id)] = {}
+        self.chat_data[str(chat_id)]["use_quote_format"] = use_quote
+        self.save_chat_data()
+
     def save_chat_data(self):
         with open('chat_data.json', 'w') as file:
             json.dump(self.chat_data, file, indent=4)
@@ -78,7 +94,8 @@ class UserData:
                     "selected_crypto": CRYPTO_CURRENCIES,  
                     "selected_currencies": ACTIVE_CURRENCIES[:5],
                     "language": "ru",
-                    "first_seen": self.bot_launch_date
+                    "first_seen": self.bot_launch_date,
+                    "use_quote_format": True
                 }, data)
         except (FileNotFoundError, json.JSONDecodeError):
             return defaultdict(lambda: {
@@ -87,7 +104,8 @@ class UserData:
                 "selected_crypto": CRYPTO_CURRENCIES,  
                 "selected_currencies": ACTIVE_CURRENCIES[:5],
                 "language": "ru",
-                "first_seen": self.bot_launch_date
+                "first_seen": self.bot_launch_date,
+                "use_quote_format": True
             })
 
     def get_user_currencies(self, user_id):
@@ -272,10 +290,15 @@ async def cmd_settings(message: Message):
             kb = InlineKeyboardBuilder()
             kb.button(text=LANGUAGES[user_lang]['currencies'], callback_data=f"show_chat_currencies_{chat_id}_0")
             kb.button(text=LANGUAGES[user_lang]['cryptocurrencies'], callback_data=f"show_chat_crypto_{chat_id}")
+            kb.button(text=LANGUAGES[user_lang]['quote_format'], callback_data=f"toggle_chat_quote_format_{chat_id}")
             kb.button(text=LANGUAGES[user_lang]['save_button'], callback_data=f"save_chat_settings_{chat_id}")
-            kb.adjust(2, 1)
+            kb.adjust(2, 1, 1)
             
-            await message.answer(LANGUAGES[user_lang]['settings'], reply_markup=kb.as_markup())
+            use_quote = user_data.get_chat_quote_format(chat_id)
+            quote_status = LANGUAGES[user_lang]['on'] if use_quote else LANGUAGES[user_lang]['off']
+            settings_text = f"{LANGUAGES[user_lang]['settings']}\n\n{LANGUAGES[user_lang]['quote_format_status']}: {quote_status}"
+            
+            await message.answer(settings_text, reply_markup=kb.as_markup())
         else:
             await message.answer("Только администраторы могут изменять настройки чата.")
 
@@ -392,33 +415,38 @@ async def process_feedback(callback_query: CallbackQuery):
     await callback_query.message.edit_text(feedback_message, reply_markup=kb.as_markup())
 
 async def process_settings(callback_query: CallbackQuery, state: FSMContext):
-    try:
-        user_data.update_user_data(callback_query.from_user.id)
-        await callback_query.answer()
-        
-        user_lang = user_data.get_user_language(callback_query.from_user.id)
-        kb = InlineKeyboardBuilder()
-        kb.button(text=LANGUAGES[user_lang]['currencies'], callback_data="show_currencies_0")
-        kb.button(text=LANGUAGES[user_lang]['cryptocurrencies'], callback_data="show_crypto")
-        kb.button(text=LANGUAGES[user_lang]['language'], callback_data="change_language")
-        kb.button(text=LANGUAGES[user_lang]['save_button'], callback_data="save_settings")
-        kb.button(text=LANGUAGES[user_lang]['back'], callback_data="back_to_main")
-        kb.adjust(2, 1, 1)
-        
-        await callback_query.message.edit_text(LANGUAGES[user_lang]['settings'], reply_markup=kb.as_markup())
-        await state.set_state(UserStates.selecting_settings)
-    except Exception as e:
-        error_details = traceback.format_exc()
-        logger.error(f"Error in process_settings for user {callback_query.from_user.id}: {str(e)}\n{error_details}")
-        user_lang = user_data.get_user_language(callback_query.from_user.id)
-        await callback_query.message.answer(LANGUAGES[user_lang]['error'])
-        
-        admin_message = f"Ошибка в process_settings для пользователя {callback_query.from_user.id}:\n{str(e)}\n\nДетали:\n{error_details}"
-        for admin_id in ADMIN_IDS:
-            try:
-                await callback_query.bot.send_message(admin_id, admin_message)
-            except Exception as admin_error:
-                logger.error(f"Failed to send error message to admin {admin_id}: {str(admin_error)}")
+    user_id = callback_query.from_user.id
+    user_lang = user_data.get_user_language(user_id)
+    use_quote = user_data.get_user_quote_format(user_id)
+    
+    kb = InlineKeyboardBuilder()
+    kb.button(text=LANGUAGES[user_lang]['currencies'], callback_data="show_currencies_0")
+    kb.button(text=LANGUAGES[user_lang]['cryptocurrencies'], callback_data="show_crypto")
+    kb.button(text=LANGUAGES[user_lang]['language'], callback_data="change_language")
+    kb.button(text=LANGUAGES[user_lang]['quote_format'], callback_data="toggle_quote_format")
+    kb.button(text=LANGUAGES[user_lang]['save_button'], callback_data="save_settings")
+    kb.button(text=LANGUAGES[user_lang]['back'], callback_data="back_to_main")
+    kb.adjust(2, 2, 1)
+    
+    quote_status = LANGUAGES[user_lang]['on'] if use_quote else LANGUAGES[user_lang]['off']
+    settings_text = f"{LANGUAGES[user_lang]['settings']}\n\n{LANGUAGES[user_lang]['quote_format_status']}: {quote_status}"
+    
+    await callback_query.message.edit_text(settings_text, reply_markup=kb.as_markup())
+
+async def toggle_quote_format(callback_query: CallbackQuery):
+    parts = callback_query.data.split('_')
+    user_id = callback_query.from_user.id
+    user_lang = user_data.get_user_language(user_id)
+    
+    if 'chat' in callback_query.data:
+        chat_id = int(parts[-1])
+        current_setting = user_data.get_chat_quote_format(chat_id)
+        user_data.set_chat_quote_format(chat_id, not current_setting)
+        await back_to_chat_settings(callback_query)
+    else:
+        current_setting = user_data.get_user_quote_format(user_id)
+        user_data.set_user_quote_format(user_id, not current_setting)
+        await process_settings(callback_query, None)
 
 async def show_currencies(callback_query: CallbackQuery):
     page = int(callback_query.data.split('_')[-1])
@@ -580,6 +608,7 @@ async def handle_conversion(message: Message):
 async def inline_query_handler(query: InlineQuery):
     user_data.update_user_data(query.from_user.id)
     user_lang = user_data.get_user_language(query.from_user.id)
+    use_quote = user_data.get_user_quote_format(query.from_user.id)
     args = query.query.split()
 
     if len(args) < 2:
@@ -634,7 +663,8 @@ async def inline_query_handler(query: InlineQuery):
             result_content += f"<b>{LANGUAGES[user_lang].get('cryptocurrencies_output', 'Cryptocurrencies')}</b>\n"
             result_content += "\n".join(crypto_results)
 
-        result_content = f"<blockquote expandable>{result_content}</blockquote>"
+        if use_quote:
+            result_content = f"<blockquote expandable>{result_content}</blockquote>"
 
         result = InlineQueryResultArticle(
             id=f"{from_currency}_all",
@@ -801,7 +831,13 @@ def format_large_number(number, is_crypto=False):
         elif abs(number) >= 1e3:
             return f"{number:,.2f}"
         else:
-            return f"{number:.2f}" 
+            return f"{number:.2f}"
+
+def format_response(response: str, use_quote: bool) -> str:
+    if use_quote:
+        return f"<blockquote expandable>{response}</blockquote>"
+    else:
+        return response 
 
 async def process_conversion(message: types.Message, amount: float, from_currency: str):
     user_id = message.from_user.id
@@ -823,9 +859,11 @@ async def process_conversion(message: types.Message, amount: float, from_currenc
         if message.chat.type in ['group', 'supergroup']:
             user_currencies = user_data.get_chat_currencies(chat_id)
             user_crypto = user_data.get_chat_crypto(chat_id)
+            use_quote = user_data.get_chat_quote_format(chat_id)
         else:
             user_currencies = user_data.get_user_currencies(user_id)
             user_crypto = user_data.get_user_crypto(user_id)
+            use_quote = user_data.get_user_quote_format(user_id)
         
         if not user_currencies:
             user_currencies = ACTIVE_CURRENCIES[:5]
@@ -868,7 +906,8 @@ async def process_conversion(message: types.Message, amount: float, from_currenc
             response += f"<b>{LANGUAGES[user_lang]['cryptocurrencies_output']}</b>\n"
             response += "\n".join(crypto_conversions)
         
-        response = f"<blockquote expandable>{response}</blockquote>"
+        if use_quote:
+            response = f"<blockquote expandable>{response}</blockquote>"
         
         kb = InlineKeyboardBuilder()
         kb.button(text=LANGUAGES[user_lang].get('delete_button', "Delete"), callback_data="delete_conversion")
@@ -963,10 +1002,15 @@ async def back_to_chat_settings(callback_query: CallbackQuery):
     kb = InlineKeyboardBuilder()
     kb.button(text=LANGUAGES[user_lang]['currencies'], callback_data=f"show_chat_currencies_{chat_id}_0")
     kb.button(text=LANGUAGES[user_lang]['cryptocurrencies'], callback_data=f"show_chat_crypto_{chat_id}")
+    kb.button(text=LANGUAGES[user_lang]['quote_format'], callback_data=f"toggle_chat_quote_format_{chat_id}")
     kb.button(text=LANGUAGES[user_lang]['save_button'], callback_data=f"save_chat_settings_{chat_id}")
-    kb.adjust(2, 1)
+    kb.adjust(2, 1, 1)
     
-    await callback_query.message.edit_text(LANGUAGES[user_lang]['settings'], reply_markup=kb.as_markup())
+    use_quote = user_data.get_chat_quote_format(chat_id)
+    quote_status = LANGUAGES[user_lang]['on'] if use_quote else LANGUAGES[user_lang]['off']
+    settings_text = f"{LANGUAGES[user_lang]['settings']}\n\n{LANGUAGES[user_lang]['quote_format_status']}: {quote_status}"
+    
+    await callback_query.message.edit_text(settings_text, reply_markup=kb.as_markup())
 
 async def process_callback(callback_query: CallbackQuery, state: FSMContext):
     action = callback_query.data.split('_')[0]
@@ -983,7 +1027,11 @@ async def process_callback(callback_query: CallbackQuery, state: FSMContext):
         elif 'crypto' in callback_query.data:
             await show_crypto(callback_query)
     elif action == 'toggle':
-        if 'currency' in callback_query.data:
+        if callback_query.data.startswith('toggle_chat_quote_format'):
+            await toggle_quote_format(callback_query)
+        elif callback_query.data == 'toggle_quote_format':
+            await toggle_quote_format(callback_query)
+        elif 'currency' in callback_query.data:
             await toggle_currency(callback_query)
         elif 'crypto' in callback_query.data:
             await toggle_crypto(callback_query)
@@ -1036,6 +1084,7 @@ async def main():
     dp.callback_query.register(back_to_main, F.data == "back_to_main")
     dp.callback_query.register(process_about, F.data == "about")
     dp.callback_query.register(view_changelog, F.data == "view_changelog")
+    dp.callback_query.register(toggle_quote_format, F.data == "toggle_quote_format")
     
     dp.callback_query.register(show_chat_currencies, F.data.startswith("show_chat_currencies_"))
     dp.callback_query.register(show_chat_crypto, F.data.startswith("show_chat_crypto_"))

@@ -1,21 +1,13 @@
-[0.9.6] - 2024-09-08
+[0.9.7] - 2024-09-08
 
 RU:
 
-Убрано: 
-
-Ненужные импорты
-
 Добавлено:
 
-Вывод был обёрнут в сворачиваемую цитату как в личке и в чатов так и в инлайн режиме
+Выбор тип сообщения (цитаты, обычные сообщения) в настройках как и чата так и у юзера
 
 EN:
 
-Removed: 
-
-Unnecessary imports
-
 Added:
 
-Output has been wrapped in a collapsible quote in both dm and chat and inline mode
+Choice of message type (quotes, normal messages) in both chat and user settings

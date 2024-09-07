@@ -73,6 +73,10 @@ LANGUAGES = {
         'view_changelog': "Посмотреть список изменений",
         'invalid_currency': "Извините, я не могу распознать валюту '{currency}'. Пожалуйста, используйте стандартные коды валют, например: USD, EUR, RUB.",
         'delete_button': "Удалить",
+        'quote_format': "Формат цитаты",
+        'quote_format_status': "Статус формата цитаты",
+        'on': "Включен",
+        'off': "Выключен"
     },
     'en': {
 'welcome': """Hello! I'm a currency conversion bot. 🌍💱
@@ -148,5 +152,9 @@ If you have any questions, feel free to contact us via feedback!""",
         'view_changelog': "View changelog",
         'invalid_currency': "Sorry, I can't recognize the currency '{currency}'. Please use standard currency codes, for example: USD, EUR, RUB.",
         'delete_button': "Delete",
+        'quote_format': "Quote format",
+        'quote_format_status': "Quote format status",
+        'on': "On",
+        'off': "Off",
     }
 }

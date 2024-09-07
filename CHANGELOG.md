@@ -1,14 +1,21 @@
-[0.9.5] - 2024-09-07
+[0.9.6] - 2024-09-08
+
 RU:
 
-Исправлено: 
+Убрано: 
 
-Вывод бота спустя время ломался
-Вывод инлайн режима
+Ненужные импорты
+
+Добавлено:
+
+Вывод был обёрнут в сворачиваемую цитату как в личке и в чатов так и в инлайн режиме
 
 EN:
 
-Fixed: 
+Removed: 
 
-The output of the bot would break after a while
-Output of inline mode
+Unnecessary imports
+
+Added:
+
+Output has been wrapped in a collapsible quote in both dm and chat and inline mode

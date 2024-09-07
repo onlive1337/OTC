@@ -16,8 +16,6 @@ from aiogram.utils.keyboard import InlineKeyboardBuilder
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.filters import Command, CommandStart
-from word2number import w2n
-from money2number import m2n
 from typing import Tuple, Optional
 from config import (
     BOT_TOKEN, ADMIN_IDS, USER_DATA_FILE, CURRENT_VERSION, CACHE_EXPIRATION_TIME,
@@ -621,26 +619,31 @@ async def inline_query_handler(query: InlineQuery):
         for to_cur in all_user_currencies:
             if to_cur != from_currency:
                 converted = convert_currency(amount, from_currency, to_cur, rates)
-                result_line = f"{converted:.2f} {ALL_CURRENCIES[to_cur]} {to_cur}"
+                result_line = f"{format_large_number(converted, to_cur in CRYPTO_CURRENCIES)} {ALL_CURRENCIES[to_cur]} {to_cur}"
                 if to_cur in CRYPTO_CURRENCIES:
                     crypto_results.append(result_line)
                 else:
                     fiat_results.append(result_line)
 
-        result_content = f"{amount:.2f} {ALL_CURRENCIES[from_currency]} {from_currency}\n\n"
+        result_content = f"{format_large_number(amount)} {ALL_CURRENCIES[from_currency]} {from_currency}\n\n"
         if fiat_results:
-            result_content += f"{LANGUAGES[user_lang].get('fiat_currencies', 'Fiat currencies')}\n"
+            result_content += f"<b>{LANGUAGES[user_lang].get('fiat_currencies', 'Fiat currencies')}</b>\n"
             result_content += "\n".join(fiat_results)
             result_content += "\n\n"
         if crypto_results:
-            result_content += f"{LANGUAGES[user_lang].get('cryptocurrencies_output', 'Cryptocurrencies')}\n"
+            result_content += f"<b>{LANGUAGES[user_lang].get('cryptocurrencies_output', 'Cryptocurrencies')}</b>\n"
             result_content += "\n".join(crypto_results)
+
+        result_content = f"<blockquote expandable>{result_content}</blockquote>"
 
         result = InlineQueryResultArticle(
             id=f"{from_currency}_all",
             title=LANGUAGES[user_lang].get('conversion_result', "Conversion Result"),
             description=f"{amount} {from_currency} to your selected currencies",
-            input_message_content=InputTextMessageContent(message_text=result_content)
+            input_message_content=InputTextMessageContent(
+                message_text=result_content,
+                parse_mode="HTML"
+            )
         )
 
         logger.info(f"Successful inline conversion for user {query.from_user.id}: {amount} {from_currency}")
@@ -857,19 +860,26 @@ async def process_conversion(message: types.Message, amount: float, from_currenc
                     crypto_conversions.append(f"Overflow {ALL_CURRENCIES.get(to_cur, '')} {to_cur}")
         
         if fiat_conversions:
-            response += f"{LANGUAGES[user_lang]['fiat_currencies']}\n"
+            response += f"<b>{LANGUAGES[user_lang]['fiat_currencies']}</b>\n"
             response += "\n".join(fiat_conversions)
             response += "\n\n"
         
         if crypto_conversions:
-            response += f"{LANGUAGES[user_lang]['cryptocurrencies_output']}\n"
+            response += f"<b>{LANGUAGES[user_lang]['cryptocurrencies_output']}</b>\n"
             response += "\n".join(crypto_conversions)
+        
+        response = f"<blockquote expandable>{response}</blockquote>"
         
         kb = InlineKeyboardBuilder()
         kb.button(text=LANGUAGES[user_lang].get('delete_button', "Delete"), callback_data="delete_conversion")
         
         logger.info(f"Sending conversion response for {amount} {from_currency} to user {user_id} in chat {chat_id}")
-        await message.answer(response, reply_markup=kb.as_markup())
+        
+        await message.answer(
+            text=response,
+            reply_markup=kb.as_markup(),
+            parse_mode="HTML"
+        )
     except OverflowError:
         await message.answer(LANGUAGES[user_lang].get('number_too_large', "The number is too large to process."))
     except Exception as e:

@@ -629,11 +629,11 @@ async def inline_query_handler(query: InlineQuery):
 
         result_content = f"{amount:.2f} {ALL_CURRENCIES[from_currency]} {from_currency}\n\n"
         if fiat_results:
-            result_content += f"{LANGUAGES[user_lang].get('fiat_currencies', 'Fiat currencies')}:\n"
+            result_content += f"{LANGUAGES[user_lang].get('fiat_currencies', 'Fiat currencies')}\n"
             result_content += "\n".join(fiat_results)
             result_content += "\n\n"
         if crypto_results:
-            result_content += f"{LANGUAGES[user_lang].get('cryptocurrencies', 'Cryptocurrencies')}:\n"
+            result_content += f"{LANGUAGES[user_lang].get('cryptocurrencies_output', 'Cryptocurrencies')}\n"
             result_content += "\n".join(crypto_results)
 
         result = InlineQueryResultArticle(

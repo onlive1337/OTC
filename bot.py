@@ -829,32 +829,31 @@ async def process_conversion(message: types.Message, amount: float, from_currenc
         if not user_crypto:
             user_crypto = CRYPTO_CURRENCIES[:5]
         
+        all_user_currencies = user_currencies + user_crypto
+        
         response = f"{format_large_number(amount)} {ALL_CURRENCIES.get(from_currency, '')} {from_currency}\n\n"
         
         fiat_conversions = []
         crypto_conversions = []
         
-        for to_cur in user_currencies:
+        for to_cur in all_user_currencies:
             if to_cur != from_currency:
                 try:
                     converted = convert_currency(amount, from_currency, to_cur, rates)
-                    conversion_line = f"{format_large_number(converted)} {ALL_CURRENCIES.get(to_cur, '')} {to_cur}"
-                    fiat_conversions.append(conversion_line)
+                    is_crypto = to_cur in CRYPTO_CURRENCIES
+                    conversion_line = f"{format_large_number(converted, is_crypto)} {ALL_CURRENCIES.get(to_cur, '')} {to_cur}"
+                    if is_crypto:
+                        crypto_conversions.append(conversion_line)
+                    else:
+                        fiat_conversions.append(conversion_line)
                 except KeyError:
                     logger.warning(f"Conversion failed for {to_cur}. It might not be in the rates.")
                 except OverflowError:
-                    fiat_conversions.append(f"Overflow {ALL_CURRENCIES.get(to_cur, '')} {to_cur}")
-        
-        for to_cur in user_crypto:
-            if to_cur != from_currency:
-                try:
-                    converted = convert_currency(amount, from_currency, to_cur, rates)
-                    conversion_line = f"{format_large_number(converted, True)} {ALL_CURRENCIES.get(to_cur, '')} {to_cur}"
-                    crypto_conversions.append(conversion_line)
-                except KeyError:
-                    logger.warning(f"Conversion failed for {to_cur}. It might not be in the rates.")
-                except OverflowError:
-                    crypto_conversions.append(f"Overflow {ALL_CURRENCIES.get(to_cur, '')} {to_cur}")
+                    conversion_line = f"Overflow {ALL_CURRENCIES.get(to_cur, '')} {to_cur}"
+                    if to_cur in CRYPTO_CURRENCIES:
+                        crypto_conversions.append(conversion_line)
+                    else:
+                        fiat_conversions.append(conversion_line)
         
         if fiat_conversions:
             response += f"{LANGUAGES[user_lang]['fiat_currencies']}\n"

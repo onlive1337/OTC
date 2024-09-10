@@ -407,6 +407,18 @@ async def cmd_stats(message: Message):
 
     await message.answer(stats_message)
 
+async def cmd_olivka(message: Message):
+    user_id = message.from_user.id
+    user_lang = user_data.get_user_language(user_id)
+    
+    easter_egg_message = "Вы нашли пасхалку, отпишите сюда за наградой @onswix"
+    
+    kb = InlineKeyboardBuilder()
+    kb.button(text=LANGUAGES[user_lang]['back'], callback_data='back_to_main')
+    
+    await message.answer(easter_egg_message, reply_markup=kb.as_markup())
+    logger.info(f"User {user_id} found the Easter egg")
+
 async def change_language(callback_query: CallbackQuery):
     user_id = callback_query.from_user.id
     current_lang = user_data.get_user_language(user_id)
@@ -490,7 +502,6 @@ async def inline_query_handler(query: InlineQuery):
 
         user_currencies = user_data.get_user_currencies(query.from_user.id)
         user_crypto = user_data.get_user_crypto(query.from_user.id)
-        all_user_currencies = user_currencies + user_crypto
 
         if from_currency not in ALL_CURRENCIES:
             raise ValueError(f"Invalid currency: {from_currency}")
@@ -499,7 +510,7 @@ async def inline_query_handler(query: InlineQuery):
         if not rates:
             return
 
-        if not all_user_currencies:
+        if not user_currencies and not user_crypto:
             no_currency_result = InlineQueryResultArticle(
                 id="no_currencies",
                 title=LANGUAGES[user_lang].get('no_currencies_selected', "No currencies selected"),
@@ -514,14 +525,20 @@ async def inline_query_handler(query: InlineQuery):
 
         fiat_results = []
         crypto_results = []
-        for to_cur in all_user_currencies:
-            if to_cur != from_currency:
-                converted = convert_currency(amount, from_currency, to_cur, rates)
-                result_line = f"{format_large_number(converted, to_cur in CRYPTO_CURRENCIES)} {ALL_CURRENCIES[to_cur]} {to_cur}"
-                if to_cur in CRYPTO_CURRENCIES:
-                    crypto_results.append(result_line)
-                else:
+        
+        if user_currencies:
+            for to_cur in user_currencies:
+                if to_cur != from_currency:
+                    converted = convert_currency(amount, from_currency, to_cur, rates)
+                    result_line = f"{format_large_number(converted)} {ALL_CURRENCIES[to_cur]} {to_cur}"
                     fiat_results.append(result_line)
+
+        if user_crypto:
+            for to_cur in user_crypto:
+                if to_cur != from_currency:
+                    converted = convert_currency(amount, from_currency, to_cur, rates)
+                    result_line = f"{format_large_number(converted, True)} {ALL_CURRENCIES[to_cur]} {to_cur}"
+                    crypto_results.append(result_line)
 
         result_content = f"{format_large_number(amount)} {ALL_CURRENCIES[from_currency]} {from_currency}\n\n"
         if fiat_results:
@@ -570,7 +587,6 @@ async def inline_query_handler(query: InlineQuery):
             )
         )
         await query.answer(results=[error_result], cache_time=1)
-        
 
 def parse_amount_and_currency(text: str) -> Tuple[Optional[float], Optional[str]]:
     text = text.lower().replace(',', '.').replace('$', 'usd').replace('€', 'eur').replace('₽', 'rub')
@@ -736,37 +752,40 @@ async def process_conversion(message: types.Message, amount: float, from_currenc
             user_crypto = user_data.get_user_crypto(user_id)
             use_quote = user_data.get_user_quote_format(user_id)
         
-        if not user_currencies:
-            user_currencies = ACTIVE_CURRENCIES[:5]
-        if not user_crypto:
-            user_crypto = CRYPTO_CURRENCIES[:5]
+        if not user_currencies and not user_crypto:
+            no_currencies_message = LANGUAGES[user_lang].get('select_currencies_full_message', 
+                "You haven't selected any currencies. Please go to bot settings to select currencies for conversion.")
+            await message.answer(no_currencies_message)
+            return
         
         response = f"{format_large_number(amount)} {ALL_CURRENCIES.get(from_currency, '')} {from_currency}\n\n"
         
         fiat_conversions = []
         crypto_conversions = []
         
-        for to_cur in user_currencies:
-            if to_cur != from_currency:
-                try:
-                    converted = convert_currency(amount, from_currency, to_cur, rates)
-                    conversion_line = f"{format_large_number(converted)} {ALL_CURRENCIES.get(to_cur, '')} {to_cur}"
-                    fiat_conversions.append(conversion_line)
-                except KeyError:
-                    logger.warning(f"Conversion failed for {to_cur}. It might not be in the rates.")
-                except OverflowError:
-                    fiat_conversions.append(f"Overflow {ALL_CURRENCIES.get(to_cur, '')} {to_cur}")
+        if user_currencies:
+            for to_cur in user_currencies:
+                if to_cur != from_currency:
+                    try:
+                        converted = convert_currency(amount, from_currency, to_cur, rates)
+                        conversion_line = f"{format_large_number(converted)} {ALL_CURRENCIES.get(to_cur, '')} {to_cur}"
+                        fiat_conversions.append(conversion_line)
+                    except KeyError:
+                        logger.warning(f"Conversion failed for {to_cur}. It might not be in the rates.")
+                    except OverflowError:
+                        fiat_conversions.append(f"Overflow {ALL_CURRENCIES.get(to_cur, '')} {to_cur}")
         
-        for to_cur in user_crypto:
-            if to_cur != from_currency:
-                try:
-                    converted = convert_currency(amount, from_currency, to_cur, rates)
-                    conversion_line = f"{format_large_number(converted, True)} {ALL_CURRENCIES.get(to_cur, '')} {to_cur}"
-                    crypto_conversions.append(conversion_line)
-                except KeyError:
-                    logger.warning(f"Conversion failed for {to_cur}. It might not be in the rates.")
-                except OverflowError:
-                    crypto_conversions.append(f"Overflow {ALL_CURRENCIES.get(to_cur, '')} {to_cur}")
+        if user_crypto:
+            for to_cur in user_crypto:
+                if to_cur != from_currency:
+                    try:
+                        converted = convert_currency(amount, from_currency, to_cur, rates)
+                        conversion_line = f"{format_large_number(converted, True)} {ALL_CURRENCIES.get(to_cur, '')} {to_cur}"
+                        crypto_conversions.append(conversion_line)
+                    except KeyError:
+                        logger.warning(f"Conversion failed for {to_cur}. It might not be in the rates.")
+                    except OverflowError:
+                        crypto_conversions.append(f"Overflow {ALL_CURRENCIES.get(to_cur, '')} {to_cur}")
         
         if fiat_conversions:
             response += f"<b>{LANGUAGES[user_lang]['fiat_currencies']}</b>\n"
@@ -943,6 +962,7 @@ async def main():
     dp.message.register(cmd_start, CommandStart())
     dp.message.register(cmd_stats, Command("stats"))
     dp.message.register(cmd_settings, Command("settings"))
+    dp.message.register(cmd_olivka, Command("olivka"))
     dp.message.register(handle_message)
     dp.message.register(handle_conversion)
     dp.message.register(handle_all_messages)

@@ -214,6 +214,9 @@ async def toggle_chat_currency(callback_query: CallbackQuery):
     currency = parts[4]
     page = int(parts[5]) if len(parts) > 5 else 0
     
+    if str(chat_id) not in user_data.chat_data:
+        user_data.initialize_chat_settings(chat_id)
+    
     chat_currencies = user_data.get_chat_currencies(chat_id)
     
     if currency in chat_currencies:
@@ -222,6 +225,7 @@ async def toggle_chat_currency(callback_query: CallbackQuery):
         chat_currencies.append(currency)
     
     user_data.set_chat_currencies(chat_id, chat_currencies)
+    user_data.save_chat_data()
     
     new_data = f"show_chat_currencies_{chat_id}_{page}"
     new_callback_query = callback_query.model_copy(update={'data': new_data})
@@ -230,6 +234,10 @@ async def toggle_chat_currency(callback_query: CallbackQuery):
 async def toggle_chat_crypto(callback_query: CallbackQuery):
     chat_id, crypto = callback_query.data.split('_')[3:]
     chat_id = int(chat_id)
+    
+    if str(chat_id) not in user_data.chat_data:
+        user_data.initialize_chat_settings(chat_id)
+    
     chat_crypto = user_data.get_chat_crypto(chat_id)
     
     if crypto in chat_crypto:
@@ -629,6 +637,8 @@ async def handle_my_chat_member(event: ChatMemberUpdated, bot: Bot):
     logger.info(f"Event content: {event.model_dump_json()}")
     
     if event.new_chat_member.status == "member":
+        user_data.initialize_chat_settings(event.chat.id)
+        
         welcome_message = (
             f"Привет! Я бот для конвертации валют. 🌍💱\n\n"
             f"Чтобы конвертировать валюту, просто напишите сумму и код валюты. Например:\n"

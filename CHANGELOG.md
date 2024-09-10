@@ -1,21 +1,29 @@
-[0.9.8] - 2024-09-08
+[0.9.9] - 2024-09-10
 
 RU:
 
-Изменено:
+Убрано:
 
-Класс UserData и все его функции убрал в отдельный файл
+Ненужные импорты
 
 Пофикшено:
 
-Когда юзер в настройках переходил в какой то раздел и потом нажимал назад в настройки там не было кнопки выбора тип сообщения (цитаты)
+Когда юзер добавлял впервые бота в чат и настраивал криптовалюту то она пропадала
+
+Изменено:
+
+bot.py был переименован в main.py для дальнейшего рефакторинга
 
 EN:
 
-Modified:
+Removed:
 
-Removed the UserData class and all its functions to a separate file
+Unnecessary imports
 
 Fixed:
 
-When user in settings went to some section and then clicked back to settings there was no button to select message type (quotes).
+When a user added a bot to chat for the first time and set up cryptocurrency, it would disappear
+
+Modified:
+
+bot.py was renamed to main.py for further refactoring

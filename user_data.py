@@ -3,6 +3,10 @@ from datetime import datetime
 from collections import defaultdict
 from typing import Dict, Any, List
 from config import USER_DATA_FILE, ACTIVE_CURRENCIES, CRYPTO_CURRENCIES
+import logging
+
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', filename='logs.txt', filemode='a')
+logger = logging.getLogger(__name__)
 
 class UserData:
     def __init__(self):
@@ -16,6 +20,16 @@ class UserData:
                 return json.load(file)
         except (FileNotFoundError, json.JSONDecodeError):
             return {}
+
+    def initialize_chat_settings(self, chat_id: int):
+        if str(chat_id) not in self.chat_data:
+            self.chat_data[str(chat_id)] = {
+                'currencies': ACTIVE_CURRENCIES[:5],
+                'crypto': CRYPTO_CURRENCIES[:5],
+                'quote_format': False
+            }
+            self.save_chat_data()
+        logger.info(f"Initialized settings for chat {chat_id}")
 
     def get_user_quote_format(self, user_id):
         return self.user_data[str(user_id)].get("use_quote_format", True)

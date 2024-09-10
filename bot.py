@@ -2,13 +2,9 @@ import asyncio
 import logging
 import os
 import re
-import json
 import time
 import math
-from datetime import datetime
-from collections import defaultdict
-import traceback
-from typing import Dict, Any, List
+from typing import Dict, Any
 import aiohttp
 from aiogram import Bot, Dispatcher, types, F
 from aiogram.types import Message, InlineQuery, InlineQueryResultArticle, InputTextMessageContent, CallbackQuery, ChatMemberUpdated
@@ -18,7 +14,7 @@ from aiogram.fsm.state import State, StatesGroup
 from aiogram.filters import Command, CommandStart
 from typing import Tuple, Optional
 from config import (
-    BOT_TOKEN, ADMIN_IDS, USER_DATA_FILE, CURRENT_VERSION, CACHE_EXPIRATION_TIME,
+    BOT_TOKEN, ADMIN_IDS, CURRENT_VERSION, CACHE_EXPIRATION_TIME,
     ALL_CURRENCIES, CRYPTO_CURRENCIES, ACTIVE_CURRENCIES, CURRENCY_SYMBOLS, CURRENCY_ABBREVIATIONS
 )
 from languages import LANGUAGES

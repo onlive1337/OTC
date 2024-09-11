@@ -76,7 +76,9 @@ LANGUAGES = {
         'quote_format': "Формат цитаты",
         'quote_format_status': "Статус формата цитаты",
         'on': "Включен",
-        'off': "Выключен"
+        'off': "Выключен",
+        'chat_settings': "Настройки чата",
+        'admin_only': "Только администраторы могут изменять настройки чата.",
     },
     'en': {
 'welcome': """Hello! I'm a currency conversion bot. 🌍💱
@@ -156,5 +158,7 @@ If you have any questions, feel free to contact us via feedback!""",
         'quote_format_status': "Quote format status",
         'on': "On",
         'off': "Off",
+        'chat_settings': "Chat settings",
+        'admin_only': "Only administrators can change chat settings.",
     }
 }

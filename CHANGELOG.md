@@ -1,23 +1,13 @@
-[0.9.9.1] - 2024-09-10
+[0.9.9.2] - 2024-09-11
 
 RU:
 
-Пофикшено:
+Изменено:
 
-Если не было выбрано криптовалюты или валюты бот присылал дефолтное значение
-
-Добавлено:
-
-Проверка на выбор валют или криптовалют, если юзер или в настройках чата не выбрано ни одной валюты или криптовалюты выведется специфическое сообщение
-Пасхалочка которая связана со мной))
+Если юзер писал /start@onlive_twilight_bot в чате то ему открывалось настройки для юзера, теперь открываются для чата
 
 EN:
 
-Fixed:
+Modified:
 
-If no cryptocurrency or currency was selected bot sent default value
-
-Added:
-
-Checking for selection of currencies or cryptocurrencies, if no currency or cryptocurrency is selected by the user or in the chat settings a specific message will be displayed
-An Easter Bunny that's related to me)))
+If a user wrote /start@onlive_twilight_bot in chat it would open settings for the user, now it opens for chat

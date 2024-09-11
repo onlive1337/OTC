@@ -122,21 +122,28 @@ def read_changelog():
 
 async def cmd_start(message: Message):
     user_data.update_user_data(message.from_user.id)
-    logger.info(f"User {message.from_user.id} started the bot")
+    logger.info(f"User {message.from_user.id} started the bot in chat {message.chat.id}")
     
     user_lang = user_data.get_user_language(message.from_user.id)
     
-    kb = InlineKeyboardBuilder()
-    kb.button(text=LANGUAGES[user_lang]['help_button'], callback_data='howto')
-    kb.button(text=LANGUAGES[user_lang]['news_button'], url="https://t.me/onswixdev")
-    kb.button(text=LANGUAGES[user_lang]['feedback_button'], callback_data='feedback')
-    kb.button(text=LANGUAGES[user_lang]['settings_button'], callback_data='settings')
-    kb.button(text=LANGUAGES[user_lang]['about_button'], callback_data='about')
-    kb.adjust(2)
-    
-    welcome_message = LANGUAGES[user_lang]['welcome']
-    
-    await message.answer(welcome_message, reply_markup=kb.as_markup())
+    if message.chat.type in ['group', 'supergroup']:
+        chat_member = await message.chat.get_member(message.from_user.id)
+        if chat_member.status in ['creator', 'administrator']:
+            await show_chat_settings(message)
+        else:
+            await message.answer(LANGUAGES[user_lang]['admin_only'])
+    else:
+        kb = InlineKeyboardBuilder()
+        kb.button(text=LANGUAGES[user_lang]['help_button'], callback_data='howto')
+        kb.button(text=LANGUAGES[user_lang]['news_button'], url="https://t.me/onswixdev")
+        kb.button(text=LANGUAGES[user_lang]['feedback_button'], callback_data='feedback')
+        kb.button(text=LANGUAGES[user_lang]['settings_button'], callback_data='settings')
+        kb.button(text=LANGUAGES[user_lang]['about_button'], callback_data='about')
+        kb.adjust(2)
+        
+        welcome_message = LANGUAGES[user_lang]['welcome']
+        
+        await message.answer(welcome_message, reply_markup=kb.as_markup())
 
 async def cmd_settings(message: Message):
     user_id = message.from_user.id
@@ -250,6 +257,24 @@ async def toggle_chat_crypto(callback_query: CallbackQuery):
     user_data.save_chat_data()
     
     await show_chat_crypto(callback_query)
+
+async def show_chat_settings(message: Message):
+    user_id = message.from_user.id
+    chat_id = message.chat.id
+    user_lang = user_data.get_user_language(user_id)
+
+    kb = InlineKeyboardBuilder()
+    kb.button(text=LANGUAGES[user_lang]['currencies'], callback_data=f"show_chat_currencies_{chat_id}_0")
+    kb.button(text=LANGUAGES[user_lang]['cryptocurrencies'], callback_data=f"show_chat_crypto_{chat_id}")
+    kb.button(text=LANGUAGES[user_lang]['quote_format'], callback_data=f"toggle_chat_quote_format_{chat_id}")
+    kb.button(text=LANGUAGES[user_lang]['save_button'], callback_data=f"save_chat_settings_{chat_id}")
+    kb.adjust(2, 1, 1)
+    
+    use_quote = user_data.get_chat_quote_format(chat_id)
+    quote_status = LANGUAGES[user_lang]['on'] if use_quote else LANGUAGES[user_lang]['off']
+    settings_text = f"{LANGUAGES[user_lang]['chat_settings']}\n\n{LANGUAGES[user_lang]['quote_format_status']}: {quote_status}"
+    
+    await message.answer(settings_text, reply_markup=kb.as_markup())
 
 async def save_chat_settings(callback_query: CallbackQuery):
     chat_id = int(callback_query.data.split('_')[3])

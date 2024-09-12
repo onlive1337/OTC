@@ -7,15 +7,16 @@ import math
 from typing import Dict, Any
 import aiohttp
 from aiogram import Bot, Dispatcher, types, F
-from aiogram.types import Message, InlineQuery, InlineQueryResultArticle, InputTextMessageContent, CallbackQuery, ChatMemberUpdated
+from aiogram.types import Message, CallbackQuery, ChatMemberUpdated
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.filters import Command, CommandStart
+from inline_handlers import inline_query_handler
 from typing import Tuple, Optional
 from config import (
     BOT_TOKEN, ADMIN_IDS, CURRENT_VERSION, CACHE_EXPIRATION_TIME,
-    ALL_CURRENCIES, CRYPTO_CURRENCIES, ACTIVE_CURRENCIES, CURRENCY_SYMBOLS, CURRENCY_ABBREVIATIONS
+    ALL_CURRENCIES, CRYPTO_CURRENCIES, ACTIVE_CURRENCIES, CURRENCY_ABBREVIATIONS
 )
 from languages import LANGUAGES
 from user_data import UserData
@@ -509,109 +510,6 @@ async def handle_conversion(message: Message):
     except Exception as e:
         logger.error(f"Error during conversion for user {message.from_user.id}: {str(e)}")
         await message.answer(LANGUAGES[user_lang]['error'])
-
-
-async def inline_query_handler(query: InlineQuery):
-    user_data.update_user_data(query.from_user.id)
-    user_lang = user_data.get_user_language(query.from_user.id)
-    use_quote = user_data.get_user_quote_format(query.from_user.id)
-    args = query.query.split()
-
-    if len(args) < 2:
-        return
-
-    try:
-        amount = float(args[0])
-        currency_input = args[1].upper()
-        from_currency = CURRENCY_SYMBOLS.get(currency_input, currency_input)
-
-        user_currencies = user_data.get_user_currencies(query.from_user.id)
-        user_crypto = user_data.get_user_crypto(query.from_user.id)
-
-        if from_currency not in ALL_CURRENCIES:
-            raise ValueError(f"Invalid currency: {from_currency}")
-
-        rates = await get_exchange_rates()
-        if not rates:
-            return
-
-        if not user_currencies and not user_crypto:
-            no_currency_result = InlineQueryResultArticle(
-                id="no_currencies",
-                title=LANGUAGES[user_lang].get('no_currencies_selected', "No currencies selected"),
-                description=LANGUAGES[user_lang].get('select_currencies_message', "Please select currencies in settings"),
-                input_message_content=InputTextMessageContent(
-                    message_text=LANGUAGES[user_lang].get('select_currencies_full_message', 
-                    "You haven't selected any currencies. Please go to bot settings to select currencies for conversion.")
-                )
-            )
-            await query.answer(results=[no_currency_result], cache_time=1)
-            return
-
-        fiat_results = []
-        crypto_results = []
-        
-        if user_currencies:
-            for to_cur in user_currencies:
-                if to_cur != from_currency:
-                    converted = convert_currency(amount, from_currency, to_cur, rates)
-                    result_line = f"{format_large_number(converted)} {ALL_CURRENCIES[to_cur]} {to_cur}"
-                    fiat_results.append(result_line)
-
-        if user_crypto:
-            for to_cur in user_crypto:
-                if to_cur != from_currency:
-                    converted = convert_currency(amount, from_currency, to_cur, rates)
-                    result_line = f"{format_large_number(converted, True)} {ALL_CURRENCIES[to_cur]} {to_cur}"
-                    crypto_results.append(result_line)
-
-        result_content = f"{format_large_number(amount)} {ALL_CURRENCIES[from_currency]} {from_currency}\n\n"
-        if fiat_results:
-            result_content += f"<b>{LANGUAGES[user_lang].get('fiat_currencies', 'Fiat currencies')}</b>\n"
-            result_content += "\n".join(fiat_results)
-            result_content += "\n\n"
-        if crypto_results:
-            result_content += f"<b>{LANGUAGES[user_lang].get('cryptocurrencies_output', 'Cryptocurrencies')}</b>\n"
-            result_content += "\n".join(crypto_results)
-
-        if use_quote:
-            result_content = f"<blockquote expandable>{result_content}</blockquote>"
-
-        result = InlineQueryResultArticle(
-            id=f"{from_currency}_all",
-            title=LANGUAGES[user_lang].get('conversion_result', "Conversion Result"),
-            description=f"{amount} {from_currency} to your selected currencies",
-            input_message_content=InputTextMessageContent(
-                message_text=result_content,
-                parse_mode="HTML"
-            )
-        )
-
-        logger.info(f"Successful inline conversion for user {query.from_user.id}: {amount} {from_currency}")
-        await query.answer(results=[result], cache_time=1)
-    except ValueError as ve:
-        error_result = InlineQueryResultArticle(
-            id="error",
-            title=LANGUAGES[user_lang].get('invalid_input', "Invalid Input"),
-            description=str(ve),
-            input_message_content=InputTextMessageContent(
-                message_text=LANGUAGES[user_lang].get('invalid_input_message', 
-                "Invalid input. Please enter amount and currency code, e.g., '100 USD'.")
-            )
-        )
-        await query.answer(results=[error_result], cache_time=1)
-    except Exception as e:
-        logger.error(f"Error during inline conversion for user {query.from_user.id}: {str(e)}")
-        error_result = InlineQueryResultArticle(
-            id="error",
-            title=LANGUAGES[user_lang].get('error', "Error"),
-            description=LANGUAGES[user_lang].get('error_occurred', "An error occurred. Please try again."),
-            input_message_content=InputTextMessageContent(
-                message_text=LANGUAGES[user_lang].get('error_message', 
-                "An error occurred. Please try again.")
-            )
-        )
-        await query.answer(results=[error_result], cache_time=1)
 
 def parse_amount_and_currency(text: str) -> Tuple[Optional[float], Optional[str]]:
     text = text.lower().replace(',', '.').replace('$', 'usd').replace('€', 'eur').replace('₽', 'rub')

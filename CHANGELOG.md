@@ -1,13 +1,13 @@
-[0.9.9.2] - 2024-09-11
+[0.9.9.3] - 2024-09-12
 
 RU:
 
 Изменено:
 
-Если юзер писал /start@onlive_twilight_bot в чате то ему открывалось настройки для юзера, теперь открываются для чата
+Убрал функцию инлайна в отдельный файл и переписал некоторые функции UserData
 
 EN:
 
 Modified:
 
-If a user wrote /start@onlive_twilight_bot in chat it would open settings for the user, now it opens for chat
+Removed the inline function to a separate file and rewrote some UserData functions

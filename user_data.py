@@ -1,7 +1,7 @@
 import json
 from datetime import datetime
 from collections import defaultdict
-from typing import Dict, Any, List
+from typing import List
 from config import USER_DATA_FILE, ACTIVE_CURRENCIES, CRYPTO_CURRENCIES
 import logging
 
@@ -32,6 +32,7 @@ class UserData:
         logger.info(f"Initialized settings for chat {chat_id}")
 
     def get_user_quote_format(self, user_id):
+        self.reload_user_data()
         return self.user_data[str(user_id)].get("use_quote_format", True)
 
     def set_user_quote_format(self, user_id, use_quote):
@@ -73,28 +74,30 @@ class UserData:
         try:
             with open(USER_DATA_FILE, 'r') as file:
                 data = json.load(file)
-                return defaultdict(lambda: {
-                    "interactions": 0,
-                    "last_seen": None,
-                    "selected_crypto": CRYPTO_CURRENCIES,  
-                    "selected_currencies": ACTIVE_CURRENCIES[:5],
-                    "language": "ru",
-                    "first_seen": self.bot_launch_date,
-                    "use_quote_format": True
-                }, data)
-        except (FileNotFoundError, json.JSONDecodeError):
-            return defaultdict(lambda: {
-                "interactions": 0,
-                "last_seen": None,
-                "selected_crypto": CRYPTO_CURRENCIES,  
-                "selected_currencies": ACTIVE_CURRENCIES[:5],
-                "language": "ru",
-                "first_seen": self.bot_launch_date,
-                "use_quote_format": True
-            })
+                return defaultdict(lambda: self.default_user_data(), data)
+        except (FileNotFoundError, json.JSONDecodeError) as e:
+            logger.error(f"Error loading user data: {e}")
+            return defaultdict(lambda: self.default_user_data())
+
+    def default_user_data(self):
+        return {
+            "interactions": 0,
+            "last_seen": None,
+            "selected_crypto": CRYPTO_CURRENCIES,
+            "selected_currencies": ACTIVE_CURRENCIES[:5],
+            "language": "ru",
+            "first_seen": None,
+            "use_quote_format": True
+        }
+
+    def reload_user_data(self):
+        self.user_data = self.load_user_data()
 
     def get_user_currencies(self, user_id):
-        return self.user_data[str(user_id)].get("selected_currencies", ACTIVE_CURRENCIES[:5])
+        self.reload_user_data()
+        user_id_str = str(user_id)
+        currencies = self.user_data[user_id_str].get("selected_currencies", ACTIVE_CURRENCIES[:5])
+        return currencies
 
     def set_user_currencies(self, user_id, currencies):
         self.user_data[str(user_id)]["selected_currencies"] = currencies
@@ -102,7 +105,7 @@ class UserData:
 
     def save_user_data(self):
         with open(USER_DATA_FILE, 'w') as file:
-            json.dump(self.user_data, file, indent=4)
+            json.dump(dict(self.user_data), file, indent=4)
 
     def update_user_data(self, user_id):
         today = datetime.now().strftime('%Y-%m-%d')
@@ -119,11 +122,11 @@ class UserData:
         self.user_data[str(user_id)]["last_seen"] = today
         self.save_user_data()
 
-    def get_user_crypto(self, user_id: int) -> List[str]:
+    def get_user_crypto(self, user_id):
+        self.reload_user_data()
         user_id_str = str(user_id)
-        if user_id_str not in self.user_data or "selected_crypto" not in self.user_data[user_id_str]:
-            self.user_data[user_id_str]["selected_crypto"] = CRYPTO_CURRENCIES
-        return self.user_data[user_id_str]["selected_crypto"]
+        crypto = self.user_data[user_id_str].get("selected_crypto", CRYPTO_CURRENCIES)
+        return crypto
 
     def set_user_crypto(self, user_id: int, crypto_list: List[str]):
         self.user_data[str(user_id)]["selected_crypto"] = crypto_list
@@ -142,6 +145,7 @@ class UserData:
         }
     
     def get_user_language(self, user_id):
+        self.reload_user_data()
         return self.user_data[str(user_id)].get("language", "ru")
     
     def set_user_language(self, user_id, language):

@@ -1,7 +1,7 @@
 import json
 from datetime import datetime
 from collections import defaultdict
-from typing import Dict, Any, List
+from typing import List
 from config import USER_DATA_FILE, ACTIVE_CURRENCIES, CRYPTO_CURRENCIES
 import logging
 

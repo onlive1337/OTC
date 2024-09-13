@@ -548,34 +548,30 @@ async def inline_query_handler(query: InlineQuery):
             await query.answer(results=[no_currency_result], cache_time=1)
             return
 
-        fiat_results = []
-        crypto_results = []
+        result_content = f"{format_large_number(amount)} {ALL_CURRENCIES[from_currency]} {from_currency}\n\n"
         
         if user_currencies:
+            result_content += f"<b>{LANGUAGES[user_lang].get('fiat_currencies', 'Fiat currencies')}</b>\n"
+            if use_quote:
+                result_content += "<blockquote expandable>"
             for to_cur in user_currencies:
                 if to_cur != from_currency:
                     converted = convert_currency(amount, from_currency, to_cur, rates)
-                    result_line = f"{format_large_number(converted)} {ALL_CURRENCIES[to_cur]} {to_cur}"
-                    fiat_results.append(result_line)
+                    result_content += f"{format_large_number(converted)} {ALL_CURRENCIES[to_cur]} {to_cur}\n"
+            if use_quote:
+                result_content += "</blockquote>"
+            result_content += "\n"
 
         if user_crypto:
+            result_content += f"<b>{LANGUAGES[user_lang].get('cryptocurrencies_output', 'Cryptocurrencies')}</b>\n"
+            if use_quote:
+                result_content += "<blockquote expandable>"
             for to_cur in user_crypto:
                 if to_cur != from_currency:
                     converted = convert_currency(amount, from_currency, to_cur, rates)
-                    result_line = f"{format_large_number(converted, True)} {ALL_CURRENCIES[to_cur]} {to_cur}"
-                    crypto_results.append(result_line)
-
-        result_content = f"{format_large_number(amount)} {ALL_CURRENCIES[from_currency]} {from_currency}\n\n"
-        if fiat_results:
-            result_content += f"<b>{LANGUAGES[user_lang].get('fiat_currencies', 'Fiat currencies')}</b>\n"
-            result_content += "\n".join(fiat_results)
-            result_content += "\n\n"
-        if crypto_results:
-            result_content += f"<b>{LANGUAGES[user_lang].get('cryptocurrencies_output', 'Cryptocurrencies')}</b>\n"
-            result_content += "\n".join(crypto_results)
-
-        if use_quote:
-            result_content = f"<blockquote expandable>{result_content}</blockquote>"
+                    result_content += f"{format_large_number(converted, True)} {ALL_CURRENCIES[to_cur]}\n"
+            if use_quote:
+                result_content += "</blockquote>"
 
         result = InlineQueryResultArticle(
             id=f"{from_currency}_all",
@@ -825,7 +821,11 @@ async def process_conversion(message: types.Message, amount: float, from_currenc
             response += f"<b>{LANGUAGES[user_lang]['cryptocurrencies_output']}</b>\n"
             if use_quote:
                 response += "<blockquote expandable>"
-            response += "\n".join(crypto_conversions)
+            crypto_formatted = []
+            for conv in crypto_conversions:
+                parts = conv.split()
+                crypto_formatted.append(f"{parts[0]} {parts[1]}")
+            response += "\n".join(crypto_formatted)
             if use_quote:
                 response += "</blockquote>"
         

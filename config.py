@@ -6,7 +6,7 @@ load_dotenv()
 BOT_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')
 ADMIN_IDS = [810587766]
 USER_DATA_FILE = 'user_data.json'
-CURRENT_VERSION = "0.9.9.2"
+CURRENT_VERSION = "0.9.9.3"
 
 CACHE_EXPIRATION_TIME = 600
 
@@ -17,8 +17,8 @@ ALL_CURRENCIES = {
     'PLN': '🇵🇱', 'THB': '🇹🇭', 'IDR': '🇮🇩', 'HUF': '🇭🇺', 'CZK': '🇨🇿', 'ILS': '🇮🇱', 'CLP': '🇨🇱',
     'PHP': '🇵🇭', 'AED': '🇦🇪', 'COP': '🇨🇴', 'SAR': '🇸🇦', 'MYR': '🇲🇾', 'RON': '🇷🇴',
     'UZS': '🇺🇿', 'UAH': '🇺🇦', 'KZT': '🇰🇿',  
-    'BTC': '₿', 'ETH': 'Ξ', 'USDT': '₮', 'BNB': 'BNB', 'XRP': 'XRP', 'ADA': 'ADA', 'SOL': 'SOL', 'DOT': 'DOT',
-    'DOGE': 'Ð', 'MATIC': 'MATIC', 'TON': 'TON', 'NOT': 'NOT', 'DUREV': 'DUREV', 'LTC': '🥈'  
+    'BTC': 'BTC', 'ETH': 'ETH', 'USDT': 'USDT', 'BNB': 'BNB', 'XRP': 'XRP', 'ADA': 'ADA', 'SOL': 'SOL', 'DOT': 'DOT',
+    'DOGE': 'DOGE', 'MATIC': 'MATIC', 'TON': 'TON', 'NOT': 'NOT', 'DUREV': 'DUREV', 'LTC': 'LTC'  
 }
 
 CRYPTO_CURRENCIES = ['BTC', 'ETH', 'USDT', 'BNB', 'XRP', 'ADA', 'SOL', 'DOT', 'DOGE', 'MATIC', 'TON', 'NOT', 'DUREV', 'LTC']

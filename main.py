@@ -814,15 +814,20 @@ async def process_conversion(message: types.Message, amount: float, from_currenc
         
         if fiat_conversions:
             response += f"<b>{LANGUAGES[user_lang]['fiat_currencies']}</b>\n"
+            if use_quote:
+                response += "<blockquote expandable>"
             response += "\n".join(fiat_conversions)
+            if use_quote:
+                response += "</blockquote>"
             response += "\n\n"
         
         if crypto_conversions:
             response += f"<b>{LANGUAGES[user_lang]['cryptocurrencies_output']}</b>\n"
+            if use_quote:
+                response += "<blockquote expandable>"
             response += "\n".join(crypto_conversions)
-        
-        if use_quote:
-            response = f"<blockquote expandable>{response}</blockquote>"
+            if use_quote:
+                response += "</blockquote>"
         
         kb = InlineKeyboardBuilder()
         kb.button(text=LANGUAGES[user_lang].get('delete_button', "Delete"), callback_data="delete_conversion")

@@ -2,7 +2,7 @@ import json
 from datetime import datetime
 from collections import defaultdict
 from typing import List
-from config import USER_DATA_FILE, ACTIVE_CURRENCIES, CRYPTO_CURRENCIES
+from config.config import USER_DATA_FILE, ACTIVE_CURRENCIES, CRYPTO_CURRENCIES
 import logging
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', filename='logs.txt', filemode='a')

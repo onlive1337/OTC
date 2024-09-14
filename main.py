@@ -13,7 +13,7 @@ from config.config import (
 )
 from utils.utils import get_exchange_rates, convert_currency, format_large_number, parse_amount_and_currency, read_changelog
 from config.languages import LANGUAGES
-from utils.data.user_data import UserData
+from data import user_data
 
 cache: Dict[str, Any] = {}
 
@@ -24,7 +24,7 @@ class UserStates(StatesGroup):
     selecting_crypto = State()
     selecting_settings = State()
 
-user_data = UserData()
+user_data = user_data.UserData()
 
 async def cmd_start(message: Message):
     user_data.update_user_data(message.from_user.id)
@@ -40,12 +40,13 @@ async def cmd_start(message: Message):
             await message.answer(LANGUAGES[user_lang]['admin_only'])
     else:
         kb = InlineKeyboardBuilder()
-        kb.button(text=LANGUAGES[user_lang]['help_button'], callback_data='howto')
         kb.button(text=LANGUAGES[user_lang]['news_button'], url="https://t.me/onswixdev")
+        kb.button(text=LANGUAGES[user_lang]['help_button'], callback_data='howto')
         kb.button(text=LANGUAGES[user_lang]['feedback_button'], callback_data='feedback')
         kb.button(text=LANGUAGES[user_lang]['settings_button'], callback_data='settings')
         kb.button(text=LANGUAGES[user_lang]['about_button'], callback_data='about')
-        kb.adjust(2)
+        kb.button(text=LANGUAGES[user_lang]['support_button'], callback_data='support')
+        kb.adjust(2, 2, 1, 1)
         
         welcome_message = LANGUAGES[user_lang]['welcome']
         
@@ -232,6 +233,20 @@ async def process_settings(callback_query: CallbackQuery, state: FSMContext):
     settings_text = f"{LANGUAGES[user_lang]['settings']}\n\n{LANGUAGES[user_lang]['quote_format_status']}: {quote_status}"
     
     await callback_query.message.edit_text(settings_text, reply_markup=kb.as_markup())
+
+async def process_support(callback_query: CallbackQuery):
+    user_data.update_user_data(callback_query.from_user.id)
+    await callback_query.answer()
+    user_lang = user_data.get_user_language(callback_query.from_user.id)
+    
+    support_message = LANGUAGES[user_lang]['support_message']
+    
+    kb = InlineKeyboardBuilder()
+    kb.button(text=LANGUAGES[user_lang]['donate_button'], url="https://boosty.to/onlive/donate")
+    kb.button(text=LANGUAGES[user_lang]['back'], callback_data='back_to_main')
+    kb.adjust(1)
+    
+    await callback_query.message.edit_text(support_message, reply_markup=kb.as_markup())
 
 async def toggle_quote_format(callback_query: CallbackQuery):
     parts = callback_query.data.split('_')
@@ -711,12 +726,13 @@ async def back_to_main(callback_query: CallbackQuery):
     user_lang = user_data.get_user_language(callback_query.from_user.id)
     
     kb = InlineKeyboardBuilder()
-    kb.button(text=LANGUAGES[user_lang]['help_button'], callback_data='howto')
     kb.button(text=LANGUAGES[user_lang]['news_button'], url="https://t.me/onswixdev")
+    kb.button(text=LANGUAGES[user_lang]['help_button'], callback_data='howto')
     kb.button(text=LANGUAGES[user_lang]['feedback_button'], callback_data='feedback')
     kb.button(text=LANGUAGES[user_lang]['settings_button'], callback_data='settings')
     kb.button(text=LANGUAGES[user_lang]['about_button'], callback_data='about')
-    kb.adjust(2)
+    kb.button(text=LANGUAGES[user_lang]['support_button'], callback_data='support')
+    kb.adjust(2, 2, 1, 1)
     welcome_message = LANGUAGES[user_lang]['welcome']
     await callback_query.message.edit_text(welcome_message, reply_markup=kb.as_markup())
 
@@ -812,6 +828,8 @@ async def process_callback(callback_query: CallbackQuery, state: FSMContext):
     elif action == 'delete':
         if callback_query.data == 'delete_conversion':
             await delete_conversion_message(callback_query)
+    elif action == 'support':
+        await process_support(callback_query)
 
 async def main():
     bot = Bot(token=BOT_TOKEN)
@@ -828,6 +846,7 @@ async def main():
     dp.callback_query.register(process_howto, F.data == "howto")
     dp.callback_query.register(process_feedback, F.data == "feedback")
     dp.callback_query.register(process_settings, F.data == "settings")
+    dp.callback_query.register(process_support, F.data == "support")
     dp.callback_query.register(show_currencies, F.data.startswith("show_currencies_"))
     dp.callback_query.register(show_crypto, F.data == "show_crypto")
     dp.callback_query.register(toggle_currency, F.data.startswith("toggle_currency_"))

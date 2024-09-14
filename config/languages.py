@@ -67,7 +67,7 @@ LANGUAGES = {
         'select_currencies_full_message': "Вы не выбрали ни одной валюты. Пожалуйста, перейдите в настройки бота, чтобы выбрать валюты для конвертации.",
         'conversion_result': "Результат конвертации",
         'number_too_large': "Число слишком большое для обработки.",
-        'about_button': "О боте",
+        'about_button': "ℹ️ О боте",
         'about_message': "Информация о боте Onlive Twilight Convert",
         'current_version': "Текущая версия:",
         'view_changelog': "Посмотреть список изменений",
@@ -79,6 +79,9 @@ LANGUAGES = {
         'off': "Выключен",
         'chat_settings': "Настройки чата",
         'admin_only': "Только администраторы могут изменять настройки чата.",
+        'support_button': "❤️ Поддержать",
+        'support_message': "✨ Спасибо за использование моего бота! Если вы хотите поддержать разработчика и помочь в дальнейшем развитии проекта, вы можете сделать это, отправив добровольный взнос, нажав на кнопку. Если вы с Узбекистана или с Росии обратитесь в ко мне лично пожалуйста. Ваша поддержка очень ценна! ❤️",
+        'donate_button': "❤️ Поддержать",
     },
     'en': {
 'welcome': """Hello! I'm a currency conversion bot. 🌍💱
@@ -148,7 +151,7 @@ If you have any questions, feel free to contact us via feedback!""",
         'select_currencies_full_message': "You haven't selected any currencies. Please go to bot settings to select currencies for conversion.",
         'conversion_result': "Conversion Result",
         'number_too_large': "The number is too large to process.",
-        'about_button': "About",
+        'about_button': "ℹ️ About",
         'about_message': "About Onlive Twilight Convert bot",
         'current_version': "Current version:",
         'view_changelog': "View changelog",
@@ -160,5 +163,8 @@ If you have any questions, feel free to contact us via feedback!""",
         'off': "Off",
         'chat_settings': "Chat settings",
         'admin_only': "Only administrators can change chat settings.",
+        'support_button': "❤️ Support",
+        'support_message': "✨ Thank you for using my bot! If you would like to support the developer and help with the further development of the project, you can do so by making a voluntary donation by clicking the button. If you are from Uzbekistan or Russia, please contact me personally. Your support is greatly appreciated! ❤️",
+        'donate_button': "❤️ Support"
     }
 }

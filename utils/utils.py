@@ -95,12 +95,15 @@ def convert_currency(amount: float, from_currency: str, to_currency: str, rates:
         return amount / rates[from_currency] * rates[to_currency]
 
 def read_changelog():
-    changelog_path = os.path.join(os.path.dirname(__file__), 'CHANGELOG.md')
+    current_file = os.path.abspath(__file__)
+    parent_dir = os.path.dirname(os.path.dirname(current_file))
+    changelog_path = os.path.join(parent_dir, 'CHANGELOG.md')
+    
     try:
         with open(changelog_path, 'r', encoding='utf-8') as file:
             return file.read()
     except FileNotFoundError:
-        return "Чейнджлог не найден." 
+        return "Чейнджлог не найден."
 
 def parse_amount_and_currency(text: str) -> Tuple[Optional[float], Optional[str]]:
     text = text.lower().replace(',', '.').replace('$', 'usd').replace('€', 'eur').replace('₽', 'rub')

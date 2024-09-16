@@ -1,25 +1,21 @@
-[0.9.9.5] - 2024-09-13
+[0.9.9.6] - 2024-09-13
 
 RU:
 
-Добавлен:
+Изменил:
 
-Раздел поддержки где каждый может помочь разработке и поддержать меня
+Перенёс все связанные функции с настройками чатов в отдельный файл
 
-Добавил иконку для раздела "О боте"
+Перенёс пару функций в utils
 
-Изменено:
-
-Опять поменял структуру базы данных
+Переписал логику отправку приветсвенного сообщения когда юзер добавляет бота в чат(теперь в зависимосте языка юзера отправляется сообщение в разных языках)
 
 EN:
 
-Added:
+Modified:
 
-Support section where everyone can help development and support me
+Moved all related functions with chat settings to a separate file
 
-Added an icon for the About section
+Moved a couple of functions to utils
 
-Changed:
-
-Changed the database structure again
+Rewrote the logic of sending a welcome message when a user adds a bot to the chat (now a message is sent in different languages depending on the user's language).

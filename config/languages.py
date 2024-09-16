@@ -82,6 +82,13 @@ LANGUAGES = {
         'support_button': "❤️ Поддержать",
         'support_message': "✨ Спасибо за использование моего бота! Если вы хотите поддержать разработчика и помочь в дальнейшем развитии проекта, вы можете сделать это, отправив добровольный взнос, нажав на кнопку. Если вы с Узбекистана или с России обратитесь в ко мне лично пожалуйста. Ваша поддержка очень ценна! ❤️",
         'donate_button': "❤️ Поддержать",
+        'welcome_group_message': (
+    "Привет! Я бот для конвертации валют. 🌍💱\n\n"
+    "Чтобы конвертировать валюту, просто напишите сумму и код валюты. Например:\n"
+    "100 USD\n5000 RUB\n750 EUR\n\n"
+    "Я автоматически конвертирую в другие валюты.\n\n"
+    "Используйте /settings, чтобы настроить валюты для конвертации."
+)
     },
     'en': {
 'welcome': """Hello! I'm a currency conversion bot. 🌍💱
@@ -165,6 +172,13 @@ If you have any questions, feel free to contact us via feedback!""",
         'admin_only': "Only administrators can change chat settings.",
         'support_button': "❤️ Support",
         'support_message': "✨ Thank you for using my bot! If you would like to support the developer and help with the further development of the project, you can do so by making a voluntary donation by clicking the button. If you are from Uzbekistan or Russia, please contact me personally. Your support is greatly appreciated! ❤️",
-        'donate_button': "❤️ Support"
+        'donate_button': "❤️ Support",
+        'welcome_group_message': (
+    "Hello! I'm a currency conversion bot. 🌍💱\n\n"
+    "To convert currency, simply type an amount and currency code. For example:\n"
+    "100 USD\n5000 RUB\n750 EUR\n\n"
+    "I will automatically convert to other currencies.\n\n"
+    "Use /settings to configure currencies for conversion."
+)
     }
 }

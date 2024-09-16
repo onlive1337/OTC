@@ -11,7 +11,8 @@ from config.config import (
     BOT_TOKEN, ADMIN_IDS, CURRENT_VERSION,
     ALL_CURRENCIES, CRYPTO_CURRENCIES, ACTIVE_CURRENCIES, CURRENCY_SYMBOLS
 )
-from utils.utils import get_exchange_rates, convert_currency, format_large_number, parse_amount_and_currency, read_changelog
+from utils.utils import get_exchange_rates, convert_currency, format_large_number, parse_amount_and_currency, read_changelog, delete_conversion_message, save_settings
+from data.chat_settings import show_chat_settings, save_chat_settings, show_chat_currencies, show_chat_crypto, toggle_chat_crypto, toggle_chat_currency, back_to_chat_settings
 from config.languages import LANGUAGES
 from data import user_data
 
@@ -76,119 +77,6 @@ async def cmd_settings(message: Message):
             await message.answer(settings_text, reply_markup=kb.as_markup())
         else:
             await message.answer("Только администраторы могут изменять настройки чата.")
-
-async def show_chat_currencies(callback_query: CallbackQuery):
-    parts = callback_query.data.split('_')
-    chat_id = int(parts[3])
-    page = int(parts[4]) if len(parts) > 4 and parts[4].isdigit() else 0
-    user_id = callback_query.from_user.id
-    chat_currencies = user_data.get_chat_currencies(chat_id)
-    user_lang = user_data.get_user_language(user_id)
-    
-    currencies_per_page = 5
-    start = page * currencies_per_page
-    end = start + currencies_per_page
-    current_currencies = ACTIVE_CURRENCIES[start:end]
-    
-    kb = InlineKeyboardBuilder()
-    for currency in current_currencies:
-        status = "✅" if currency in chat_currencies else "❌"
-        kb.button(text=f"{ALL_CURRENCIES[currency]} {currency} {status}", callback_data=f"toggle_chat_currency_{chat_id}_{currency}_{page}")
-    
-    if page > 0:
-        kb.button(text=f"⬅️ {LANGUAGES[user_lang]['back']}", callback_data=f"show_chat_currencies_{chat_id}_{page-1}")
-    if end < len(ACTIVE_CURRENCIES):
-        kb.button(text=f"{LANGUAGES[user_lang]['forward']} ➡️", callback_data=f"show_chat_currencies_{chat_id}_{page+1}")
-    
-    kb.button(text=LANGUAGES[user_lang]['back_to_settings'], callback_data=f"back_to_chat_settings_{chat_id}")
-    kb.adjust(1)
-    
-    await callback_query.message.edit_text(LANGUAGES[user_lang]['currencies'], reply_markup=kb.as_markup())
-    
-async def show_chat_crypto(callback_query: CallbackQuery):
-    chat_id = int(callback_query.data.split('_')[3])
-    user_id = callback_query.from_user.id
-    chat_crypto = user_data.get_chat_crypto(chat_id)
-    user_lang = user_data.get_user_language(user_id)
-    
-    kb = InlineKeyboardBuilder()
-    for crypto in CRYPTO_CURRENCIES:
-        status = "✅" if crypto in chat_crypto else "❌"
-        kb.button(text=f"{ALL_CURRENCIES[crypto]} {crypto} {status}", callback_data=f"toggle_chat_crypto_{chat_id}_{crypto}")
-    
-    kb.button(text=LANGUAGES[user_lang]['back_to_settings'], callback_data=f"back_to_chat_settings_{chat_id}")
-    kb.adjust(2)
-    
-    await callback_query.message.edit_text(LANGUAGES[user_lang]['cryptocurrencies'], reply_markup=kb.as_markup())
-
-
-async def toggle_chat_currency(callback_query: CallbackQuery):
-    parts = callback_query.data.split('_')
-    chat_id = int(parts[3])
-    currency = parts[4]
-    page = int(parts[5]) if len(parts) > 5 else 0
-    
-    if str(chat_id) not in user_data.chat_data:
-        user_data.initialize_chat_settings(chat_id)
-    
-    chat_currencies = user_data.get_chat_currencies(chat_id)
-    
-    if currency in chat_currencies:
-        chat_currencies.remove(currency)
-    else:
-        chat_currencies.append(currency)
-    
-    user_data.set_chat_currencies(chat_id, chat_currencies)
-    user_data.save_chat_data()
-    
-    new_data = f"show_chat_currencies_{chat_id}_{page}"
-    new_callback_query = callback_query.model_copy(update={'data': new_data})
-    await show_chat_currencies(new_callback_query)
-
-async def toggle_chat_crypto(callback_query: CallbackQuery):
-    chat_id, crypto = callback_query.data.split('_')[3:]
-    chat_id = int(chat_id)
-    
-    if str(chat_id) not in user_data.chat_data:
-        user_data.initialize_chat_settings(chat_id)
-    
-    chat_crypto = user_data.get_chat_crypto(chat_id)
-    
-    if crypto in chat_crypto:
-        chat_crypto.remove(crypto)
-    else:
-        chat_crypto.append(crypto)
-    
-    user_data.set_chat_crypto(chat_id, chat_crypto)
-    
-    user_data.save_chat_data()
-    
-    await show_chat_crypto(callback_query)
-
-async def show_chat_settings(message: Message):
-    user_id = message.from_user.id
-    chat_id = message.chat.id
-    user_lang = user_data.get_user_language(user_id)
-
-    kb = InlineKeyboardBuilder()
-    kb.button(text=LANGUAGES[user_lang]['currencies'], callback_data=f"show_chat_currencies_{chat_id}_0")
-    kb.button(text=LANGUAGES[user_lang]['cryptocurrencies'], callback_data=f"show_chat_crypto_{chat_id}")
-    kb.button(text=LANGUAGES[user_lang]['quote_format'], callback_data=f"toggle_chat_quote_format_{chat_id}")
-    kb.button(text=LANGUAGES[user_lang]['save_button'], callback_data=f"save_chat_settings_{chat_id}")
-    kb.adjust(2, 1, 1)
-    
-    use_quote = user_data.get_chat_quote_format(chat_id)
-    quote_status = LANGUAGES[user_lang]['on'] if use_quote else LANGUAGES[user_lang]['off']
-    settings_text = f"{LANGUAGES[user_lang]['chat_settings']}\n\n{LANGUAGES[user_lang]['quote_format_status']}: {quote_status}"
-    
-    await message.answer(settings_text, reply_markup=kb.as_markup())
-
-async def save_chat_settings(callback_query: CallbackQuery):
-    chat_id = int(callback_query.data.split('_')[3])
-    user_id = callback_query.from_user.id
-    user_lang = user_data.get_user_language(user_id)
-    await callback_query.message.edit_text(LANGUAGES[user_lang]['save_settings'])
-    await callback_query.answer()
 
 async def process_howto(callback_query: CallbackQuery):
     user_data.update_user_data(callback_query.from_user.id)
@@ -331,12 +219,6 @@ async def toggle_crypto(callback_query: CallbackQuery):
     user_data.set_user_crypto(user_id, user_crypto)
     await show_crypto(callback_query)
 
-async def save_settings(callback_query: CallbackQuery):
-    user_lang = user_data.get_user_language(callback_query.from_user.id)
-    await callback_query.message.edit_text(LANGUAGES[user_lang]['save_settings'])
-    await callback_query.answer()
-
-
 async def cmd_stats(message: Message):
     if message.from_user.id not in ADMIN_IDS:
         await message.answer("У вас нет прав для выполнения этой команды.")
@@ -352,18 +234,6 @@ async def cmd_stats(message: Message):
     )
 
     await message.answer(stats_message)
-
-async def cmd_olivka(message: Message):
-    user_id = message.from_user.id
-    user_lang = user_data.get_user_language(user_id)
-    
-    easter_egg_message = "Вы нашли пасхалку, отпишите сюда за наградой @onswix"
-    
-    kb = InlineKeyboardBuilder()
-    kb.button(text=LANGUAGES[user_lang]['back'], callback_data='back_to_main')
-    
-    await message.answer(easter_egg_message, reply_markup=kb.as_markup())
-    logger.info(f"User {user_id} found the Easter egg")
 
 async def change_language(callback_query: CallbackQuery):
     user_id = callback_query.from_user.id
@@ -430,7 +300,6 @@ async def handle_conversion(message: Message):
     except Exception as e:
         logger.error(f"Error during conversion for user {message.from_user.id}: {str(e)}")
         await message.answer(LANGUAGES[user_lang]['error'])
-
 
 async def inline_query_handler(query: InlineQuery):
     user_data.update_user_data(query.from_user.id)
@@ -537,12 +406,8 @@ async def handle_all_messages(message: types.Message, bot: Bot):
     if message.new_chat_members:
         for member in message.new_chat_members:
             if member.id == bot.id:
-                welcome_message = (
-                    f"Привет! Я бот для конвертации валют. 🌍💱\n\n"
-                    f"Чтобы конвертировать валюту, просто напишите сумму и код валюты. Например:\n"
-                    f"100 USD\n5000 RUB\n750 EUR\nсто долларов\nпятьсот евро\n\n"
-                    f"Я автоматически конвертирую в другие валюты."
-                )
+                user_lang = user_data.get_user_language(message.from_user.id)
+                welcome_message = LANGUAGES[user_lang]['welcome_group_message']
                 await message.answer(welcome_message)
                 logger.info(f"Bot added to chat {message.chat.id}. Welcome message sent.")
                 return
@@ -554,12 +419,10 @@ async def handle_my_chat_member(event: ChatMemberUpdated, bot: Bot):
     if event.new_chat_member.status == "member":
         user_data.initialize_chat_settings(event.chat.id)
         
-        welcome_message = (
-            f"Привет! Я бот для конвертации валют. 🌍💱\n\n"
-            f"Чтобы конвертировать валюту, просто напишите сумму и код валюты. Например:\n"
-            f"100 USD\n5000 RUB\n750 EUR\nсто долларов\nпятьсот евро\n\n"
-            f"Я автоматически конвертирую в другие валюты."
-        )
+        user_lang = user_data.get_user_language(event.from_user.id)
+        
+        welcome_message = LANGUAGES[user_lang]['welcome_group_message']
+        
         await bot.send_message(event.chat.id, welcome_message)
         logger.info(f"Welcome message sent to chat {event.chat.id}")
 
@@ -608,6 +471,7 @@ async def process_conversion(message: types.Message, amount: float, from_currenc
             return
         
         if message.chat.type in ['group', 'supergroup']:
+            user_data.update_chat_cache(chat_id)
             user_currencies = user_data.get_chat_currencies(chat_id)
             user_crypto = user_data.get_chat_crypto(chat_id)
             use_quote = user_data.get_chat_quote_format(chat_id)
@@ -689,10 +553,6 @@ async def process_conversion(message: types.Message, amount: float, from_currenc
         logger.exception("Full traceback:")
         await message.answer(LANGUAGES[user_lang]['error'])
 
-async def delete_conversion_message(callback_query: CallbackQuery):
-    await callback_query.message.delete()
-    await callback_query.answer()
-
 async def process_about(callback_query: CallbackQuery):
     user_data.update_user_data(callback_query.from_user.id)
     await callback_query.answer()
@@ -719,7 +579,6 @@ async def view_changelog(callback_query: CallbackQuery):
     kb.button(text=LANGUAGES[user_lang]['back'], callback_data='about')
     
     await callback_query.message.edit_text(changelog, reply_markup=kb.as_markup())
-
 
 async def back_to_main(callback_query: CallbackQuery):
     user_data.update_user_data(callback_query.from_user.id)
@@ -750,32 +609,6 @@ async def back_to_settings(callback_query: CallbackQuery):
     kb.button(text=LANGUAGES[user_lang]['back'], callback_data="back_to_main")
     kb.adjust(2, 2, 1, 1)
     
-    quote_status = LANGUAGES[user_lang]['on'] if use_quote else LANGUAGES[user_lang]['off']
-    settings_text = f"{LANGUAGES[user_lang]['settings']}\n\n{LANGUAGES[user_lang]['quote_format_status']}: {quote_status}"
-    
-    await callback_query.message.edit_text(settings_text, reply_markup=kb.as_markup())
-
-async def back_to_chat_settings(callback_query: CallbackQuery):
-    parts = callback_query.data.split('_')
-    chat_id = next((part for part in parts if part.lstrip('-').isdigit()), None)
-    
-    if chat_id is None:
-        logger.error(f"Invalid callback data for back_to_chat_settings: {callback_query.data}")
-        await callback_query.answer("Произошла ошибка. Пожалуйста, попробуйте еще раз.")
-        return
-
-    chat_id = int(chat_id)
-    user_id = callback_query.from_user.id
-    user_lang = user_data.get_user_language(user_id)
-
-    kb = InlineKeyboardBuilder()
-    kb.button(text=LANGUAGES[user_lang]['currencies'], callback_data=f"show_chat_currencies_{chat_id}_0")
-    kb.button(text=LANGUAGES[user_lang]['cryptocurrencies'], callback_data=f"show_chat_crypto_{chat_id}")
-    kb.button(text=LANGUAGES[user_lang]['quote_format'], callback_data=f"toggle_chat_quote_format_{chat_id}")
-    kb.button(text=LANGUAGES[user_lang]['save_button'], callback_data=f"save_chat_settings_{chat_id}")
-    kb.adjust(2, 1, 1)
-    
-    use_quote = user_data.get_chat_quote_format(chat_id)
     quote_status = LANGUAGES[user_lang]['on'] if use_quote else LANGUAGES[user_lang]['off']
     settings_text = f"{LANGUAGES[user_lang]['settings']}\n\n{LANGUAGES[user_lang]['quote_format_status']}: {quote_status}"
     
@@ -838,7 +671,6 @@ async def main():
     dp.message.register(cmd_start, CommandStart())
     dp.message.register(cmd_stats, Command("stats"))
     dp.message.register(cmd_settings, Command("settings"))
-    dp.message.register(cmd_olivka, Command("olivka"))
     dp.message.register(handle_message)
     dp.message.register(handle_conversion)
     dp.message.register(handle_all_messages)

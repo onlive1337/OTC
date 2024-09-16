@@ -1,11 +1,16 @@
 from typing import Dict, Any, Tuple, Optional
 import time
 from config.config import CACHE_EXPIRATION_TIME, ACTIVE_CURRENCIES, CRYPTO_CURRENCIES, CURRENCY_ABBREVIATIONS, ALL_CURRENCIES
+from config.languages import LANGUAGES
 import logging
 import aiohttp
 import os
 import math
 import re
+from aiogram.types import CallbackQuery
+from data import user_data
+
+user_data = user_data.UserData()
 
 
 cache: Dict[str, Any] = {}
@@ -182,3 +187,12 @@ def format_response(response: str, use_quote: bool) -> str:
         return f"<blockquote expandable>{response}</blockquote>"
     else:
         return response 
+
+async def delete_conversion_message(callback_query: CallbackQuery):
+    await callback_query.message.delete()
+    await callback_query.answer()
+
+async def save_settings(callback_query: CallbackQuery):
+    user_lang = user_data.get_user_language(callback_query.from_user.id)
+    await callback_query.message.edit_text(LANGUAGES[user_lang]['save_settings'])
+    await callback_query.answer()

@@ -21,6 +21,11 @@ class UserData:
         except (FileNotFoundError, json.JSONDecodeError):
             return {}
 
+    def update_chat_cache(self, chat_id):
+        chat_id_str = str(chat_id)
+        if chat_id_str in self.chat_data:
+            self.chat_data[chat_id_str] = self.load_chat_data().get(chat_id_str, {})
+
     def initialize_chat_settings(self, chat_id: int):
         if str(chat_id) not in self.chat_data:
             self.chat_data[str(chat_id)] = {

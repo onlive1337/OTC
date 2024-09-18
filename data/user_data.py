@@ -26,6 +26,11 @@ class UserData:
         if chat_id_str in self.chat_data:
             self.chat_data[chat_id_str] = self.load_chat_data().get(chat_id_str, {})
 
+    def update_user_cache(self, user_id):
+        user_id_str = str(user_id)
+        if user_id_str in self.user_data:
+            self.user_data[user_id_str] = self.load_user_data().get(user_id_str, {})
+
     def initialize_chat_settings(self, chat_id: int):
         if str(chat_id) not in self.chat_data:
             self.chat_data[str(chat_id)] = {
@@ -40,8 +45,10 @@ class UserData:
         return self.user_data[str(user_id)].get("use_quote_format", True)
 
     def set_user_quote_format(self, user_id, use_quote):
-        self.user_data[str(user_id)]["use_quote_format"] = use_quote
+        user_id_str = str(user_id)
+        self.user_data[user_id_str]["use_quote_format"] = use_quote
         self.save_user_data()
+        self.update_user_data(user_id)
 
     def get_chat_quote_format(self, chat_id):
         return self.chat_data.get(str(chat_id), {}).get("use_quote_format", True)
@@ -77,33 +84,18 @@ class UserData:
     def load_user_data(self):
         try:
             with open(USER_DATA_FILE, 'r') as file:
-                data = json.load(file)
-                return defaultdict(lambda: {
-                    "interactions": 0,
-                    "last_seen": None,
-                    "selected_crypto": CRYPTO_CURRENCIES,  
-                    "selected_currencies": ACTIVE_CURRENCIES[:5],
-                    "language": "ru",
-                    "first_seen": self.bot_launch_date,
-                    "use_quote_format": True
-                }, data)
+                return json.load(file)
         except (FileNotFoundError, json.JSONDecodeError):
-            return defaultdict(lambda: {
-                "interactions": 0,
-                "last_seen": None,
-                "selected_crypto": CRYPTO_CURRENCIES,  
-                "selected_currencies": ACTIVE_CURRENCIES[:5],
-                "language": "ru",
-                "first_seen": self.bot_launch_date,
-                "use_quote_format": True
-            })
+            return {}
 
     def get_user_currencies(self, user_id):
         return self.user_data[str(user_id)].get("selected_currencies", ACTIVE_CURRENCIES[:5])
 
     def set_user_currencies(self, user_id, currencies):
-        self.user_data[str(user_id)]["selected_currencies"] = currencies
+        user_id_str = str(user_id)
+        self.user_data[user_id_str]["selected_currencies"] = currencies
         self.save_user_data()
+        self.update_user_data(user_id)
 
     def save_user_data(self):
         with open(USER_DATA_FILE, 'w') as file:
@@ -111,17 +103,26 @@ class UserData:
 
     def update_user_data(self, user_id):
         today = datetime.now().strftime('%Y-%m-%d')
-        if str(user_id) not in self.user_data:
-            self.user_data[str(user_id)] = {
+        user_id_str = str(user_id)
+    
+        fresh_data = self.load_user_data()
+    
+        if user_id_str not in fresh_data:
+            fresh_data[user_id_str] = {
                 "interactions": 0, 
                 "last_seen": today, 
                 "selected_crypto": CRYPTO_CURRENCIES,
                 "selected_currencies": ACTIVE_CURRENCIES[:5],
                 "language": "ru",
-                "first_seen": today
-            }
-        self.user_data[str(user_id)]["interactions"] += 1
-        self.user_data[str(user_id)]["last_seen"] = today
+                "first_seen": today,
+                "use_quote_format": True
+        }
+    
+        fresh_data[user_id_str]["interactions"] += 1
+        fresh_data[user_id_str]["last_seen"] = today
+    
+        self.user_data = fresh_data
+    
         self.save_user_data()
 
     def get_user_crypto(self, user_id: int) -> List[str]:
@@ -131,8 +132,10 @@ class UserData:
         return self.user_data[user_id_str]["selected_crypto"]
 
     def set_user_crypto(self, user_id: int, crypto_list: List[str]):
-        self.user_data[str(user_id)]["selected_crypto"] = crypto_list
+        user_id_str = str(user_id)
+        self.user_data[user_id_str]["selected_crypto"] = crypto_list
         self.save_user_data()
+        self.update_user_data(user_id)
 
     def get_statistics(self):
         today = datetime.now().strftime('%Y-%m-%d')
@@ -150,5 +153,7 @@ class UserData:
         return self.user_data[str(user_id)].get("language", "ru")
     
     def set_user_language(self, user_id, language):
-        self.user_data[str(user_id)]["language"] = language
+        user_id_str = str(user_id)
+        self.user_data[user_id_str]["language"] = language
         self.save_user_data()
+        self.update_user_data(user_id)

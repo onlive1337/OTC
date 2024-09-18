@@ -9,10 +9,11 @@ from aiogram.fsm.state import State, StatesGroup
 from aiogram.filters import Command, CommandStart
 from config.config import (
     BOT_TOKEN, ADMIN_IDS, CURRENT_VERSION,
-    ALL_CURRENCIES, CRYPTO_CURRENCIES, ACTIVE_CURRENCIES, CURRENCY_SYMBOLS
+    ALL_CURRENCIES, CURRENCY_SYMBOLS
 )
 from utils.utils import get_exchange_rates, convert_currency, format_large_number, parse_amount_and_currency, read_changelog, delete_conversion_message, save_settings
 from data.chat_settings import show_chat_settings, save_chat_settings, show_chat_currencies, show_chat_crypto, toggle_chat_crypto, toggle_chat_currency, back_to_chat_settings
+from data.user_settings import show_currencies, show_crypto, toggle_crypto, toggle_currency, toggle_quote_format, change_language, set_language
 from config.languages import LANGUAGES
 from data import user_data
 
@@ -136,89 +137,6 @@ async def process_support(callback_query: CallbackQuery):
     
     await callback_query.message.edit_text(support_message, reply_markup=kb.as_markup())
 
-async def toggle_quote_format(callback_query: CallbackQuery):
-    parts = callback_query.data.split('_')
-    user_id = callback_query.from_user.id
-    user_lang = user_data.get_user_language(user_id)
-    
-    if 'chat' in callback_query.data:
-        chat_id = int(parts[-1])
-        current_setting = user_data.get_chat_quote_format(chat_id)
-        user_data.set_chat_quote_format(chat_id, not current_setting)
-        await back_to_chat_settings(callback_query)
-    else:
-        current_setting = user_data.get_user_quote_format(user_id)
-        user_data.set_user_quote_format(user_id, not current_setting)
-        await process_settings(callback_query, None)
-
-async def show_currencies(callback_query: CallbackQuery):
-    page = int(callback_query.data.split('_')[-1])
-    user_id = callback_query.from_user.id
-    user_currencies = user_data.get_user_currencies(user_id)
-    user_lang = user_data.get_user_language(user_id)
-    
-    currencies_per_page = 5
-    start = page * currencies_per_page
-    end = start + currencies_per_page
-    current_currencies = ACTIVE_CURRENCIES[start:end]
-    
-    kb = InlineKeyboardBuilder()
-    for currency in current_currencies:
-        status = "✅" if currency in user_currencies else "❌"
-        kb.button(text=f"{ALL_CURRENCIES[currency]} {currency} {status}", callback_data=f"toggle_currency_{currency}_{page}")
-    
-    if page > 0:
-        kb.button(text=f"⬅️ {LANGUAGES[user_lang]['back']}", callback_data=f"show_currencies_{page-1}")
-    if end < len(ACTIVE_CURRENCIES):
-        kb.button(text=f"{LANGUAGES[user_lang]['forward']} ➡️", callback_data=f"show_currencies_{page+1}")
-    
-    kb.button(text=LANGUAGES[user_lang]['back_to_settings'], callback_data="back_to_settings")
-    kb.adjust(1)
-    
-    await callback_query.message.edit_text(LANGUAGES[user_lang]['currencies'], reply_markup=kb.as_markup())
-
-async def show_crypto(callback_query: CallbackQuery):
-    user_id = callback_query.from_user.id
-    user_crypto = user_data.get_user_crypto(user_id)
-    user_lang = user_data.get_user_language(user_id)
-    
-    kb = InlineKeyboardBuilder()
-    for crypto in CRYPTO_CURRENCIES:
-        status = "✅" if crypto in user_crypto else "❌"
-        kb.button(text=f"{ALL_CURRENCIES[crypto]} {crypto} {status}", callback_data=f"toggle_crypto_{crypto}")
-    
-    kb.button(text=LANGUAGES[user_lang]['back_to_settings'], callback_data="back_to_settings")
-    kb.adjust(2)
-    
-    await callback_query.message.edit_text(LANGUAGES[user_lang]['cryptocurrencies'], reply_markup=kb.as_markup())
-
-async def toggle_currency(callback_query: CallbackQuery):
-    currency, page = callback_query.data.split('_')[2:]
-    page = int(page)
-    user_currencies = user_data.get_user_currencies(callback_query.from_user.id)
-    
-    if currency in user_currencies:
-        user_currencies.remove(currency)
-    else:
-        user_currencies.append(currency)
-    
-    user_data.set_user_currencies(callback_query.from_user.id, user_currencies)
-    await show_currencies(callback_query)
-
-
-async def toggle_crypto(callback_query: CallbackQuery):
-    crypto = callback_query.data.split('_')[-1]
-    user_id = callback_query.from_user.id
-    user_crypto = user_data.get_user_crypto(user_id)
-    
-    if crypto in user_crypto:
-        user_crypto.remove(crypto)
-    else:
-        user_crypto.append(crypto)
-    
-    user_data.set_user_crypto(user_id, user_crypto)
-    await show_crypto(callback_query)
-
 async def cmd_stats(message: Message):
     if message.from_user.id not in ADMIN_IDS:
         await message.answer("У вас нет прав для выполнения этой команды.")
@@ -234,29 +152,6 @@ async def cmd_stats(message: Message):
     )
 
     await message.answer(stats_message)
-
-async def change_language(callback_query: CallbackQuery):
-    user_id = callback_query.from_user.id
-    current_lang = user_data.get_user_language(user_id)
-    
-    kb = InlineKeyboardBuilder()
-    kb.button(text="🇷🇺 Русский", callback_data="set_language_ru")
-    kb.button(text="🇬🇧 English", callback_data="set_language_en")
-    kb.button(text=LANGUAGES[current_lang]['back_to_settings'], callback_data="back_to_settings")
-    kb.adjust(2, 1)
-    
-    await callback_query.message.edit_text(LANGUAGES[current_lang]['language'], reply_markup=kb.as_markup())
-
-async def set_language(callback_query: CallbackQuery):
-    user_id = callback_query.from_user.id
-    new_lang = callback_query.data.split('_')[-1]
-    user_data.set_user_language(user_id, new_lang)
-    
-    kb = InlineKeyboardBuilder()
-    kb.button(text=LANGUAGES[new_lang]['back_to_settings'], callback_data="back_to_settings")
-    
-    await callback_query.message.edit_text(LANGUAGES[new_lang]['save_settings'], reply_markup=kb.as_markup())
-    await callback_query.answer(LANGUAGES[new_lang]['save_settings'])    
 
 async def handle_conversion(message: Message):
     user_data.update_user_data(message.from_user.id)
@@ -456,6 +351,7 @@ async def handle_message(message: types.Message):
 async def process_conversion(message: types.Message, amount: float, from_currency: str):
     user_id = message.from_user.id
     chat_id = message.chat.id
+    user_data.update_user_data(user_id)
     user_lang = user_data.get_user_language(user_id)
     logger.info(f"Processing conversion: {amount} {from_currency} for user {user_id} in chat {chat_id}")
     
@@ -596,6 +492,7 @@ async def back_to_main(callback_query: CallbackQuery):
     await callback_query.message.edit_text(welcome_message, reply_markup=kb.as_markup())
 
 async def back_to_settings(callback_query: CallbackQuery):
+    user_data.update_user_data(callback_query.from_user.id)
     user_id = callback_query.from_user.id
     user_lang = user_data.get_user_language(user_id)
     use_quote = user_data.get_user_quote_format(user_id)

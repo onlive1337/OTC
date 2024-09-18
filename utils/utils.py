@@ -123,7 +123,7 @@ def parse_amount_and_currency(text: str) -> Tuple[Optional[float], Optional[str]
         'млрд': 1000000000
     }
     
-    pattern = r'^(\d+(?:\.\d+)?)\s*(к|кк|м|млн|млрд)?\s*([a-zA-Zа-яА-Я]+)$|^([a-zA-Zа-яА-Я]+)\s*(\d+(?:\.\d+)?)\s*(к|кк|м|млн|млрд)?$'
+    pattern = r'^(\d+(?:\s?\d+)*(?:\.\d+)?)\s*(к|кк|м|млн|млрд)?\s*([a-zA-Zа-яА-Я]+)$|^([a-zA-Zа-яА-Я]+)\s*(\d+(?:\s?\d+)*(?:\.\d+)?)\s*(к|кк|м|млн|млрд)?$'
     match = re.match(pattern, text)
     
     if not match:
@@ -135,6 +135,7 @@ def parse_amount_and_currency(text: str) -> Tuple[Optional[float], Optional[str]
     else:
         currency_str, amount_str, multiplier = groups[3:]
     
+    amount_str = amount_str.replace(' ', '')
     amount = float(amount_str)
     
     if multiplier:

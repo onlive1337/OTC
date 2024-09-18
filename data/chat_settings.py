@@ -147,6 +147,6 @@ async def back_to_chat_settings(callback_query: CallbackQuery):
     
     use_quote = user_data.get_chat_quote_format(chat_id)
     quote_status = LANGUAGES[user_lang]['on'] if use_quote else LANGUAGES[user_lang]['off']
-    settings_text = f"{LANGUAGES[user_lang]['settings']}\n\n{LANGUAGES[user_lang]['quote_format_status']}: {quote_status}"
+    settings_text = f"{LANGUAGES[user_lang]['chat_settings']}\n\n{LANGUAGES[user_lang]['quote_format_status']}: {quote_status}"
     
     await callback_query.message.edit_text(settings_text, reply_markup=kb.as_markup())

@@ -88,7 +88,9 @@ LANGUAGES = {
     "100 USD\n5000 RUB\n750 EUR\n\n"
     "Я автоматически конвертирую в другие валюты.\n\n"
     "Используйте /settings, чтобы настроить валюты для конвертации."
-)
+   ),
+   'setting_updated': "Настройка обновлена",
+   'language_changed': "Язык изменён"
     },
     'en': {
 'welcome': """Hello! I'm a currency conversion bot. 🌍💱
@@ -179,6 +181,8 @@ If you have any questions, feel free to contact us via feedback!""",
     "100 USD\n5000 RUB\n750 EUR\n\n"
     "I will automatically convert to other currencies.\n\n"
     "Use /settings to configure currencies for conversion."
-)
+   ),
+   'setting_updated': "Settings has been updated",
+   'language_changed': "The language has been changed"
     }
 }

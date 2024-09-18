@@ -1,21 +1,21 @@
-[0.9.9.6] - 2024-09-13
+[0.9.9.7] - 2024-09-18
 
 RU:
 
-Изменил:
+Изменено:
 
-Перенёс все связанные функции с настройками чатов в отдельный файл
+Теперь если юзер пишет к примеру 13 499 KZT бот обработает это сообщение (то есть поддержка пробела)
 
-Перенёс пару функций в utils
+Перенёс всё что связанное с настройками юзера в отдельный файл
 
-Переписал логику отправку приветсвенного сообщения когда юзер добавляет бота в чат(теперь в зависимосте языка юзера отправляется сообщение в разных языках)
+Переписал структуру сохранения, обновления данных у юзера
 
 EN:
 
-Modified:
+Changed:
 
-Moved all related functions with chat settings to a separate file
+Now if a user writes for example 13 499 KZT the bot will process this message (i.e. space support)
 
-Moved a couple of functions to utils
+Transferred everything related to user's settings to a separate file.
 
-Rewrote the logic of sending a welcome message when a user adds a bot to the chat (now a message is sent in different languages depending on the user's language).
+Rewrote the structure of saving and updating of user's data

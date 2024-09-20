@@ -113,7 +113,7 @@ def read_changelog():
 def parse_amount_and_currency(text: str) -> Tuple[Optional[float], Optional[str]]:
     text = text.replace(' ', '')
     
-    pattern = r'^([\d,.]+)\s*(к|kk|м|млн|млрд)?\s*([a-zA-Zа-яА-Я]+)$|^([a-zA-Zа-яА-Я]+)\s*([\d,.]+)\s*(к|kk|м|млн|млрд)?$'
+    pattern = r'^([\d,.]+)\s*(к|kk|м|млн|млрд)?\s*([a-zA-Zа-яА-Я$€£¥]+)$|^([a-zA-Zа-яА-Я$€£¥]+)\s*([\d,.]+)\s*(к|kk|м|млн|млрд)?$'
     match = re.match(pattern, text)
     
     if not match:
@@ -153,10 +153,14 @@ def parse_amount_and_currency(text: str) -> Tuple[Optional[float], Optional[str]
         amount *= multipliers.get(multiplier.lower(), 1)
     
     currency = None
-    for abbr, code in CURRENCY_ABBREVIATIONS.items():
-        if abbr.lower() in currency_str.lower():
-            currency = code
-            break
+    currency_symbols = {'$': 'USD', '€': 'EUR', '£': 'GBP', '¥': 'JPY'}
+    if currency_str in currency_symbols:
+        currency = currency_symbols[currency_str]
+    else:
+        for abbr, code in CURRENCY_ABBREVIATIONS.items():
+            if abbr.lower() in currency_str.lower():
+                currency = code
+                break
     
     if not currency:
         currency = currency_str.strip().upper()

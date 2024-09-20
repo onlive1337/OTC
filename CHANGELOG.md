@@ -10,8 +10,6 @@ RU:
 
 EN:
 
-RU:
-
 Fixed:
 
 Bot output if a query had a comma for example 13,499 KZT (bot output it as 13,50 KZT)

@@ -200,16 +200,23 @@ async def inline_query_handler(query: InlineQuery):
     user_data.update_user_data(query.from_user.id)
     user_lang = user_data.get_user_language(query.from_user.id)
     use_quote = user_data.get_user_quote_format(query.from_user.id)
-    args = query.query.split()
+    
+    amount, from_currency = parse_amount_and_currency(query.query)
 
-    if len(args) < 2:
+    if amount is None or from_currency is None:
+        error_result = InlineQueryResultArticle(
+            id="error",
+            title=LANGUAGES[user_lang].get('invalid_input', "Invalid Input"),
+            description=LANGUAGES[user_lang].get('invalid_input_message', "Invalid input. Please enter amount and currency code, e.g., '100 USD'."),
+            input_message_content=InputTextMessageContent(
+                message_text=LANGUAGES[user_lang].get('invalid_input_message', 
+                "Invalid input. Please enter amount and currency code, e.g., '100 USD'.")
+            )
+        )
+        await query.answer(results=[error_result], cache_time=1)
         return
 
     try:
-        amount = float(args[0])
-        currency_input = args[1].upper()
-        from_currency = CURRENCY_SYMBOLS.get(currency_input, currency_input)
-
         user_currencies = user_data.get_user_currencies(query.from_user.id)
         user_crypto = user_data.get_user_crypto(query.from_user.id)
 

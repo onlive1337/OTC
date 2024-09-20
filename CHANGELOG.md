@@ -1,21 +1,19 @@
-[0.9.9.7] - 2024-09-18
+[0.9.9.8] - 2024-09-20
 
 RU:
 
-Изменено:
+Исправил:
 
-Теперь если юзер пишет к примеру 13 499 KZT бот обработает это сообщение (то есть поддержка пробела)
+Вывод бота если запрос имел запятую к примеру 13,499 KZT (бот выдавал его как 13,50 KZT)
 
-Перенёс всё что связанное с настройками юзера в отдельный файл
-
-Переписал структуру сохранения, обновления данных у юзера
+Инлайн режим не обрабатывал пробелы и заптяую
 
 EN:
 
-Changed:
+RU:
 
-Now if a user writes for example 13 499 KZT the bot will process this message (i.e. space support)
+Fixed:
 
-Transferred everything related to user's settings to a separate file.
+Bot output if a query had a comma for example 13,499 KZT (bot output it as 13,50 KZT)
 
-Rewrote the structure of saving and updating of user's data
+Inline mode did not process spaces and commas

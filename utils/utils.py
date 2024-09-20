@@ -111,19 +111,9 @@ def read_changelog():
         return "Чейнджлог не найден."
 
 def parse_amount_and_currency(text: str) -> Tuple[Optional[float], Optional[str]]:
-    text = text.lower().replace(',', '.').replace('$', 'usd').replace('€', 'eur').replace('₽', 'rub')
+    text = text.replace(' ', '')
     
-    multipliers = {
-        'к': 1000,
-        'kk': 1000000,
-        'к': 1000,
-        'кк': 1000000,
-        'м': 1000000,
-        'млн': 1000000,
-        'млрд': 1000000000
-    }
-    
-    pattern = r'^(\d+(?:\s?\d+)*(?:\.\d+)?)\s*(к|кк|м|млн|млрд)?\s*([a-zA-Zа-яА-Я]+)$|^([a-zA-Zа-яА-Я]+)\s*(\d+(?:\s?\d+)*(?:\.\d+)?)\s*(к|кк|м|млн|млрд)?$'
+    pattern = r'^([\d,.]+)\s*(к|kk|м|млн|млрд)?\s*([a-zA-Zа-яА-Я]+)$|^([a-zA-Zа-яА-Я]+)\s*([\d,.]+)\s*(к|kk|м|млн|млрд)?$'
     match = re.match(pattern, text)
     
     if not match:
@@ -135,15 +125,36 @@ def parse_amount_and_currency(text: str) -> Tuple[Optional[float], Optional[str]
     else:
         currency_str, amount_str, multiplier = groups[3:]
     
-    amount_str = amount_str.replace(' ', '')
-    amount = float(amount_str)
+    if ',' in amount_str and '.' in amount_str:
+        if amount_str.index(',') < amount_str.index('.'):
+            amount_str = amount_str.replace(',', '')
+        else:
+            amount_str = amount_str.replace('.', '').replace(',', '.')
+    elif ',' in amount_str:
+        if len(amount_str.split(',')[-1]) == 3:
+            amount_str = amount_str.replace(',', '')
+        else:
+            amount_str = amount_str.replace(',', '.')
+    
+    try:
+        amount = float(amount_str)
+    except ValueError:
+        return None, None
+    
+    multipliers = {
+        'к': 1000,
+        'kk': 1000000,
+        'м': 1000000,
+        'млн': 1000000,
+        'млрд': 1000000000
+    }
     
     if multiplier:
-        amount *= multipliers.get(multiplier, 1)
+        amount *= multipliers.get(multiplier.lower(), 1)
     
     currency = None
     for abbr, code in CURRENCY_ABBREVIATIONS.items():
-        if abbr in currency_str:
+        if abbr.lower() in currency_str.lower():
             currency = code
             break
     

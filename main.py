@@ -363,6 +363,10 @@ async def process_conversion(message: types.Message, amount: float, from_currenc
     logger.info(f"Processing conversion: {amount} {from_currency} for user {user_id} in chat {chat_id}")
     
     try:
+        if amount <= 0:
+            await message.answer(LANGUAGES[user_lang].get('negative_or_zero_amount', "The result of the calculation is negative or zero. Please enter a positive amount."))
+            return
+
         if amount > 1e100 or amount < -1e100:
             await message.answer(LANGUAGES[user_lang].get('number_too_large', "The number is too large to process."))
             return
@@ -444,7 +448,7 @@ async def process_conversion(message: types.Message, amount: float, from_currenc
         
         logger.info(f"Sending conversion response for {amount} {from_currency} to user {user_id} in chat {chat_id}")
         
-        await message.answer(
+        await message.reply(
             text=response,
             reply_markup=kb.as_markup(),
             parse_mode="HTML"

@@ -7,6 +7,8 @@ import aiohttp
 import os
 import math
 import re
+import ast
+import operator
 from aiogram.types import CallbackQuery
 from data import user_data
 
@@ -111,46 +113,23 @@ def read_changelog():
         return "Чейнджлог не найден."
 
 def parse_amount_and_currency(text: str) -> Tuple[Optional[float], Optional[str]]:
-    text = text.replace(' ', '')
+    text = text.strip()
     
-    pattern = r'^([\d,.]+)\s*(к|kk|м|млн|млрд)?\s*([a-zA-Zа-яА-Я$€£¥]+)$|^([a-zA-Zа-яА-Я$€£¥]+)\s*([\d,.]+)\s*(к|kk|м|млн|млрд)?$'
+    pattern = r'^(.*?)\s*([a-zA-Zа-яА-Я$€£¥]+)$'
     match = re.match(pattern, text)
     
     if not match:
         return None, None
     
-    groups = match.groups()
-    if groups[0] is not None:
-        amount_str, multiplier, currency_str = groups[:3]
-    else:
-        currency_str, amount_str, multiplier = groups[3:]
-    
-    if ',' in amount_str and '.' in amount_str:
-        if amount_str.index(',') < amount_str.index('.'):
-            amount_str = amount_str.replace(',', '')
-        else:
-            amount_str = amount_str.replace('.', '').replace(',', '.')
-    elif ',' in amount_str:
-        if len(amount_str.split(',')[-1]) == 3:
-            amount_str = amount_str.replace(',', '')
-        else:
-            amount_str = amount_str.replace(',', '.')
+    expr, currency_str = match.groups()
     
     try:
-        amount = float(amount_str)
-    except ValueError:
+        expr = expr.replace('к', 'k').replace('м', 'm').replace('млн', 'm').replace('млрд', 'b')
+        expr = expr.replace('k', '*1000').replace('m', '*1000000').replace('b', '*1000000000')
+        
+        amount = safe_eval(expr)
+    except:
         return None, None
-    
-    multipliers = {
-        'к': 1000,
-        'kk': 1000000,
-        'м': 1000000,
-        'млн': 1000000,
-        'млрд': 1000000000
-    }
-    
-    if multiplier:
-        amount *= multipliers.get(multiplier.lower(), 1)
     
     currency = None
     currency_symbols = {'$': 'USD', '€': 'EUR', '£': 'GBP', '¥': 'JPY'}
@@ -169,34 +148,40 @@ def parse_amount_and_currency(text: str) -> Tuple[Optional[float], Optional[str]
     
     return amount, currency
 
+def safe_eval(expr):
+    return eval(expr, {"__builtins__": None}, {"abs": abs})
+
 def format_large_number(number, is_crypto=False):
     if abs(number) > 1e100:  
         return "Число слишком большое"
     
+    sign = "-" if number < 0 else ""
+    number = abs(number)
+    
     if is_crypto:
-        if abs(number) < 1e-8:
-            return f"{number:.8e}"
-        elif abs(number) < 1:
-            return f"{number:.8f}".rstrip('0').rstrip('.')  
-        elif abs(number) < 1000:
-            return f"{number:.4f}".rstrip('0').rstrip('.')  
-        elif abs(number) >= 1e15:
-            exponent = int(math.log10(abs(number)))
+        if number < 1e-8:
+            return f"{sign}{number:.8e}"
+        elif number < 1:
+            return f"{sign}{number:.8f}".rstrip('0').rstrip('.')  
+        elif number < 1000:
+            return f"{sign}{number:.4f}".rstrip('0').rstrip('.')  
+        elif number >= 1e15:
+            exponent = int(math.log10(number))
             mantissa = number / (10 ** exponent)
-            return f"{mantissa:.2f}e{exponent}"
+            return f"{sign}{mantissa:.2f}e{exponent}"
         else:
-            return f"{number:,.2f}"
+            return f"{sign}{number:,.8f}".rstrip('0').rstrip('.')
     else:
-        if abs(number) < 0.01:
-            return f"{number:.4f}".rstrip('0').rstrip('.')  
-        elif abs(number) >= 1e15:
-            exponent = int(math.log10(abs(number)))
+        if number < 0.01:
+            return f"{sign}{number:.4f}".rstrip('0').rstrip('.')  
+        elif number >= 1e15:
+            exponent = int(math.log10(number))
             mantissa = number / (10 ** exponent)
-            return f"{mantissa:.2f}e{exponent}"
-        elif abs(number) >= 1e3:
-            return f"{number:,.2f}"
+            return f"{sign}{mantissa:.2f}e{exponent}"
+        elif number >= 1e3:
+            return f"{sign}{number:,.2f}"
         else:
-            return f"{number:.2f}"
+            return f"{sign}{number:.2f}"
 
 def format_response(response: str, use_quote: bool) -> str:
     if use_quote:

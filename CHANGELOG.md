@@ -2,16 +2,20 @@
 
 RU:
 
-Исправил:
+Изменил:
 
-Вывод бота если запрос имел запятую к примеру 13,499 KZT (бот выдавал его как 13,50 KZT)
+Теперь бот отвечает реплаем на запрос
 
-Инлайн режим не обрабатывал пробелы и заптяую
+Добавил:
+
+Простые математические задачи по типу 5 + 5 USD и т.д
 
 EN:
 
-Fixed:
+Modified:
 
-Bot output if a query had a comma for example 13,499 KZT (bot output it as 13,50 KZT)
+The bot now responds with a reply to the request
 
-Inline mode did not process spaces and commas
+Added:
+
+Simple math problems like 5 + 5 USD, etc.

@@ -347,11 +347,15 @@ async def handle_message(message: types.Message):
             await cmd_stats(message)
         return
 
-    amount, currency = parse_amount_and_currency(message.text)
-
-    if amount is not None and currency is not None:
-        logger.info(f"Valid conversion request: {amount} {currency} from user {user_id}")
-        await process_conversion(message, amount, currency)
+    parsed_result = parse_amount_and_currency(message.text)
+    
+    if parsed_result is not None:
+        amount, currency = parsed_result
+        if amount is not None and currency is not None:
+            logger.info(f"Valid conversion request: {amount} {currency} from user {user_id}")
+            await process_conversion(message, amount, currency)
+        else:
+            logger.info(f"Invalid conversion request from user {user_id}: amount={amount}, currency={currency}")
     else:
         logger.info(f"Ignored message: {message.text} from user {user_id}")
 

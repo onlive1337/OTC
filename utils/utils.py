@@ -1,6 +1,6 @@
 from typing import Dict, Any, Tuple, Optional
 import time
-from config.config import CACHE_EXPIRATION_TIME, ACTIVE_CURRENCIES, CRYPTO_CURRENCIES, CURRENCY_ABBREVIATIONS, ALL_CURRENCIES
+from config.config import CACHE_EXPIRATION_TIME, ACTIVE_CURRENCIES, CRYPTO_CURRENCIES, CURRENCY_ABBREVIATIONS, ALL_CURRENCIES, CURRENCY_SYMBOLS
 from config.languages import LANGUAGES
 import logging
 import aiohttp
@@ -113,9 +113,11 @@ def read_changelog():
         return "Чейнджлог не найден."
 
 def parse_amount_and_currency(text: str) -> Tuple[Optional[float], Optional[str]]:
-    text = text.strip()
+    text = text.strip().lower()
     
-    pattern = r'^(.*?)\s*([a-zA-Zа-яА-Я$€£¥]+)$'
+    text = re.sub(r'(\d+)\s*(млн|млрд|m|k|к)', lambda m: m.group(1) + {'млн': '*1000000', 'млрд': '*1000000000', 'm': '*1000000', 'k': '*1000', 'к': '*1000'}[m.group(2)], text)
+    
+    pattern = r'^(.*?)\s*([a-zа-я$€£¥]+)$'
     match = re.match(pattern, text)
     
     if not match:
@@ -124,17 +126,13 @@ def parse_amount_and_currency(text: str) -> Tuple[Optional[float], Optional[str]
     expr, currency_str = match.groups()
     
     try:
-        expr = expr.replace('к', 'k').replace('м', 'm').replace('млн', 'm').replace('млрд', 'b')
-        expr = expr.replace('k', '*1000').replace('m', '*1000000').replace('b', '*1000000000')
-        
         amount = safe_eval(expr)
     except:
         return None, None
     
     currency = None
-    currency_symbols = {'$': 'USD', '€': 'EUR', '£': 'GBP', '¥': 'JPY'}
-    if currency_str in currency_symbols:
-        currency = currency_symbols[currency_str]
+    if currency_str in CURRENCY_SYMBOLS:
+        currency = CURRENCY_SYMBOLS[currency_str]
     else:
         for abbr, code in CURRENCY_ABBREVIATIONS.items():
             if abbr.lower() in currency_str.lower():
@@ -145,11 +143,20 @@ def parse_amount_and_currency(text: str) -> Tuple[Optional[float], Optional[str]
         currency = currency_str.strip().upper()
         if currency not in ALL_CURRENCIES:
             return None, None
-    
+
     return amount, currency
 
 def safe_eval(expr):
-    return eval(expr, {"__builtins__": None}, {"abs": abs})
+    return eval(expr, {"__builtins__": None}, {
+        "abs": abs,
+        "round": round,
+        "+": operator.add,
+        "-": operator.sub,
+        "*": operator.mul,
+        "/": operator.truediv,
+        "**": operator.pow,
+        "^": operator.pow
+    })
 
 def format_large_number(number, is_crypto=False):
     if abs(number) > 1e100:  

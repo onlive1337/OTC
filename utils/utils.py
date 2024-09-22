@@ -115,19 +115,21 @@ def read_changelog():
 def parse_amount_and_currency(text: str) -> Tuple[Optional[float], Optional[str]]:
     text = text.strip().lower()
     
-    text = re.sub(r'(\d+)\s*(млн|млрд|m|k|к)', lambda m: m.group(1) + {'млн': '*1000000', 'млрд': '*1000000000', 'm': '*1000000', 'k': '*1000', 'к': '*1000'}[m.group(2)], text)
+    text = re.sub(r'(\d)\s+(\d)', r'\1\2', text)
+    text = text.replace(',', '.')
     
-    pattern = r'^(.*?)\s*([a-zа-я$€£¥]+)$'
-    match = re.match(pattern, text)
-    
-    if not match:
+    parts = text.split()
+    if len(parts) < 2:
         return None, None
     
-    expr, currency_str = match.groups()
+    currency_str = parts[-1]
+    amount_str = ' '.join(parts[:-1])
+    
+    amount_str = re.sub(r'(\d+)(млн|млрд|m)$', lambda m: str(float(m.group(1)) * {'млн': 1e6, 'млрд': 1e9, 'm': 1e6}[m.group(2)]), amount_str)
     
     try:
-        amount = safe_eval(expr)
-    except:
+        amount = safe_eval(amount_str)
+    except Exception:
         return None, None
     
     currency = None
@@ -135,12 +137,12 @@ def parse_amount_and_currency(text: str) -> Tuple[Optional[float], Optional[str]
         currency = CURRENCY_SYMBOLS[currency_str]
     else:
         for abbr, code in CURRENCY_ABBREVIATIONS.items():
-            if abbr.lower() in currency_str.lower():
+            if abbr.lower() == currency_str.lower():
                 currency = code
                 break
     
     if not currency:
-        currency = currency_str.strip().upper()
+        currency = currency_str.upper()
         if currency not in ALL_CURRENCIES:
             return None, None
 

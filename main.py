@@ -207,10 +207,10 @@ async def inline_query_handler(query: InlineQuery):
         error_result = InlineQueryResultArticle(
             id="error",
             title=LANGUAGES[user_lang].get('invalid_input', "Invalid Input"),
-            description=LANGUAGES[user_lang].get('invalid_input_message', "Invalid input. Please enter amount and currency code, e.g., '100 USD'."),
+            description=LANGUAGES[user_lang].get('invalid_input_message', "Invalid input. Please enter amount and currency code, e.g., '100 USD' or '10,982 KZT'."),
             input_message_content=InputTextMessageContent(
                 message_text=LANGUAGES[user_lang].get('invalid_input_message', 
-                "Invalid input. Please enter amount and currency code, e.g., '100 USD'.")
+                "Invalid input. Please enter amount and currency code, e.g., '100 USD' or '10,982 KZT'.")
             )
         )
         await query.answer(results=[error_result], cache_time=1)

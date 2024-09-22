@@ -116,7 +116,6 @@ def parse_amount_and_currency(text: str) -> Tuple[Optional[float], Optional[str]
     text = text.strip().lower()
     
     text = re.sub(r'(\d)\s+(\d)', r'\1\2', text)
-    text = text.replace(',', '.')
     
     parts = text.split()
     if len(parts) < 2:
@@ -124,6 +123,16 @@ def parse_amount_and_currency(text: str) -> Tuple[Optional[float], Optional[str]
     
     currency_str = parts[-1]
     amount_str = ' '.join(parts[:-1])
+    
+    if amount_str.endswith('кк'):
+        amount_str = amount_str[:-2] + '*1000000'
+    elif amount_str.endswith('к'):
+        amount_str = amount_str[:-1] + '*1000'
+    
+    if ',' in amount_str and '.' not in amount_str:
+        amount_str = amount_str.replace(',', '')
+    else:
+        amount_str = amount_str.replace(',', '.')
     
     amount_str = re.sub(r'(\d+)(млн|млрд|m)$', lambda m: str(float(m.group(1)) * {'млн': 1e6, 'млрд': 1e9, 'm': 1e6}[m.group(2)]), amount_str)
     
@@ -173,7 +182,7 @@ def format_large_number(number, is_crypto=False):
         elif number < 1:
             return f"{sign}{number:.8f}".rstrip('0').rstrip('.')  
         elif number < 1000:
-            return f"{sign}{number:.4f}".rstrip('0').rstrip('.')  
+            return f"{sign}{number:.8f}".rstrip('0').rstrip('.')
         elif number >= 1e15:
             exponent = int(math.log10(number))
             mantissa = number / (10 ** exponent)
@@ -190,7 +199,7 @@ def format_large_number(number, is_crypto=False):
         elif number >= 1e3:
             return f"{sign}{number:,.2f}"
         else:
-            return f"{sign}{number:.2f}"
+            return f"{sign}{number:.8f}".rstrip('0').rstrip('.')
 
 def format_response(response: str, use_quote: bool) -> str:
     if use_quote:

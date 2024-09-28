@@ -91,7 +91,7 @@ LANGUAGES = {
    ),
    'setting_updated': "Настройка обновлена",
    'language_changed': "Язык изменён",
-   'negative_or_zero_amount': "Результат вычисления отрицательный или равен нулю. Пожалуйста, введите положительную сумму."
+   'negative_or_zero_amount': "Результат вычисления отрицательный или равен нулю. Пожалуйста, введите положительную сумму.",
     },
     'en': {
 'welcome': """Hello! I'm a currency conversion bot. 🌍💱
@@ -185,6 +185,6 @@ If you have any questions, feel free to contact us via feedback!""",
    ),
    'setting_updated': "Settings has been updated",
    'language_changed': "The language has been changed",
-   'negative_or_zero_amount': "The result of the calculation is negative or zero. Please enter a positive amount."
+   'negative_or_zero_amount': "The result of the calculation is negative or zero. Please enter a positive amount.",
     }
 }

@@ -7,7 +7,6 @@ import aiohttp
 import os
 import math
 import re
-import ast
 import operator
 from aiogram.types import CallbackQuery
 from data import user_data

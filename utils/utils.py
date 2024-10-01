@@ -169,7 +169,7 @@ def safe_eval(expr):
     })
 
 def format_large_number(number, is_crypto=False):
-    if abs(number) > 1e100:  
+    if abs(number) > 1e100:
         return "Число слишком большое"
     
     sign = "-" if number < 0 else ""
@@ -179,7 +179,7 @@ def format_large_number(number, is_crypto=False):
         if number < 1e-8:
             return f"{sign}{number:.8e}"
         elif number < 1:
-            return f"{sign}{number:.8f}".rstrip('0').rstrip('.')  
+            return f"{sign}{number:.8f}".rstrip('0').rstrip('.')
         elif number < 1000:
             return f"{sign}{number:.8f}".rstrip('0').rstrip('.')
         elif number >= 1e15:
@@ -190,15 +190,16 @@ def format_large_number(number, is_crypto=False):
             return f"{sign}{number:,.8f}".rstrip('0').rstrip('.')
     else:
         if number < 0.01:
-            return f"{sign}{number:.4f}".rstrip('0').rstrip('.')  
+            return f"{sign}{number:.6f}".rstrip('0').rstrip('.')
         elif number >= 1e15:
             exponent = int(math.log10(number))
             mantissa = number / (10 ** exponent)
-            return f"{sign}{mantissa:.2f}e{exponent}"
-        elif number >= 1e3:
-            return f"{sign}{number:,.2f}"
+            return f"{sign}{mantissa:.4f}e{exponent}"
         else:
-            return f"{sign}{number:.8f}".rstrip('0').rstrip('.')
+            integer_part = int(number)
+            decimal_places = max(2, min(4, 6 - len(str(integer_part))))
+            formatted = f"{sign}{number:,.{decimal_places}f}"
+            return formatted.rstrip('0').rstrip('.') if '.' in formatted else formatted
 
 def format_response(response: str, use_quote: bool) -> str:
     if use_quote:

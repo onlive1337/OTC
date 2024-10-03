@@ -1,109 +1,133 @@
-# Бот-конвертер валют
+# Currency Converter Bot
 
-Этот Telegram бот позволяет конвертировать валюты и криптовалюты. Он поддерживает как личные чаты, так и групповые.
+[![Python](https://img.shields.io/badge/Python-3.7%2B-blue)](https://www.python.org/downloads/)
+[![aiogram](https://img.shields.io/badge/aiogram-3.0%2B-green)](https://docs.aiogram.dev/)
+[![License](https://img.shields.io/badge/license-MIT-blue.svg)](https://opensource.org/licenses/MIT)
 
-## Возможности
-
-- Конвертация валют и криптовалют
-- Поддержка групповых чатов
-- Inline режим для быстрой конвертации
-- Настраиваемый список валют и криптовалют
-- Многоязычный интерфейс (русский и английский)
-
-## Установка
-
-1. Клонируйте репозиторий:
-   ```
-   git clone https://github.com/onlive1337/OTC.git
-   cd OTC
-   ```
-
-2. Установите зависимости:
-   ```
-   pip install -r requirements.txt
-   ```
-
-3. Создайте файл `.env` и добавьте следующие переменные:
-   ```python
-   BOT_TOKEN = 'your_bot_token_here'
-   ```
-
-## Запуск бота
-
-Запустите бота с помощью команды:
-```
-python bot.py
-```
-
-## Использование
-
-1. Начните чат с ботом в Telegram, отправив команду `/start`.
-2. Для конвертации валюты, просто отправьте сумму и код валюты, например: `100 USD` или `5000 RUB`.
-3. Используйте команду `/settings` для настройки списка валют и языка интерфейса.
-4. В групповых чатах, добавьте бота и используйте команду `/settings` для настройки валют для группы.
-
-## Дополнительные команды
-
-- `/start` - Начать взаимодействие с ботом
-- `/settings` - Открыть меню настроек
-- `/stats` - Показать статистику (только для администраторов)
-
-## Поддержка
-
-Если у вас возникли проблемы или есть предложения по улучшению бота, пожалуйста, создайте issue в этом репозитории.
+[English](#english) | [Русский](#русский)
 
 ---
 
-# Currency Converter Bot
+## English
 
-This Telegram bot allows you to convert currencies and cryptocurrencies. It supports both private chats and group chats.
+### Description
 
-## Features
+This Currency Converter Bot is a powerful Telegram bot that allows users to convert between various currencies and cryptocurrencies. It provides real-time exchange rates, supports group chats, and offers a user-friendly interface with customizable settings.
 
-- Currency and cryptocurrency conversion
-- Group chat support
-- Inline mode for quick conversion
-- Customizable list of currencies and cryptocurrencies
-- Multilingual interface (Russian and English)
+### Key Features
 
-## Installation
+- Real-time currency and cryptocurrency conversion
+- Support for multiple fiat currencies and cryptocurrencies
+- Inline mode for quick conversions in any chat
+- Customizable user settings (preferred currencies, language, quote format)
+- Group chat support with separate settings for each group
+- Caching system for efficient API usage
+
+### Requirements
+
+- Python 3.7+
+- aiogram 3.0+
+- aiohttp
+- Other dependencies (see `requirements.txt`)
+
+### Installation
 
 1. Clone the repository:
    ```
-   git clone https://github.com/onlive1337/OTC.git
+   git clone https://github.com/yourusername/OTC.git
    cd OTC
    ```
 
-2. Install dependencies:
+2. Install the required packages:
    ```
    pip install -r requirements.txt
    ```
 
-3. Create a `.env` file and add the following variables:
-   ```python
-   BOT_TOKEN = 'your_bot_token_here'
+3. Set up your configuration:
+   - Create `.env` file 
+   - Fill `TELEGRAM_BOT_TOKEN=TOKEN`
+
+### Usage
+
+To start the bot, run:
+
+```
+python main.py
+```
+
+### Commands
+
+- `/start` - Initialize the bot and see the main menu
+- `/settings` - Adjust your preferences
+- `/stats` - View bot statistics (admin only)
+
+### Contributing
+
+Contributions are welcome! Please feel free to submit a Pull Request.
+
+### License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+---
+
+## Русский
+
+### Описание
+
+Этот Бот-Конвертер Валют - мощный Telegram-бот, который позволяет пользователям конвертировать различные валюты и криптовалюты. Он предоставляет актуальные обменные курсы, поддерживает групповые чаты и предлагает удобный интерфейс с настраиваемыми параметрами.
+
+### Основные функции
+
+- Конвертация валют и криптовалют в реальном времени
+- Поддержка множества фиатных валют и криптовалют
+- Инлайн-режим для быстрой конвертации в любом чате
+- Настраиваемые пользовательские настройки (предпочтительные валюты, язык, формат цитирования)
+- Поддержка групповых чатов с отдельными настройками для каждой группы
+- Система кэширования для эффективного использования API
+
+### Требования
+
+- Python 3.7+
+- aiogram 3.0+
+- aiohttp
+- Другие зависимости (см. `requirements.txt`)
+
+### Установка
+
+1. Клонируйте репозиторий:
+   ```
+   git clone https://github.com/yourusername/OTC.git
+   cd OTC
    ```
 
-## Running the Bot
+2. Установите необходимые пакеты:
+   ```
+   pip install -r requirements.txt
+   ```
 
-Start the bot using the command:
+3. Настройте конфигурацию:
+  - Создайте файл `.env`
+  -  Заполните токен вот так: `TELEGRAM_BOT_TOKEN=TOKEN` 
+
+### Использование
+
+Чтобы запустить бота, выполните:
+
 ```
-python bot.py
+python main.py
 ```
 
-## Usage
+### Команды
 
-1. Start a chat with the bot on Telegram by sending the `/start` command.
-2. To convert currency, simply send an amount and currency code, for example: `100 USD` or `5000 RUB`.
-3. Use the `/settings` command to customize the list of currencies and interface language.
-4. In group chats, add the bot and use the `/settings` command to set up currencies for the group.
+- `/start` - Инициализировать бота и увидеть главное меню
+- `/settings` - Настроить ваши предпочтения
+- `/stats` - Просмотреть статистику бота (только для админов)
 
-## Additional Commands
+### Вклад в проект
 
-- `/start` - Start interacting with the bot
-- `/settings` - Open the settings menu
-- `/stats` - Show statistics (admin only)
+Мы приветствуем вклад в развитие проекта! Пожалуйста, не стесняйтесь отправлять Pull Request.
 
-## Support
+### Лицензия
 
-If you encounter any issues or have suggestions for improving the bot, please create an issue in this repository.
+Этот проект лицензирован под MIT License - подробности см. в файле [LICENSE](LICENSE).

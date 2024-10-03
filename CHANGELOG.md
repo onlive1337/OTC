@@ -1,21 +1,17 @@
-[0.9.9.8] - 2024-09-20
+[1.0.0] - 2024-10-03
 
 RU:
 
-Изменил:
+Изменено:
 
-Теперь бот отвечает реплаем на запрос
+Теперь когда юзер пишет /help ему выдаётся мануал по использованию бота
 
-Добавил:
-
-Простые математические задачи по типу 5 + 5 USD и т.д
+Переписана многая часть локализации
 
 EN:
 
 Modified:
 
-The bot now responds with a reply to the request
+Now when a user writes /help he gets a tutorial on how to use the bot
 
-Added:
-
-Simple math problems like 5 + 5 USD, etc.
+Many parts of the localization have been rewritten

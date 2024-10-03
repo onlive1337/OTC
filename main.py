@@ -9,7 +9,7 @@ from aiogram.fsm.state import State, StatesGroup
 from aiogram.filters import Command, CommandStart
 from config.config import (
     BOT_TOKEN, ADMIN_IDS, CURRENT_VERSION,
-    ALL_CURRENCIES, CURRENCY_SYMBOLS
+    ALL_CURRENCIES
 )
 from utils.utils import get_exchange_rates, convert_currency, format_large_number, parse_amount_and_currency, read_changelog, delete_conversion_message, save_settings
 from data.chat_settings import show_chat_settings, save_chat_settings, show_chat_currencies, show_chat_crypto, toggle_chat_crypto, toggle_chat_currency, back_to_chat_settings
@@ -91,6 +91,21 @@ async def process_howto(callback_query: CallbackQuery):
     kb.adjust(1)
     
     await callback_query.message.edit_text(howto_message, reply_markup=kb.as_markup())
+
+async def cmd_help(message: Message):
+    user_data.update_user_data(message.from_user.id)
+    user_lang = user_data.get_user_language(message.from_user.id)
+    
+    howto_message = LANGUAGES[user_lang]['help']
+    
+    kb = InlineKeyboardBuilder()
+    kb.button(text=LANGUAGES[user_lang].get('delete_button', "Delete"), callback_data="delete_conversion")
+    kb.adjust(1)
+    
+    await message.reply(
+        text=howto_message,
+        reply_markup=kb.as_markup()
+    )
 
 async def process_feedback(callback_query: CallbackQuery):
     user_data.update_user_data(callback_query.from_user.id)
@@ -583,6 +598,7 @@ async def main():
     dp.message.register(cmd_start, CommandStart())
     dp.message.register(cmd_stats, Command("stats"))
     dp.message.register(cmd_settings, Command("settings"))
+    dp.message.register(cmd_help, Command("help"))
     dp.message.register(handle_message)
     dp.message.register(handle_conversion)
     dp.message.register(handle_all_messages)

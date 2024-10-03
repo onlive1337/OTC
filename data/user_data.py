@@ -1,6 +1,5 @@
 import json
 from datetime import datetime
-from collections import defaultdict
 from typing import List
 from config.config import USER_DATA_FILE, ACTIVE_CURRENCIES, CRYPTO_CURRENCIES
 import logging
@@ -113,7 +112,7 @@ class UserData:
                 "last_seen": today, 
                 "selected_crypto": CRYPTO_CURRENCIES,
                 "selected_currencies": ACTIVE_CURRENCIES[:5],
-                "language": "ru",
+                "language": "en",
                 "first_seen": today,
                 "use_quote_format": True
         }

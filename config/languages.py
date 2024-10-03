@@ -12,7 +12,7 @@ LANGUAGES = {
 Чтобы начать:
 1️⃣ Используйте /settings для настройки вашего опыта
 2️⃣ Проверьте /help для подробных инструкций
-3️⃣ Присоединяйтесь к нашему каналу @onswixdev для последних обновлений
+3️⃣ Присоединяйтесь к нашему каналу @OTC_InfoHub для последних обновлений
 
 Приятной конвертации! 💰✨
         """,
@@ -39,7 +39,7 @@ LANGUAGES = {
 • Используйте 'м' для миллионов: '1м EUR' равно '1000000 EUR'
 • Поддерживает большинство основных валют и популярных криптовалют
 
-🆘 Нужна дополнительная помощь? Свяжитесь с нами в @onswixdev
+🆘 Нужна дополнительная помощь? Свяжитесь со мной: @onswix 
 
 Приятной конвертации! 🌈💰
         """,
@@ -118,7 +118,7 @@ This bot helps you convert currencies quickly and easily. Here's what you can do
 To get started:
 1️⃣ Use /settings to customize your experience (chat)
 2️⃣ Check /help for detailed instructions
-3️⃣ Join our channel @onswixdev for the latest updates
+3️⃣ Join our channel @OTC_InfoHub for the latest updates
 
 Happy converting! 💰✨
         """,
@@ -145,7 +145,7 @@ Happy converting! 💰✨
 • Use 'm' for millions: '1m EUR' equals '1000000 EUR'
 • Supports most major currencies and popular cryptocurrencies
 
-🆘 Need more help? Contact us at @onswixdev
+🆘 Need more help? Contact me at @onswix
 
 Happy converting! 🌈💰
         """,

@@ -42,7 +42,7 @@ async def cmd_start(message: Message):
             await message.answer(LANGUAGES[user_lang]['admin_only'])
     else:
         kb = InlineKeyboardBuilder()
-        kb.button(text=LANGUAGES[user_lang]['news_button'], url="https://t.me/onswixdev")
+        kb.button(text=LANGUAGES[user_lang]['news_button'], url="https://t.me/OTC_InfoHub")
         kb.button(text=LANGUAGES[user_lang]['help_button'], callback_data='howto')
         kb.button(text=LANGUAGES[user_lang]['feedback_button'], callback_data='feedback')
         kb.button(text=LANGUAGES[user_lang]['settings_button'], callback_data='settings')
@@ -511,7 +511,7 @@ async def back_to_main(callback_query: CallbackQuery):
     user_lang = user_data.get_user_language(callback_query.from_user.id)
     
     kb = InlineKeyboardBuilder()
-    kb.button(text=LANGUAGES[user_lang]['news_button'], url="https://t.me/onswixdev")
+    kb.button(text=LANGUAGES[user_lang]['news_button'], url="https://t.me/OTC_InfoHub")
     kb.button(text=LANGUAGES[user_lang]['help_button'], callback_data='howto')
     kb.button(text=LANGUAGES[user_lang]['feedback_button'], callback_data='feedback')
     kb.button(text=LANGUAGES[user_lang]['settings_button'], callback_data='settings')

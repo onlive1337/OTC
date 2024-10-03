@@ -1,4 +1,4 @@
-# Currency Converter Bot
+# OTC bot
 
 [![Python](https://img.shields.io/badge/Python-3.7%2B-blue)](https://www.python.org/downloads/)
 [![aiogram](https://img.shields.io/badge/aiogram-3.0%2B-green)](https://docs.aiogram.dev/)

@@ -4,9 +4,10 @@ from dotenv import load_dotenv
 load_dotenv()
 
 BOT_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')
+LOG_CHAT_ID = "-4558354811"
 ADMIN_IDS = [810587766]
 USER_DATA_FILE = 'user_data.json'
-CURRENT_VERSION = "1.0.0"
+CURRENT_VERSION = "1.0.1"
 
 CACHE_EXPIRATION_TIME = 600
 

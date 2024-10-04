@@ -116,6 +116,8 @@ def parse_amount_and_currency(text: str) -> Tuple[Optional[float], Optional[str]
     
     text = re.sub(r'(\d)\s+(\d)', r'\1\2', text)
     
+    text = re.sub(r'(\d+)\s*(млн|млрд|m|k|к)', lambda m: m.group(1) + m.group(2), text)
+    
     parts = text.split()
     if len(parts) < 2:
         return None, None

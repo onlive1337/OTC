@@ -88,7 +88,19 @@ class UserData:
             return {}
 
     def get_user_currencies(self, user_id):
-        return self.user_data[str(user_id)].get("selected_currencies", ACTIVE_CURRENCIES[:5])
+        user_id_str = str(user_id)
+        if user_id_str not in self.user_data:
+            self.user_data[user_id_str] = {
+                "interactions": 0,
+                "last_seen": datetime.now().strftime('%Y-%m-%d'),
+                "selected_currencies": ACTIVE_CURRENCIES[:5],
+                "selected_crypto": CRYPTO_CURRENCIES,
+                "language": "en",
+                "first_seen": datetime.now().strftime('%Y-%m-%d'),
+                "use_quote_format": True
+            }
+            self.save_user_data()
+        return self.user_data[user_id_str].get("selected_currencies", ACTIVE_CURRENCIES[:5])
 
     def set_user_currencies(self, user_id, currencies):
         user_id_str = str(user_id)

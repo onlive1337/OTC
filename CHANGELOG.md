@@ -1,17 +1,24 @@
-[1.0.0] - 2024-10-03
+[1.0.1] - 2024-10-03
 
 RU:
 
-Изменено:
+Исправил:
 
-Теперь когда юзер пишет /help ему выдаётся мануал по использованию бота
+Бот игнорил запросы на некоторые сокращения
 
-Переписана многая часть локализации
+Попытка исправить баг с базой данных у всех юзеров
 
-EN:
+Добавил:
 
-Modified:
+Систему отправку логов ERROR в чат
 
-Now when a user writes /help he gets a tutorial on how to use the bot
+RU:
+Corrected:
 
-Many parts of the localization have been rewritten
+Bot was ignoring requests for some abbreviations
+
+Attempting to fix a bug with the database for all users
+
+Added:
+
+System for sending ERROR logs to the chat room

@@ -9,13 +9,14 @@ from aiogram.fsm.state import State, StatesGroup
 from aiogram.filters import Command, CommandStart
 from config.config import (
     BOT_TOKEN, ADMIN_IDS, CURRENT_VERSION,
-    ALL_CURRENCIES
+    ALL_CURRENCIES, LOG_CHAT_ID
 )
 from utils.utils import get_exchange_rates, convert_currency, format_large_number, parse_amount_and_currency, read_changelog, delete_conversion_message, save_settings
 from data.chat_settings import show_chat_settings, save_chat_settings, show_chat_currencies, show_chat_crypto, toggle_chat_crypto, toggle_chat_currency, back_to_chat_settings
 from data.user_settings import show_currencies, show_crypto, toggle_crypto, toggle_currency, toggle_quote_format, change_language, set_language
 from config.languages import LANGUAGES
 from data import user_data
+from utils.log_handler import setup_telegram_logging
 
 cache: Dict[str, Any] = {}
 
@@ -632,6 +633,7 @@ async def main():
     dp.inline_query.register(inline_query_handler)
     dp.my_chat_member.register(handle_my_chat_member)
     
+    await setup_telegram_logging(bot)
     await dp.start_polling(bot)
 
 if __name__ == "__main__":

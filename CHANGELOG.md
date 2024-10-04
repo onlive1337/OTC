@@ -2,23 +2,12 @@
 
 RU:
 
-Исправил:
+Изменил:
 
-Бот игнорил запросы на некоторые сокращения
+Переписал всю логику базы данных
 
-Попытка исправить баг с базой данных у всех юзеров
+EN:
 
-Добавил:
+Modified:
 
-Систему отправку логов ERROR в чат
-
-RU:
-Corrected:
-
-Bot was ignoring requests for some abbreviations
-
-Attempting to fix a bug with the database for all users
-
-Added:
-
-System for sending ERROR logs to the chat room
+Rewrote all database logic

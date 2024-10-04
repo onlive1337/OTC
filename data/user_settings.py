@@ -61,7 +61,7 @@ async def toggle_quote_format(callback_query: CallbackQuery):
                 raise
         await callback_query.answer(LANGUAGES[user_lang]['setting_updated'])
     
-    user_data.update_user_cache(user_id)
+    user_data.update_user_data(user_id)
 
 async def show_currencies(callback_query: CallbackQuery):
     page = int(callback_query.data.split('_')[-1])
@@ -115,7 +115,7 @@ async def toggle_currency(callback_query: CallbackQuery):
         user_currencies.append(currency)
     
     user_data.set_user_currencies(callback_query.from_user.id, user_currencies)
-    user_data.update_user_cache(callback_query.from_user.id)
+    user_data.update_user_data(callback_query.from_user.id)
     await show_currencies(callback_query)
 
 async def toggle_crypto(callback_query: CallbackQuery):
@@ -129,7 +129,7 @@ async def toggle_crypto(callback_query: CallbackQuery):
         user_crypto.append(crypto)
     
     user_data.set_user_crypto(user_id, user_crypto)
-    user_data.update_user_cache(user_id)
+    user_data.update_user_data(user_id)
     await show_crypto(callback_query)
 
 async def change_language(callback_query: CallbackQuery):
@@ -148,7 +148,7 @@ async def set_language(callback_query: CallbackQuery):
     user_id = callback_query.from_user.id
     new_lang = callback_query.data.split('_')[-1]
     user_data.set_user_language(user_id, new_lang)
-    user_data.update_user_cache(user_id)
+    user_data.update_user_data(user_id)
     
     kb = InlineKeyboardBuilder()
     kb.button(text=LANGUAGES[new_lang]['back_to_settings'], callback_data="back_to_settings")

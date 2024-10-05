@@ -1,6 +1,6 @@
 import asyncio
 import logging
-from typing import Dict, Any
+from typing import Dict, Any, Union
 from aiogram import Bot, Dispatcher, types, F
 from aiogram.types import Message, InlineQuery, InlineQueryResultArticle, InputTextMessageContent, CallbackQuery, ChatMemberUpdated
 from aiogram.utils.keyboard import InlineKeyboardBuilder
@@ -61,7 +61,20 @@ async def cmd_settings(message: Message):
     user_lang = user_data.get_user_language(user_id)
 
     if message.chat.type == 'private':
-        await process_settings(message, None)
+        kb = InlineKeyboardBuilder()
+        kb.button(text=LANGUAGES[user_lang]['currencies'], callback_data="show_currencies_0")
+        kb.button(text=LANGUAGES[user_lang]['cryptocurrencies'], callback_data="show_crypto")
+        kb.button(text=LANGUAGES[user_lang]['language'], callback_data="change_language")
+        kb.button(text=LANGUAGES[user_lang]['quote_format'], callback_data="toggle_quote_format")
+        kb.button(text=LANGUAGES[user_lang]['save_button'], callback_data="save_settings")
+        kb.button(text=LANGUAGES[user_lang]['back'], callback_data="back_to_main")
+        kb.adjust(2, 2, 1, 1)
+        
+        use_quote = user_data.get_user_quote_format(user_id)
+        quote_status = LANGUAGES[user_lang]['on'] if use_quote else LANGUAGES[user_lang]['off']
+        settings_text = f"{LANGUAGES[user_lang]['settings']}\n\n{LANGUAGES[user_lang]['quote_format_status']}: {quote_status}"
+        
+        await message.answer(settings_text, reply_markup=kb.as_markup())
     else:
         chat_member = await message.chat.get_member(user_id)
         if chat_member.status in ['creator', 'administrator']:
@@ -78,7 +91,7 @@ async def cmd_settings(message: Message):
             
             await message.answer(settings_text, reply_markup=kb.as_markup())
         else:
-            await message.answer("Только администраторы могут изменять настройки чата.")
+            await message.answer(LANGUAGES[user_lang]['admin_only'])
 
 async def process_howto(callback_query: CallbackQuery):
     user_data.update_user_data(callback_query.from_user.id)
@@ -120,7 +133,12 @@ async def process_feedback(callback_query: CallbackQuery):
     
     await callback_query.message.edit_text(feedback_message, reply_markup=kb.as_markup())
 
-async def process_settings(callback_query: CallbackQuery, state: FSMContext):
+async def process_settings(callback_query_or_message: Union[CallbackQuery, Message], state: FSMContext):
+    if isinstance(callback_query_or_message, Message):
+        await cmd_settings(callback_query_or_message)
+        return
+        
+    callback_query = callback_query_or_message
     user_id = callback_query.from_user.id
     user_lang = user_data.get_user_language(user_id)
     use_quote = user_data.get_user_quote_format(user_id)

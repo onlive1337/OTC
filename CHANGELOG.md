@@ -1,13 +1,13 @@
-[1.0.1] - 2024-10-03
+[1.0.2] - 2024-10-03
 
 RU:
 
-Изменил:
+Пофиксил:
 
-Переписал всю логику базы данных
+Пофиксил ошибку связанную с настройками
 
 EN:
 
-Modified:
+Fixed:
 
-Rewrote all database logic
+Fixed a bug related to settings

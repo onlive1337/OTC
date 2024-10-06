@@ -57,9 +57,9 @@ async def get_exchange_rates() -> Dict[str, float]:
                 if id in crypto_data:
                     rates[crypto] = 1 / crypto_data[id]['usd']
 
-            async with session.get('https://min-api.cryptocompare.com/data/pricemulti?fsyms=NOT,DUREV&tsyms=USD') as response:
+            async with session.get('https://min-api.cryptocompare.com/data/pricemulti?fsyms=NOT,DUREV,HMSTR&tsyms=USD') as response:
                 additional_crypto_data = await response.json()
-            for crypto in ['NOT', 'DUREV']:
+            for crypto in ['NOT', 'DUREV', 'HMSTR']:
                 if crypto in additional_crypto_data:
                     rates[crypto] = 1 / additional_crypto_data[crypto]['USD']
 

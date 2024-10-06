@@ -44,5 +44,6 @@ CURRENCY_ABBREVIATIONS = {
     'гривен': 'UAH',
     'юань': 'CNY',
     'юаней': 'CNY',
-    'рублей': 'RUB'
+    'рублей': 'RUB',
+    'тенге': 'KZT'
 }

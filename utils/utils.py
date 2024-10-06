@@ -118,13 +118,24 @@ def parse_amount_and_currency(text: str) -> Tuple[Optional[float], Optional[str]
     
     text = re.sub(r'(\d+)\s*(млн|млрд|m|k|к)', lambda m: m.group(1) + m.group(2), text)
     
-    parts = text.split()
-    if len(parts) < 2:
-        return None, None
+    currency_pattern = r'(' + '|'.join(map(re.escape, CURRENCY_SYMBOLS.keys() | CURRENCY_ABBREVIATIONS.keys())) + r')'
+    match = re.search(f'^{currency_pattern}(.+)$|^(.+){currency_pattern}$', text)
     
-    currency_str = parts[-1]
-    amount_str = ' '.join(parts[:-1])
+    if match:
+        if match.group(1):
+            currency_str = match.group(1)
+            amount_str = match.group(2)
+        else:
+            currency_str = match.group(4)
+            amount_str = match.group(3)
+    else:
+        parts = text.split()
+        if len(parts) < 2:
+            return None, None
+        currency_str = parts[-1]
+        amount_str = ' '.join(parts[:-1])
     
+    amount_str = amount_str.strip()
     if amount_str.endswith('кк'):
         amount_str = amount_str[:-2] + '*1000000'
     elif amount_str.endswith('к'):
@@ -145,13 +156,9 @@ def parse_amount_and_currency(text: str) -> Tuple[Optional[float], Optional[str]
     currency = None
     if currency_str in CURRENCY_SYMBOLS:
         currency = CURRENCY_SYMBOLS[currency_str]
+    elif currency_str in CURRENCY_ABBREVIATIONS:
+        currency = CURRENCY_ABBREVIATIONS[currency_str]
     else:
-        for abbr, code in CURRENCY_ABBREVIATIONS.items():
-            if abbr.lower() == currency_str.lower():
-                currency = code
-                break
-    
-    if not currency:
         currency = currency_str.upper()
         if currency not in ALL_CURRENCIES:
             return None, None

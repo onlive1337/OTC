@@ -1,13 +1,17 @@
-[1.0.2] - 2024-10-03
+[1.0.4] - 2024-10-17
 
 RU:
 
-Пофиксил:
+Изменил:
 
-Пофиксил ошибку связанную с настройками
+Улучшил систему математических задач
+
+Улучшил систему обработку сообщений
 
 EN:
 
-Fixed:
+Modified:
 
-Fixed a bug related to settings
+Improved the math problem system
+
+Improved message handling system

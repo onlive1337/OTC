@@ -1,7 +1,5 @@
 from typing import Dict, Any, Tuple, Optional
 import time
-from config.config import CACHE_EXPIRATION_TIME, ACTIVE_CURRENCIES, CRYPTO_CURRENCIES, CURRENCY_ABBREVIATIONS, ALL_CURRENCIES, CURRENCY_SYMBOLS
-from config.languages import LANGUAGES
 import logging
 import aiohttp
 import os
@@ -10,9 +8,10 @@ import re
 import operator
 from aiogram.types import CallbackQuery
 from data import user_data
+from config.config import CACHE_EXPIRATION_TIME, ACTIVE_CURRENCIES, CRYPTO_CURRENCIES, CURRENCY_ABBREVIATIONS, ALL_CURRENCIES, CURRENCY_SYMBOLS
+from config.languages import LANGUAGES
 
 user_data = user_data.UserData()
-
 
 cache: Dict[str, Any] = {}
 
@@ -114,9 +113,19 @@ def read_changelog():
 def parse_amount_and_currency(text: str) -> Tuple[Optional[float], Optional[str]]:
     text = text.strip().lower()
     
-    text = re.sub(r'(\d)\s+(\d)', r'\1\2', text)
+    replacements = {
+        'кк': '*1000000',
+        'к': '*1000',
+        'млн': '*1000000',
+        'млрд': '*1000000000',
+        'b': '*1000000000',
+        'm': '*1000000',
+        'k': '*1000'
+    }
+    for short, full in replacements.items():
+        text = re.sub(rf'(\d+)\s*{short}\b', rf'\1{full}', text, flags=re.IGNORECASE)
     
-    text = re.sub(r'(\d+)\s*(млн|млрд|m|k|к)', lambda m: m.group(1) + m.group(2), text)
+    text = re.sub(r'(\d)\s+(\d)', r'\1\2', text)
     
     currency_pattern = '(' + '|'.join(map(re.escape, CURRENCY_SYMBOLS.keys() | CURRENCY_ABBREVIATIONS.keys() | ALL_CURRENCIES.keys())) + ')'
     pattern = rf'^{currency_pattern}\s*(.+)$|^(.+)\s*{currency_pattern}$'
@@ -137,17 +146,13 @@ def parse_amount_and_currency(text: str) -> Tuple[Optional[float], Optional[str]
         amount_str = ' '.join(parts[:-1])
     
     amount_str = amount_str.strip()
-    if amount_str.endswith('кк'):
-        amount_str = amount_str[:-2] + '*1000000'
-    elif amount_str.endswith('к'):
-        amount_str = amount_str[:-1] + '*1000'
     
-    if ',' in amount_str and '.' not in amount_str:
-        amount_str = amount_str.replace(',', '')
-    else:
-        amount_str = amount_str.replace(',', '.')
+    if '%' in amount_str:
+        amount_str = amount_str.replace('%', '/100')
     
-    amount_str = re.sub(r'(\d+)(млн|млрд|m)$', lambda m: str(float(m.group(1)) * {'млн': 1e6, 'млрд': 1e9, 'm': 1e6}[m.group(2)]), amount_str)
+    amount_str = amount_str.replace(',', '.')
+    
+    amount_str = re.sub(r'(\d+)e(\d+)', r'\1*10**\2', amount_str, flags=re.IGNORECASE)
     
     try:
         amount = safe_eval(amount_str)
@@ -173,16 +178,23 @@ def parse_amount_and_currency(text: str) -> Tuple[Optional[float], Optional[str]
     return amount, currency
 
 def safe_eval(expr):
-    return eval(expr, {"__builtins__": None}, {
+    safe_dict = {
         "abs": abs,
         "round": round,
+        "sin": math.sin,
+        "cos": math.cos,
+        "tan": math.tan,
+        "sqrt": math.sqrt,
+        "pi": math.pi,
+        "e": math.e,
         "+": operator.add,
         "-": operator.sub,
         "*": operator.mul,
         "/": operator.truediv,
         "**": operator.pow,
         "^": operator.pow
-    })
+    }
+    return eval(expr, {"__builtins__": None}, safe_dict)
 
 def format_large_number(number, is_crypto=False):
     if abs(number) > 1e100:

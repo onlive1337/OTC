@@ -86,6 +86,10 @@ LANGUAGES = {
         'support_button': "❤️ Поддержать",
         'support_message': "✨ Спасибо за использование моего бота! Если вы хотите поддержать разработчика и помочь в дальнейшем развитии проекта, вы можете сделать это, отправив добровольный взнос, нажав на кнопку. Если вы с Узбекистана или с России обратитесь в ко мне лично пожалуйста. Ваша поддержка очень ценна! ❤️",
         'donate_button': "❤️ Поддержать",
+        'empty_input_title': "Введите сумму и валюту",
+        'empty_input_description': "Например, '100 USD' или '10 982 RUB'",
+        'empty_input_message': "Пожалуйста, введите сумму и код валюты для конвертации, например, '100 USD' или '10 982 RUB'.",
+        'invalid_input_description': "Пожалуйста, проверьте формат ввода",
         'welcome_group_message': """
 👋 Привет! Я OTC, теперь к вашим услугам в этой группе!
 
@@ -192,6 +196,10 @@ Happy converting! 🌈💰
         'support_button': "❤️ Support",
         'support_message': "✨ Thank you for using my bot! If you would like to support the developer and help with the further development of the project, you can do so by making a voluntary donation by clicking the button. If you are from Uzbekistan or Russia, please contact me personally. Your support is greatly appreciated! ❤️",
         'donate_button': "❤️ Support",
+        'empty_input_title': "Enter amount and currency",
+        'empty_input_description': "For example, '100 USD' or '10,982 KZT'",
+        'empty_input_message': "Please enter an amount and currency code to convert, e.g., '100 USD' or '10,982 KZT'.",
+        'invalid_input_description': "Please check your input format",
         'welcome_group_message': """
 👋 Hello! I'm the OTC, now at your service in this group!
 

@@ -235,13 +235,26 @@ async def inline_query_handler(query: InlineQuery):
     user_lang = user_data.get_user_language(query.from_user.id)
     use_quote = user_data.get_user_quote_format(query.from_user.id)
     
+    if not query.query.strip():
+        empty_input_result = InlineQueryResultArticle(
+            id="empty_input",
+            title=LANGUAGES[user_lang].get('empty_input_title', "Enter amount and currency"),
+            description=LANGUAGES[user_lang].get('empty_input_description', "For example, '100 USD' or '10,982 KZT'"),
+            input_message_content=InputTextMessageContent(
+                message_text=LANGUAGES[user_lang].get('empty_input_message', 
+                "Please enter an amount and currency code to convert, e.g., '100 USD' or '10,982 KZT'.")
+            )
+        )
+        await query.answer(results=[empty_input_result], cache_time=1)
+        return
+
     amount, from_currency = parse_amount_and_currency(query.query)
 
     if amount is None or from_currency is None:
         error_result = InlineQueryResultArticle(
             id="error",
             title=LANGUAGES[user_lang].get('invalid_input', "Invalid Input"),
-            description=LANGUAGES[user_lang].get('invalid_input_message', "Invalid input. Please enter amount and currency code, e.g., '100 USD' or '10,982 KZT'."),
+            description=LANGUAGES[user_lang].get('invalid_input_description', "Please check your input format"),
             input_message_content=InputTextMessageContent(
                 message_text=LANGUAGES[user_lang].get('invalid_input_message', 
                 "Invalid input. Please enter amount and currency code, e.g., '100 USD' or '10,982 KZT'.")

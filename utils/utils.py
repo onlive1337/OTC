@@ -128,24 +128,29 @@ def parse_amount_and_currency(text: str) -> Tuple[Optional[float], Optional[str]
     text = re.sub(r'(\d)\s+(\d)', r'\1\2', text)
     
     currency_pattern = '(' + '|'.join(map(re.escape, CURRENCY_SYMBOLS.keys() | CURRENCY_ABBREVIATIONS.keys() | ALL_CURRENCIES.keys())) + ')'
-    pattern = rf'^{currency_pattern}\s*(.+)$|^(.+)\s*{currency_pattern}$'
-    match = re.search(pattern, text, re.IGNORECASE)
     
-    if match:
-        if match.group(1):
-            currency_str = match.group(1)
-            amount_str = match.group(2)
-        else:
-            currency_str = match.group(4)
-            amount_str = match.group(3)
-    else:
-        parts = text.split()
-        if len(parts) < 2:
-            return None, None
-        currency_str = parts[-1]
-        amount_str = ' '.join(parts[:-1])
+    patterns = [
+        rf'(\d+(?:[.,]\d+)?(?:\s*[*/+\-]\s*\d+(?:[.,]\d+)?)*)\s*{currency_pattern}\b',
+        rf'{currency_pattern}\s*(\d+(?:[.,]\d+)?(?:\s*[*/+\-]\s*\d+(?:[.,]\d+)?)*)\b'
+    ]
     
-    amount_str = amount_str.strip()
+    amount_str = None
+    currency_str = None
+    
+    for pattern in patterns:
+        match = re.search(pattern, text, re.IGNORECASE)
+        if match:
+            groups = [g for g in match.groups() if g is not None]
+            for group in groups:
+                if re.match(r'^\d+(?:[.,]\d+)?(?:\s*[*/+\-]\s*\d+(?:[.,]\d+)?)*$', group):
+                    amount_str = group
+                elif group.lower() in CURRENCY_SYMBOLS or group.upper() in ALL_CURRENCIES or group.lower() in CURRENCY_ABBREVIATIONS:
+                    currency_str = group
+            if amount_str and currency_str:
+                break
+    
+    if not amount_str or not currency_str:
+        return None, None
     
     if '%' in amount_str:
         amount_str = amount_str.replace('%', '/100')

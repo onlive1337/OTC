@@ -7,7 +7,7 @@ BOT_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')
 LOG_CHAT_ID = "-4558354811"
 ADMIN_IDS = [810587766]
 USER_DATA_FILE = 'user_data.json'
-CURRENT_VERSION = "1.0.4"
+CURRENT_VERSION = "1.0.5"
 
 CACHE_EXPIRATION_TIME = 600
 
@@ -45,5 +45,6 @@ CURRENCY_ABBREVIATIONS = {
     'юань': 'CNY',
     'юаней': 'CNY',
     'рублей': 'RUB',
-    'тенге': 'KZT'
+    'тенге': 'KZT',
+    'евро': 'EUR'
 }

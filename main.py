@@ -9,7 +9,7 @@ from aiogram.fsm.state import State, StatesGroup
 from aiogram.filters import Command, CommandStart
 from config.config import (
     BOT_TOKEN, ADMIN_IDS, CURRENT_VERSION,
-    ALL_CURRENCIES, LOG_CHAT_ID
+    ALL_CURRENCIES
 )
 from utils.utils import get_exchange_rates, convert_currency, format_large_number, parse_amount_and_currency, read_changelog, delete_conversion_message, save_settings
 from data.chat_settings import show_chat_settings, save_chat_settings, show_chat_currencies, show_chat_crypto, toggle_chat_crypto, toggle_chat_currency, back_to_chat_settings

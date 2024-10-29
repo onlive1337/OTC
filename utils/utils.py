@@ -127,11 +127,18 @@ def parse_amount_and_currency(text: str) -> Tuple[Optional[float], Optional[str]
     
     text = re.sub(r'(\d)\s+(\d)', r'\1\2', text)
     
-    currency_pattern = '(' + '|'.join(map(re.escape, CURRENCY_SYMBOLS.keys() | CURRENCY_ABBREVIATIONS.keys() | ALL_CURRENCIES.keys())) + ')'
+    amount_pattern = r'\d+(?:[.,]\d+)?'
+    currency_symbols_pattern = '|'.join(map(re.escape, CURRENCY_SYMBOLS.keys()))
+    currency_abbrev_pattern = '|'.join(map(re.escape, CURRENCY_ABBREVIATIONS.keys()))
+    currency_codes_pattern = '|'.join(map(re.escape, ALL_CURRENCIES.keys()))
+    
+    currency_pattern = f'({currency_symbols_pattern}|{currency_abbrev_pattern}|{currency_codes_pattern})'
+    
+    logger.info(f"Looking for currencies with pattern: {currency_pattern}")
     
     patterns = [
-        rf'(\d+(?:[.,]\d+)?(?:\s*[*/+\-]\s*\d+(?:[.,]\d+)?)*)\s*{currency_pattern}\b',
-        rf'{currency_pattern}\s*(\d+(?:[.,]\d+)?(?:\s*[*/+\-]\s*\d+(?:[.,]\d+)?)*)\b'
+        rf'({amount_pattern})\s*{currency_pattern}',
+        rf'{currency_pattern}\s*({amount_pattern})', 
     ]
     
     amount_str = None
@@ -140,28 +147,25 @@ def parse_amount_and_currency(text: str) -> Tuple[Optional[float], Optional[str]
     for pattern in patterns:
         match = re.search(pattern, text, re.IGNORECASE)
         if match:
-            groups = [g for g in match.groups() if g is not None]
-            for group in groups:
-                if re.match(r'^\d+(?:[.,]\d+)?(?:\s*[*/+\-]\s*\d+(?:[.,]\d+)?)*$', group):
-                    amount_str = group
-                elif group.lower() in CURRENCY_SYMBOLS or group.upper() in ALL_CURRENCIES or group.lower() in CURRENCY_ABBREVIATIONS:
-                    currency_str = group
-            if amount_str and currency_str:
+            if len(match.groups()) == 2:
+                if match.group(1).replace('.', '').replace(',', '').isdigit():
+                    amount_str = match.group(1)
+                    currency_str = match.group(2)
+                else:
+                    amount_str = match.group(2)
+                    currency_str = match.group(1)
                 break
     
     if not amount_str or not currency_str:
         return None, None
     
-    if '%' in amount_str:
-        amount_str = amount_str.replace('%', '/100')
-    
     amount_str = amount_str.replace(',', '.')
     
-    amount_str = re.sub(r'(\d+)e(\d+)', r'\1*10**\2', amount_str, flags=re.IGNORECASE)
-    
     try:
-        amount = safe_eval(amount_str)
-    except Exception:
+        amount = float(amount_str)
+        logger.info(f"Parsed amount: {amount}")
+    except Exception as e:
+        logger.error(f"Error parsing amount: {e}")
         return None, None
     
     currency = None
@@ -172,14 +176,7 @@ def parse_amount_and_currency(text: str) -> Tuple[Optional[float], Optional[str]
         currency = CURRENCY_ABBREVIATIONS[currency_str]
     elif currency_str.upper() in ALL_CURRENCIES:
         currency = currency_str.upper()
-    else:
-        for abbr, curr in CURRENCY_ABBREVIATIONS.items():
-            if abbr in currency_str:
-                currency = curr
-                break
-        if not currency:
-            return None, None
-
+    
     return amount, currency
 
 def safe_eval(expr):

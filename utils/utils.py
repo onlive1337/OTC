@@ -113,6 +113,9 @@ def read_changelog():
 def parse_amount_and_currency(text: str) -> Tuple[Optional[float], Optional[str]]:
     text = text.strip().lower()
     
+    if not text:
+        return None, None
+        
     replacements = {
         'кк': '*1000000',
         'млрд': '*1000000000',
@@ -122,26 +125,24 @@ def parse_amount_and_currency(text: str) -> Tuple[Optional[float], Optional[str]
         'm': '*1000000',
         'k': '*1000'
     }
-    
+
     text = re.sub(r'(\d+)\s+(кк|к|млн|млрд|k|m|b)\b', r'\1\2', text, flags=re.IGNORECASE)
-    
     for short, full in sorted(replacements.items(), key=lambda x: len(x[0]), reverse=True):
         text = re.sub(rf'(\d+){short}\b', rf'\1{full}', text, flags=re.IGNORECASE)
     
     text = re.sub(r'(\d)\s+(\d)', r'\1\2', text)
-    
+
     amount_pattern = r'\d+(?:[.,]\d+)?(?:\*\d+)?'
     currency_symbols_pattern = '|'.join(map(re.escape, CURRENCY_SYMBOLS.keys()))
     currency_abbrev_pattern = '|'.join(map(re.escape, CURRENCY_ABBREVIATIONS.keys()))
     currency_codes_pattern = '|'.join(map(re.escape, ALL_CURRENCIES.keys()))
-    
     currency_pattern = f'({currency_symbols_pattern}|{currency_abbrev_pattern}|{currency_codes_pattern})'
-    
+
     patterns = [
         rf'({amount_pattern})\s*{currency_pattern}',
         rf'{currency_pattern}\s*({amount_pattern})',
     ]
-    
+
     amount_str = None
     currency_str = None
     
@@ -156,12 +157,11 @@ def parse_amount_and_currency(text: str) -> Tuple[Optional[float], Optional[str]
                     amount_str = match.group(2)
                     currency_str = match.group(1)
                 break
-    
+
     if not amount_str or not currency_str:
         return None, None
-    
+
     amount_str = amount_str.replace(',', '.')
-    
     try:
         if '*' in amount_str:
             amount = safe_eval(amount_str)
@@ -171,16 +171,17 @@ def parse_amount_and_currency(text: str) -> Tuple[Optional[float], Optional[str]
     except Exception as e:
         logger.error(f"Error parsing amount: {e}")
         return None, None
-    
+
     currency = None
     currency_str = currency_str.lower()
+    
     if currency_str in CURRENCY_SYMBOLS:
         currency = CURRENCY_SYMBOLS[currency_str]
     elif currency_str in CURRENCY_ABBREVIATIONS:
         currency = CURRENCY_ABBREVIATIONS[currency_str]
     elif currency_str.upper() in ALL_CURRENCIES:
         currency = currency_str.upper()
-    
+
     return amount, currency
 
 def safe_eval(expr):

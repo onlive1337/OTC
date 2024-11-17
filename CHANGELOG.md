@@ -1,13 +1,13 @@
-[1.0.6] - 2024-11-6
+[1.0.7] - 2024-11-17
 
 RU:
 
-Изменено:
+Добавлено:
 
-Теперь бот поддерживает множественные запросы, к примеру "40$ и 20$"
+Обработчик редактированных сообщений
 
 EN:
 
-Modified:
+Added:
 
-The bot now supports multiple queries, for example “40$ and 20$”
+Edit Message Handler

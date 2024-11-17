@@ -722,6 +722,7 @@ async def main():
     dp.message.register(handle_message)
     dp.message.register(handle_conversion)
     dp.message.register(handle_all_messages)
+    dp.edited_message.register(handle_message)
     
     dp.callback_query.register(process_howto, F.data == "howto")
     dp.callback_query.register(process_feedback, F.data == "feedback")

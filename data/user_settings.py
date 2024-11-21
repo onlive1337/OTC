@@ -1,7 +1,6 @@
 from aiogram.types import CallbackQuery
 from aiogram.exceptions import TelegramBadRequest
 from data import user_data
-from data.chat_settings import back_to_chat_settings
 from config.config import ACTIVE_CURRENCIES, ALL_CURRENCIES, CRYPTO_CURRENCIES
 from config.languages import LANGUAGES
 from aiogram.utils.keyboard import InlineKeyboardBuilder

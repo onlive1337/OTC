@@ -1,8 +1,7 @@
 import logging
 from aiogram import Bot
-from config.config import BOT_TOKEN, LOG_CHAT_ID
+from config.config import LOG_CHAT_ID
 import asyncio
-import traceback
 
 class TelegramLogHandler(logging.Handler):
     def __init__(self, bot: Bot):

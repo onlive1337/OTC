@@ -90,6 +90,7 @@ LANGUAGES = {
         'empty_input_description': "Например, '100 USD' или '10 982 RUB'",
         'empty_input_message': "Пожалуйста, введите сумму и код валюты для конвертации, например, '100 USD' или '10 982 RUB'.",
         'invalid_input_description': "Пожалуйста, проверьте формат ввода",
+        'not_admin_message': 'Чтобы изменить эти настройки, необходимо быть администратором.',
         'welcome_group_message': """
 👋 Привет! Я OTC, теперь к вашим услугам в этой группе!
 
@@ -200,6 +201,7 @@ Happy converting! 🌈💰
         'empty_input_description': "For example, '100 USD' or '10,982 KZT'",
         'empty_input_message': "Please enter an amount and currency code to convert, e.g., '100 USD' or '10,982 KZT'.",
         'invalid_input_description': "Please check your input format",
+        'not_admin_message': 'You need to be an admin to change these settings.',
         'welcome_group_message': """
 👋 Hello! I'm the OTC, now at your service in this group!
 

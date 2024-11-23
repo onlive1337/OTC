@@ -1,13 +1,17 @@
-[1.0.7] - 2024-11-17
+[1.0.8] - 2024-11-23
 
 RU:
 
-Добавлено:
+Исправлено:
 
-Обработчик редактированных сообщений
+Не администраторы чата могли менять настройки чата
+
+Чуть чуть почистил код
 
 EN:
 
-Added:
+Fixed:
 
-Edit Message Handler
+Non-administrators of the chat could change chat room settings
+
+Cleaned up the code a bit

@@ -1,4 +1,4 @@
-from typing import Dict, Any, Tuple, Optional
+from typing import Dict, Any, Tuple, Optional, Union
 import time
 import logging
 import aiohttp
@@ -6,7 +6,7 @@ import os
 import math
 import re
 import operator
-from aiogram.types import CallbackQuery
+from aiogram.types import CallbackQuery, Message
 from data import user_data
 from config.config import CACHE_EXPIRATION_TIME, ACTIVE_CURRENCIES, CRYPTO_CURRENCIES, CURRENCY_ABBREVIATIONS, ALL_CURRENCIES, CURRENCY_SYMBOLS
 from config.languages import LANGUAGES
@@ -250,3 +250,20 @@ async def save_settings(callback_query: CallbackQuery):
     user_lang = user_data.get_user_language(callback_query.from_user.id)
     await callback_query.message.edit_text(LANGUAGES[user_lang]['save_settings'])
     await callback_query.answer()
+
+async def check_admin_rights(message_or_callback: Union[Message, CallbackQuery], user_id: int, chat_id: int) -> bool:
+    try:
+        chat_member = await message_or_callback.bot.get_chat_member(chat_id, user_id)
+        return chat_member.status in ['creator', 'administrator']
+    except Exception as e:
+        logger.error(f"Error checking admin rights: {e}")
+        return False
+
+async def show_not_admin_message(message_or_callback: Union[Message, CallbackQuery], user_id: int):
+    user_lang = user_data.get_user_language(user_id)
+    error_text = LANGUAGES[user_lang].get('not_admin_message', 'You need to be an admin to change these settings.')
+    
+    if isinstance(message_or_callback, CallbackQuery):
+        await message_or_callback.answer(error_text, show_alert=True)
+    else:
+        await message_or_callback.reply(error_text)

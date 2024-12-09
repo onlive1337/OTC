@@ -395,15 +395,14 @@ async def handle_message(message: types.Message):
             await cmd_stats(message)
         return
 
-    requests = re.split(r'[,;]|\s+и\s+|\s+and\s+', message.text)
+    requests = re.split(r';|\s+и\s+|\s+and\s+', message.text)
     valid_requests = []
     
     for request in requests:
+        request = re.sub(r'(\d+),(\d{3})', r'\1\2', request)
         parsed_result = parse_amount_and_currency(request)
-        if parsed_result is not None:
-            amount, currency = parsed_result
-            if amount is not None and currency is not None:
-                valid_requests.append((amount, currency))
+        if parsed_result[0] is not None and parsed_result[1] is not None:
+            valid_requests.append(parsed_result)
     
     if valid_requests:
         if len(valid_requests) > 1:
@@ -507,45 +506,31 @@ async def process_multiple_conversions(message: types.Message, requests: List[Tu
 async def process_conversion(message: types.Message, amount: float, from_currency: str):
     user_id = message.from_user.id
     chat_id = message.chat.id
-    user_data.update_user_data(user_id)
     user_lang = user_data.get_user_language(user_id)
-    logger.info(f"Processing conversion: {amount} {from_currency} for user {user_id} in chat {chat_id}")
     
     try:
         if amount <= 0:
-            await message.answer(LANGUAGES[user_lang].get('negative_or_zero_amount', "The result of the calculation is negative or zero. Please enter a positive amount."))
-            return
-
-        if amount > 1e100 or amount < -1e100:
-            await message.answer(LANGUAGES[user_lang].get('number_too_large', "The number is too large to process."))
+            await message.answer(LANGUAGES[user_lang].get('negative_or_zero_amount'))
             return
 
         rates = await get_exchange_rates()
         if not rates:
-            logger.error(f"Failed to get exchange rates for user {user_id}")
             await message.answer(LANGUAGES[user_lang]['error'])
             return
         
         if message.chat.type in ['group', 'supergroup']:
-            user_data.update_chat_cache(chat_id)
             user_currencies = user_data.get_chat_currencies(chat_id)
             user_crypto = user_data.get_chat_crypto(chat_id)
         else:
             user_currencies = user_data.get_user_currencies(user_id)
             user_crypto = user_data.get_user_crypto(user_id)
         
-        if not user_currencies and not user_crypto:
-            no_currencies_message = LANGUAGES[user_lang].get('select_currencies_full_message', 
-                "You haven't selected any currencies. Please go to bot settings to select currencies for conversion.")
-            await message.answer(no_currencies_message)
-            return
-        
-        response = f"{format_large_number(amount)} {ALL_CURRENCIES.get(from_currency, '')} {from_currency}\n\n"
-        
-        fiat_conversions = []
-        crypto_conversions = []
+        response_parts = []
+        response_parts.append(f"{format_large_number(amount)} {ALL_CURRENCIES.get(from_currency, '')} {from_currency}\n")
         
         if user_currencies:
+            response_parts.append(f"\n{LANGUAGES[user_lang]['fiat_currencies']}")
+            fiat_conversions = []
             for to_cur in user_currencies:
                 if to_cur != from_currency:
                     try:
@@ -553,50 +538,34 @@ async def process_conversion(message: types.Message, amount: float, from_currenc
                         conversion_line = f"{format_large_number(converted)} {ALL_CURRENCIES.get(to_cur, '')} {to_cur}"
                         fiat_conversions.append(conversion_line)
                     except KeyError:
-                        logger.warning(f"Conversion failed for {to_cur}. It might not be in the rates.")
-                    except OverflowError:
-                        fiat_conversions.append(f"Overflow {ALL_CURRENCIES.get(to_cur, '')} {to_cur}")
+                        continue
+            response_parts.append("<blockquote expandable>" + "\n".join(fiat_conversions) + "</blockquote>")
         
         if user_crypto:
+            response_parts.append(f"\n\n{LANGUAGES[user_lang]['cryptocurrencies_output']}")
+            crypto_conversions = []
             for to_cur in user_crypto:
                 if to_cur != from_currency:
                     try:
                         converted = convert_currency(amount, from_currency, to_cur, rates)
-                        conversion_line = f"{format_large_number(converted, True)} {ALL_CURRENCIES.get(to_cur, '')} {to_cur}"
-                        crypto_formatted = " ".join(conversion_line.split()[:2])
-                        crypto_conversions.append(crypto_formatted)
+                        conversion_line = f"{format_large_number(converted, True)} {to_cur}"
+                        crypto_conversions.append(conversion_line)
                     except KeyError:
-                        logger.warning(f"Conversion failed for {to_cur}. It might not be in the rates.")
-                    except OverflowError:
-                        crypto_conversions.append(f"Overflow {ALL_CURRENCIES.get(to_cur, '')} {to_cur}")
-        
-        if fiat_conversions:
-            response += f"<b>{LANGUAGES[user_lang]['fiat_currencies']}</b>\n"
-            response += "<blockquote expandable>\n"
-            response += "\n".join(fiat_conversions)
-            response += "</blockquote>\n\n"
-        
-        if crypto_conversions:
-            response += f"<b>{LANGUAGES[user_lang]['cryptocurrencies_output']}</b>\n"
-            response += "<blockquote expandable>\n"
-            response += "\n".join(crypto_conversions)
-            response += "</blockquote>"
+                        continue
+            response_parts.append("<blockquote expandable>" + "\n".join(crypto_conversions) + "</blockquote>")
         
         kb = InlineKeyboardBuilder()
         kb.button(text=LANGUAGES[user_lang].get('delete_button', "Delete"), callback_data="delete_conversion")
         
-        logger.info(f"Sending conversion response for {amount} {from_currency} to user {user_id} in chat {chat_id}")
+        final_response = "".join(response_parts).strip()
         
         await message.reply(
-            text=response,
+            text=final_response,
             reply_markup=kb.as_markup(),
             parse_mode="HTML"
         )
-    except OverflowError:
-        await message.answer(LANGUAGES[user_lang].get('number_too_large', "The number is too large to process."))
     except Exception as e:
         logger.error(f"Error in process_conversion for user {user_id}: {e}")
-        logger.exception("Full traceback:")
         await message.answer(LANGUAGES[user_lang]['error'])
 
 async def process_about(callback_query: CallbackQuery):

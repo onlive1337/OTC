@@ -1,17 +1,17 @@
-[1.0.8] - 2024-11-23
+[1.0.9] - 2024-12-09
 
 RU:
 
 Исправлено:
 
-Не администраторы чата могли менять настройки чата
+Баги с двоичными запросами (аля 20к сум и 20к рублей)
 
-Чуть чуть почистил код
+Баги с парсированием текста с запятой
 
 EN:
 
 Fixed:
 
-Non-administrators of the chat could change chat room settings
+Bugs with binary queries (aka 20k sum and 20k rubles)
 
-Cleaned up the code a bit
+Bugs with parsing text with comma

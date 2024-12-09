@@ -115,6 +115,8 @@ def parse_amount_and_currency(text: str) -> Tuple[Optional[float], Optional[str]
     
     if not text:
         return None, None
+
+    new_text = text.replace(',', '')
         
     replacements = {
         'кк': '*1000000',
@@ -126,12 +128,9 @@ def parse_amount_and_currency(text: str) -> Tuple[Optional[float], Optional[str]
         'k': '*1000'
     }
 
-    text = re.sub(r'(\d+)\s+(кк|к|млн|млрд|k|m|b)\b', r'\1\2', text, flags=re.IGNORECASE)
-    for short, full in sorted(replacements.items(), key=lambda x: len(x[0]), reverse=True):
-        text = re.sub(rf'(\d+){short}\b', rf'\1{full}', text, flags=re.IGNORECASE)
+    new_text = re.sub(r'(\d)\s+(\d)', r'\1\2', new_text)
+    logger.info(f"After space removal: {new_text}")
     
-    text = re.sub(r'(\d)\s+(\d)', r'\1\2', text)
-
     amount_pattern = r'\d+(?:[.,]\d+)?(?:\*\d+)?'
     currency_symbols_pattern = '|'.join(map(re.escape, CURRENCY_SYMBOLS.keys()))
     currency_abbrev_pattern = '|'.join(map(re.escape, CURRENCY_ABBREVIATIONS.keys()))
@@ -147,7 +146,7 @@ def parse_amount_and_currency(text: str) -> Tuple[Optional[float], Optional[str]
     currency_str = None
     
     for pattern in patterns:
-        match = re.search(pattern, text, re.IGNORECASE)
+        match = re.search(pattern, new_text, re.IGNORECASE)
         if match:
             if len(match.groups()) == 2:
                 if re.match(amount_pattern, match.group(1)):
@@ -161,13 +160,14 @@ def parse_amount_and_currency(text: str) -> Tuple[Optional[float], Optional[str]
     if not amount_str or not currency_str:
         return None, None
 
-    amount_str = amount_str.replace(',', '.')
+    logger.info(f"Matched amount_str: {amount_str}, currency_str: {currency_str}")
+
     try:
         if '*' in amount_str:
             amount = safe_eval(amount_str)
         else:
             amount = float(amount_str)
-        logger.info(f"Parsed amount: {amount}")
+        logger.info(f"Final parsed amount: {amount}")
     except Exception as e:
         logger.error(f"Error parsing amount: {e}")
         return None, None
@@ -237,10 +237,10 @@ def format_large_number(number, is_crypto=False):
             return formatted.rstrip('0').rstrip('.') if '.' in formatted else formatted
 
 def format_response(response: str, use_quote: bool) -> str:
+    response = response.strip()
     if use_quote:
         return f"<blockquote expandable>{response}</blockquote>"
-    else:
-        return response 
+    return response
 
 async def delete_conversion_message(callback_query: CallbackQuery):
     await callback_query.message.delete()

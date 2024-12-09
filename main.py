@@ -422,75 +422,57 @@ async def process_multiple_conversions(message: types.Message, requests: List[Tu
     try:
         rates = await get_exchange_rates()
         if not rates:
-            logger.error(f"Failed to get exchange rates for user {user_id}")
             await message.answer(LANGUAGES[user_lang]['error'])
             return
         
         if message.chat.type in ['group', 'supergroup']:
-            user_data.update_chat_cache(chat_id)
             user_currencies = user_data.get_chat_currencies(chat_id)
             user_crypto = user_data.get_chat_crypto(chat_id)
         else:
             user_currencies = user_data.get_user_currencies(user_id)
             user_crypto = user_data.get_user_crypto(user_id)
         
-        if not user_currencies and not user_crypto:
-            no_currencies_message = LANGUAGES[user_lang].get('select_currencies_full_message', 
-                "You haven't selected any currencies. Please go to bot settings to select currencies for conversion.")
-            await message.answer(no_currencies_message)
-            return
-        
         final_response = ""
         
         for amount, from_currency in requests:
             if amount <= 0 or amount > 1e100 or amount < -1e100:
                 continue
-                
-            response = f"{format_large_number(amount)} {ALL_CURRENCIES.get(from_currency, '')} {from_currency}\n"
-            response += "<blockquote expandable>\n"
             
-            fiat_conversions = []
-            crypto_conversions = []
+            response = f"{format_large_number(amount)} {ALL_CURRENCIES.get(from_currency, '')} {from_currency}\n"
+            conversion_parts = []
             
             if user_currencies:
+                conversion_parts.append(f"{LANGUAGES[user_lang]['fiat_currencies']}")
+                fiat_parts = []
                 for to_cur in user_currencies:
                     if to_cur != from_currency:
                         try:
                             converted = convert_currency(amount, from_currency, to_cur, rates)
-                            conversion_line = f"{format_large_number(converted)} {ALL_CURRENCIES.get(to_cur, '')} {to_cur}"
-                            fiat_conversions.append(conversion_line)
+                            fiat_parts.append(f"{format_large_number(converted)} {ALL_CURRENCIES.get(to_cur, '')} {to_cur}")
                         except (KeyError, OverflowError):
                             continue
+                if fiat_parts:
+                    conversion_parts.append("\n".join(fiat_parts))
             
             if user_crypto:
+                conversion_parts.append(f"{LANGUAGES[user_lang]['cryptocurrencies_output']}")
+                crypto_parts = []
                 for to_cur in user_crypto:
                     if to_cur != from_currency:
                         try:
                             converted = convert_currency(amount, from_currency, to_cur, rates)
-                            conversion_line = f"{format_large_number(converted, True)} {ALL_CURRENCIES.get(to_cur, '')} {to_cur}"
-                            crypto_formatted = " ".join(conversion_line.split()[:2])
-                            crypto_conversions.append(crypto_formatted)
+                            crypto_parts.append(f"{format_large_number(converted, True)} {to_cur}")
                         except (KeyError, OverflowError):
                             continue
+                if crypto_parts:
+                    conversion_parts.append("\n".join(crypto_parts))
             
-            if fiat_conversions:
-                response += f"<b>{LANGUAGES[user_lang]['fiat_currencies']}</b>\n"
-                response += "\n".join(fiat_conversions)
-                if crypto_conversions:
-                    response += "\n\n"
-            
-            if crypto_conversions:
-                response += f"<b>{LANGUAGES[user_lang]['cryptocurrencies_output']}</b>\n"
-                response += "\n".join(crypto_conversions)
-            
-            response += "</blockquote>\n\n"
+            response += "<blockquote expandable>" + "\n\n".join(conversion_parts) + "</blockquote>\n\n"
             final_response += response
         
         if final_response:
             kb = InlineKeyboardBuilder()
             kb.button(text=LANGUAGES[user_lang].get('delete_button', "Delete"), callback_data="delete_conversion")
-            
-            logger.info(f"Sending multiple conversion response to user {user_id} in chat {chat_id}")
             
             await message.reply(
                 text=final_response.strip(),
@@ -500,7 +482,6 @@ async def process_multiple_conversions(message: types.Message, requests: List[Tu
             
     except Exception as e:
         logger.error(f"Error in process_multiple_conversions for user {user_id}: {e}")
-        logger.exception("Full traceback:")
         await message.answer(LANGUAGES[user_lang]['error'])
 
 async def process_conversion(message: types.Message, amount: float, from_currency: str):

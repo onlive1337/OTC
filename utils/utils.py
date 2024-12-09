@@ -115,8 +115,6 @@ def parse_amount_and_currency(text: str) -> Tuple[Optional[float], Optional[str]
     
     if not text:
         return None, None
-
-    new_text = text.replace(',', '')
         
     replacements = {
         'кк': '*1000000',
@@ -128,25 +126,24 @@ def parse_amount_and_currency(text: str) -> Tuple[Optional[float], Optional[str]
         'k': '*1000'
     }
 
-    new_text = re.sub(r'(\d)\s+(\d)', r'\1\2', new_text)
-    logger.info(f"After space removal: {new_text}")
+    text = re.sub(r'(\d+)\s*(кк|к|млн|млрд|k|m|b)\b', r'\1\2', text, flags=re.IGNORECASE)
     
+    for short, full in sorted(replacements.items(), key=lambda x: len(x[0]), reverse=True):
+        text = re.sub(rf'(\d+){short}\b', rf'\1{full}', text, flags=re.IGNORECASE)
+
+    text = re.sub(r'(\d)\s+(\d)', r'\1\2', text)
+    text = re.sub(r'(\d+),(\d{3})(?!\d)', r'\1\2', text)
+
     amount_pattern = r'\d+(?:[.,]\d+)?(?:\*\d+)?'
-    currency_symbols_pattern = '|'.join(map(re.escape, CURRENCY_SYMBOLS.keys()))
-    currency_abbrev_pattern = '|'.join(map(re.escape, CURRENCY_ABBREVIATIONS.keys()))
-    currency_codes_pattern = '|'.join(map(re.escape, ALL_CURRENCIES.keys()))
-    currency_pattern = f'({currency_symbols_pattern}|{currency_abbrev_pattern}|{currency_codes_pattern})'
+    currency_pattern = f'({"|".join(map(re.escape, CURRENCY_SYMBOLS.keys() | CURRENCY_ABBREVIATIONS.keys() | ALL_CURRENCIES.keys()))})'
 
     patterns = [
         rf'({amount_pattern})\s*{currency_pattern}',
-        rf'{currency_pattern}\s*({amount_pattern})',
+        rf'{currency_pattern}\s*({amount_pattern})'
     ]
 
-    amount_str = None
-    currency_str = None
-    
     for pattern in patterns:
-        match = re.search(pattern, new_text, re.IGNORECASE)
+        match = re.search(pattern, text, re.IGNORECASE)
         if match:
             if len(match.groups()) == 2:
                 if re.match(amount_pattern, match.group(1)):
@@ -155,34 +152,28 @@ def parse_amount_and_currency(text: str) -> Tuple[Optional[float], Optional[str]
                 else:
                     amount_str = match.group(2)
                     currency_str = match.group(1)
-                break
 
-    if not amount_str or not currency_str:
-        return None, None
+                try:
+                    if '*' in amount_str:
+                        amount = safe_eval(amount_str)
+                    else:
+                        amount = float(amount_str)
+                    
+                    currency = None
+                    currency_str = currency_str.lower()
+                    
+                    if currency_str in CURRENCY_SYMBOLS:
+                        currency = CURRENCY_SYMBOLS[currency_str]
+                    elif currency_str in CURRENCY_ABBREVIATIONS:
+                        currency = CURRENCY_ABBREVIATIONS[currency_str]
+                    elif currency_str.upper() in ALL_CURRENCIES:
+                        currency = currency_str.upper()
 
-    logger.info(f"Matched amount_str: {amount_str}, currency_str: {currency_str}")
+                    return amount, currency
+                except Exception as e:
+                    logger.error(f"Error processing amount: {e}")
 
-    try:
-        if '*' in amount_str:
-            amount = safe_eval(amount_str)
-        else:
-            amount = float(amount_str)
-        logger.info(f"Final parsed amount: {amount}")
-    except Exception as e:
-        logger.error(f"Error parsing amount: {e}")
-        return None, None
-
-    currency = None
-    currency_str = currency_str.lower()
-    
-    if currency_str in CURRENCY_SYMBOLS:
-        currency = CURRENCY_SYMBOLS[currency_str]
-    elif currency_str in CURRENCY_ABBREVIATIONS:
-        currency = CURRENCY_ABBREVIATIONS[currency_str]
-    elif currency_str.upper() in ALL_CURRENCIES:
-        currency = currency_str.upper()
-
-    return amount, currency
+    return None, None
 
 def safe_eval(expr):
     safe_dict = {

@@ -109,6 +109,20 @@ def read_changelog():
             return file.read()
     except FileNotFoundError:
         return "Чейнджлог не найден."
+    
+def preprocess_number(text: str) -> str:
+    text = re.sub(r'(\d)\s+(\d)', r'\1\2', text)
+    
+    if re.match(r'^\d+,\d{1,2}$', text):
+        return text.replace(',', '.')
+    
+    parts = re.split(r'[.,]', text)
+    if len(parts) > 1:
+        if len(parts[-1]) <= 2:
+            return ''.join(parts[:-1]) + '.' + parts[-1]
+        return ''.join(parts)
+    
+    return text
 
 def parse_amount_and_currency(text: str) -> Tuple[Optional[float], Optional[str]]:
     text = text.strip().lower()
@@ -132,7 +146,6 @@ def parse_amount_and_currency(text: str) -> Tuple[Optional[float], Optional[str]
         text = re.sub(rf'(\d+){short}\b', rf'\1{full}', text, flags=re.IGNORECASE)
 
     text = re.sub(r'(\d)\s+(\d)', r'\1\2', text)
-    text = re.sub(r'(\d+),(\d{3})(?!\d)', r'\1\2', text)
 
     amount_pattern = r'\d+(?:[.,]\d+)?(?:\*\d+)?'
     currency_pattern = f'({"|".join(map(re.escape, CURRENCY_SYMBOLS.keys() | CURRENCY_ABBREVIATIONS.keys() | ALL_CURRENCIES.keys()))})'
@@ -154,6 +167,8 @@ def parse_amount_and_currency(text: str) -> Tuple[Optional[float], Optional[str]
                     currency_str = match.group(1)
 
                 try:
+                    amount_str = preprocess_number(amount_str)
+                    
                     if '*' in amount_str:
                         amount = safe_eval(amount_str)
                     else:
@@ -171,7 +186,7 @@ def parse_amount_and_currency(text: str) -> Tuple[Optional[float], Optional[str]
 
                     return amount, currency
                 except Exception as e:
-                    logger.error(f"Error processing amount: {e}")
+                    logger.error(f"Error processing amount: {str(e)}, input: {text}")
 
     return None, None
 

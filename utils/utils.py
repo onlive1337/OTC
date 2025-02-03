@@ -1,3 +1,4 @@
+from datetime import datetime
 from typing import Dict, Any, Tuple, Optional, Union
 import time
 import logging
@@ -273,3 +274,89 @@ async def show_not_admin_message(message_or_callback: Union[Message, CallbackQue
         await message_or_callback.answer(error_text, show_alert=True)
     else:
         await message_or_callback.reply(error_text)
+
+async def get_crypto_history(crypto_id: str, days: str = "7") -> dict:
+    try:
+        symbol = f"{crypto_id}USDT"
+        
+        interval_mapping = {
+            "1": "5m",
+            "7": "15m",
+            "30": "30m"
+        }
+        
+        interval = interval_mapping.get(days, "15m")
+        
+        async with aiohttp.ClientSession() as session:
+            url = "https://api.mexc.com/api/v3/klines"
+            params = {
+                'symbol': symbol,
+                'interval': interval
+            }
+            
+            logger.info(f"Requesting MEXC data: {url} with params {params}")
+            
+            async with session.get(url, params=params) as response:
+                if response.status == 200:
+                    data = await response.json()
+                    return {
+                        'prices': [[int(item[0]), float(item[4])] for item in data[-100:]],
+                        'volumes': [[int(item[0]), float(item[5])] for item in data[-100:]]
+                    }
+                else:
+                    logger.error(f"MEXC API error: {response.status}")
+                    return None
+                    
+    except Exception as e:
+        logger.error(f"Error fetching crypto history from MEXC: {e}")
+        return None
+
+async def get_current_price(crypto_id: str) -> tuple[float, float]:
+    try:
+        symbol = f"{crypto_id}USDT"
+        
+        async with aiohttp.ClientSession() as session:
+            url = "https://api.mexc.com/api/v3/ticker/24hr"
+            params = {'symbol': symbol}
+            
+            async with session.get(url, params=params) as response:
+                if response.status == 200:
+                    data = await response.json()
+                    price = float(data['lastPrice'])
+                    change_percent = float(data['priceChangePercent'])
+                    return price, change_percent
+                else:
+                    return None, None
+                    
+    except Exception as e:
+        logger.error(f"Error getting current price from MEXC: {e}")
+        return None, None
+
+async def get_chart_image(symbol: str) -> bytes:
+    try:
+        chart_url = f"https://api.cryptowat.ch/markets/mexc/{symbol.lower()}usdt/ohlc/png"
+        params = {
+            'width': 800,
+            'height': 400,
+            'theme': 'dark',
+            'period': '1d'
+        }
+        
+        logger.info(f"Requesting chart from CryptoWatch: {chart_url}")
+        
+        async with aiohttp.ClientSession() as session:
+            async with session.get(chart_url, params=params) as response:
+                if response.status == 200:
+                    return await response.read()
+                else:
+                    logger.info("Trying alternative API...")
+                    alt_url = f"https://www.coingecko.com/coins/{symbol.lower()}/sparkline.svg"
+                    async with session.get(alt_url) as alt_response:
+                        if alt_response.status == 200:
+                            return await alt_response.read()
+                        else:
+                            logger.error(f"Both APIs failed. CryptoWatch: {response.status}, Alternative: {alt_response.status}")
+                            return None
+    except Exception as e:
+        logger.error(f"Error getting chart image: {e}")
+        return None

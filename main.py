@@ -3,16 +3,16 @@ import logging
 import re
 from typing import Dict, Any, List, Tuple, Union
 from aiogram import Bot, Dispatcher, types, F
-from aiogram.types import Message, InlineQuery, InlineQueryResultArticle, InputTextMessageContent, CallbackQuery, ChatMemberUpdated
+from aiogram.types import Message, InlineQuery, InlineQueryResultArticle, InputTextMessageContent, CallbackQuery, ChatMemberUpdated, BufferedInputFile
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.filters import Command, CommandStart
 from config.config import (
-    BOT_TOKEN, ADMIN_IDS, CURRENT_VERSION,
+    BOT_TOKEN, ADMIN_IDS, CRYPTO_CURRENCIES, CURRENT_VERSION,
     ALL_CURRENCIES
 )
-from utils.utils import get_exchange_rates, convert_currency, format_large_number, parse_amount_and_currency, read_changelog, delete_conversion_message, save_settings
+from utils.utils import get_chart_image, get_crypto_history, get_exchange_rates, convert_currency, format_large_number, parse_amount_and_currency, read_changelog, delete_conversion_message, save_settings, get_current_price
 from data.chat_settings import show_chat_settings, save_chat_settings, show_chat_currencies, show_chat_crypto, toggle_chat_crypto, toggle_chat_currency, back_to_chat_settings
 from data.user_settings import show_currencies, show_crypto, toggle_crypto, toggle_currency, toggle_quote_format, change_language, set_language
 from config.languages import LANGUAGES
@@ -157,6 +157,94 @@ async def process_settings(callback_query_or_message: Union[CallbackQuery, Messa
     settings_text = f"{LANGUAGES[user_lang]['settings']}\n\n{LANGUAGES[user_lang]['quote_format_status']}: {quote_status}"
     
     await callback_query.message.edit_text(settings_text, reply_markup=kb.as_markup())
+
+async def cmd_price(message: Message):
+    try:
+        parts = message.text.split()
+        if len(parts) < 2:
+            await message.answer(
+                "Используйте формат: /price <криптовалюта>\n" +
+                "Например: /price BTC\n" +
+                f"Доступные криптовалюты: {', '.join(CRYPTO_CURRENCIES)}"
+            )
+            return
+            
+        crypto = parts[1].upper()
+        if crypto not in CRYPTO_CURRENCIES:
+            await message.answer(
+                f"Неподдерживаемая криптовалюта: {crypto}\n" +
+                f"Доступные: {', '.join(CRYPTO_CURRENCIES)}"
+            )
+            return
+            
+        await process_crypto_price(message, crypto, "7d")
+        
+    except Exception as e:
+        logger.error(f"Error in cmd_price: {e}")
+        await message.answer("Произошла ошибка при обработке запроса.")
+
+async def process_crypto_price(message: Message, crypto: str, period: str):
+    try:
+        if crypto == 'USDT':
+            price_info = (
+                f"💰 USDT/USD: $1.00\n"
+                f"ℹ️ USDT является стейблкоином, привязанным к доллару США"
+            )
+            
+            kb = InlineKeyboardBuilder()
+            kb.button(text="🗑 Удалить", callback_data="delete_conversion")
+            kb.adjust(1)
+            
+            await message.answer(
+                price_info,
+                reply_markup=kb.as_markup()
+            )
+            return
+
+        current_price, price_24h_change = await get_current_price(crypto)
+        if current_price is None:
+            await message.answer("Не удалось получить данные. Попробуйте позже.")
+            return
+
+        history_data = await get_crypto_history(crypto, "7")
+        if not history_data:
+            price_info = (
+                f"💰 {crypto}/USDT: ${current_price:.4f}\n"
+                f"{'🟢' if price_24h_change >= 0 else '🔴'} Изменение за 24ч: {price_24h_change:+.2f}%"
+            )
+            await message.answer(price_info)
+            return
+
+        first_price = history_data['prices'][0][1]
+        last_price = history_data['prices'][-1][1]
+        week_change = ((last_price - first_price) / first_price) * 100
+
+        price_info = (
+            f"💰 {crypto}/USDT: ${current_price:.4f}\n"
+            f"{'🟢' if price_24h_change >= 0 else '🔴'} Изменение за 24ч: {price_24h_change:+.2f}%\n"
+            f"{'🟢' if week_change >= 0 else '🔴'} Изменение за 7д: {week_change:+.2f}%"
+        )
+
+        kb = InlineKeyboardBuilder()
+        kb.button(text="🗑 Удалить", callback_data="delete_conversion")
+        kb.adjust(1)
+
+        await message.answer(
+            price_info,
+            reply_markup=kb.as_markup()
+        )
+        
+    except Exception as e:
+        logger.error(f"Error in process_crypto_price: {e}")
+        await message.answer("Произошла ошибка при обработке запроса.")
+
+async def process_price_callback(callback_query: CallbackQuery):
+    try:
+        await callback_query.message.delete()
+        await callback_query.answer()
+    except Exception as e:
+        logger.error(f"Error in price callback: {e}")
+        await callback_query.answer("Произошла ошибка. Попробуйте позже.", show_alert=True)
 
 async def process_support(callback_query: CallbackQuery):
     user_data.update_user_data(callback_query.from_user.id)
@@ -669,6 +757,7 @@ async def main():
     dp.message.register(cmd_stats, Command("stats"))
     dp.message.register(cmd_settings, Command("settings"))
     dp.message.register(cmd_help, Command("help"))
+    dp.message.register(cmd_price, Command("price"))
     dp.message.register(handle_message)
     dp.message.register(handle_conversion)
     dp.message.register(handle_all_messages)
@@ -695,6 +784,7 @@ async def main():
     dp.callback_query.register(toggle_chat_currency, F.data.startswith("toggle_chat_currency_"))
     dp.callback_query.register(toggle_chat_crypto, F.data.startswith("toggle_chat_crypto_"))
     dp.callback_query.register(save_chat_settings, F.data.startswith("save_chat_settings_"))
+    dp.callback_query.register(process_price_callback, F.data.startswith("price_"))
     dp.callback_query.register(back_to_settings, F.data == "back_to_settings")
     dp.callback_query.register(back_to_chat_settings, F.data.startswith("back_to_chat_settings_"))
     dp.callback_query.register(delete_conversion_message, F.data == "delete_conversion")

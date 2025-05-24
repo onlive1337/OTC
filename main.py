@@ -186,7 +186,7 @@ async def cmd_price(message: Message):
         if len(parts) < 2:
             kb = InlineKeyboardBuilder()
             for i, crypto in enumerate(['BTC', 'ETH', 'BNB', 'SOL', 'TON', 'NOT']):
-                kb.button(text=f"{crypto}", callback_data=f"price_chart_{crypto}_7d")
+                kb.button(text=f"{crypto}", callback_data=f"price_select_{crypto}")
             kb.adjust(3)
             
             await message.answer(
@@ -290,14 +290,50 @@ async def send_crypto_chart(message: Message, crypto: str, period: str = "7d", l
 
 async def process_price_chart_callback(callback_query: CallbackQuery):
     try:
-        _, _, crypto, period = callback_query.data.split('_')
+        parts = callback_query.data.split('_')
         
-        loading_msg = await callback_query.message.answer("📊 Обновляю график...")
+        if parts[1] == 'select':
+            crypto = parts[2]
+            await callback_query.message.delete()
+            loading_msg = await callback_query.message.chat.send_message("📊 Загружаю график...")
+            
+            class FakeMessage:
+                def __init__(self, chat):
+                    self.chat = chat
+                    
+                async def answer(self, *args, **kwargs):
+                    return await self.chat.send_message(*args, **kwargs)
+                    
+                async def answer_photo(self, *args, **kwargs):
+                    return await self.chat.send_photo(*args, **kwargs)
+            
+            fake_message = FakeMessage(callback_query.message.chat)
+            await send_crypto_chart(fake_message, crypto, "7d", loading_msg)
+            await callback_query.answer()
+            return
         
-        await callback_query.message.delete()
-        
-        await send_crypto_chart(callback_query.message, crypto, period, loading_msg)
-        
+        if parts[1] == 'chart':
+            _, _, crypto, period = callback_query.data.split('_')
+            
+            chat = callback_query.message.chat
+            
+            await callback_query.message.delete()
+            
+            loading_msg = await chat.send_message("📊 Обновляю график...")
+            
+            class FakeMessage:
+                def __init__(self, chat):
+                    self.chat = chat
+                    
+                async def answer(self, *args, **kwargs):
+                    return await self.chat.send_message(*args, **kwargs)
+                    
+                async def answer_photo(self, *args, **kwargs):
+                    return await self.chat.send_photo(*args, **kwargs)
+            
+            fake_message = FakeMessage(chat)
+            await send_crypto_chart(fake_message, crypto, period, loading_msg)
+            
         await callback_query.answer()
         
     except Exception as e:
@@ -344,14 +380,6 @@ async def process_crypto_price(message: Message, crypto: str, period: str):
     except Exception as e:
         logger.error(f"Error in process_crypto_price: {e}")
         await message.answer("❌ Произошла ошибка при обработке запроса.")
-
-async def process_price_callback(callback_query: CallbackQuery):
-    try:
-        await callback_query.message.delete()
-        await callback_query.answer()
-    except Exception as e:
-        logger.error(f"Error in price callback: {e}")
-        await callback_query.answer("Произошла ошибка. Попробуйте позже.", show_alert=True)
 
 async def process_support(callback_query: CallbackQuery):
     user_data.update_user_data(callback_query.from_user.id)
@@ -916,11 +944,11 @@ async def main():
     dp.callback_query.register(toggle_chat_currency, F.data.startswith("toggle_chat_currency_"))
     dp.callback_query.register(toggle_chat_crypto, F.data.startswith("toggle_chat_crypto_"))
     dp.callback_query.register(save_chat_settings, F.data.startswith("save_chat_settings_"))
-    dp.callback_query.register(process_price_callback, F.data.startswith("price_"))
     dp.callback_query.register(back_to_settings, F.data == "back_to_settings")
     dp.callback_query.register(back_to_chat_settings, F.data.startswith("back_to_chat_settings_"))
     dp.callback_query.register(delete_conversion_message, F.data == "delete_conversion")
     dp.callback_query.register(process_price_chart_callback, F.data.startswith("price_chart_"))
+    dp.callback_query.register(process_price_chart_callback, F.data.startswith("price_select_"))
     dp.callback_query.register(process_callback)
     
     dp.inline_query.register(inline_query_handler)

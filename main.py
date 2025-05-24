@@ -14,7 +14,7 @@ from config.config import (
     BOT_TOKEN, ADMIN_IDS, CRYPTO_CURRENCIES, CURRENT_VERSION,
     ALL_CURRENCIES
 )
-from utils.utils import create_crypto_chart, get_chart_image, get_crypto_history, get_exchange_rates, convert_currency, format_large_number, parse_amount_and_currency, read_changelog, delete_conversion_message, save_settings, get_current_price
+from utils.utils import create_crypto_chart, get_crypto_history, get_exchange_rates, convert_currency, format_large_number, parse_amount_and_currency, read_changelog, delete_conversion_message, save_settings, get_current_price
 from data.chat_settings import show_chat_settings, save_chat_settings, show_chat_currencies, show_chat_crypto, toggle_chat_crypto, toggle_chat_currency, back_to_chat_settings
 from data.user_settings import show_currencies, show_crypto, toggle_crypto, toggle_currency, toggle_quote_format, change_language, set_language
 from config.languages import LANGUAGES
@@ -234,11 +234,20 @@ async def send_crypto_chart(message: Message, crypto: str, period: str = "7d", l
             )
             return
 
-        current_price, price_change = await get_current_price(crypto)
+        current_price, price_24h_change = await get_current_price(crypto)
         if current_price is None:
             if loading_msg:
                 await loading_msg.edit_text("❌ Не удалось получить данные. Попробуйте позже.")
             return
+
+        history_data = await get_crypto_history(crypto, period.replace('d', ''))
+        
+        if history_data and history_data['prices'] and len(history_data['prices']) > 0:
+            first_price = history_data['prices'][0][1]
+            last_price = history_data['prices'][-1][1]
+            period_change = ((last_price - first_price) / first_price) * 100
+        else:
+            period_change = price_24h_change
 
         chart_image = await create_crypto_chart(crypto, period)
         
@@ -260,11 +269,12 @@ async def send_crypto_chart(message: Message, crypto: str, period: str = "7d", l
             kb.adjust(3, 1, 1)
             
             period_names = {'1d': '24 часа', '7d': '7 дней', '30d': '30 дней'}
+            
             caption = (
                 f"💰 **{crypto}/USDT**\n\n" +
                 f"📊 График за {period_names.get(period, period)}\n" +
                 f"💵 Текущая цена: ${current_price:,.4f}\n" +
-                f"{'📈' if price_change >= 0 else '📉'} Изменение: {price_change:+.2f}%\n\n" +
+                f"{'📈' if period_change >= 0 else '📉'} Изменение за период: {period_change:+.2f}%\n\n" +
                 f"⏰ Обновлено: {datetime.now().strftime('%H:%M:%S')}"
             )
             
@@ -295,19 +305,23 @@ async def process_price_chart_callback(callback_query: CallbackQuery):
         if parts[1] == 'select':
             crypto = parts[2]
             await callback_query.message.delete()
-            loading_msg = await callback_query.message.chat.send_message("📊 Загружаю график...")
+            loading_msg = await callback_query.bot.send_message(
+                chat_id=callback_query.message.chat.id,
+                text="📊 Загружаю график..."
+            )
             
             class FakeMessage:
-                def __init__(self, chat):
-                    self.chat = chat
+                def __init__(self, bot, chat_id):
+                    self.bot = bot
+                    self.chat = type('obj', (object,), {'id': chat_id})
                     
                 async def answer(self, *args, **kwargs):
-                    return await self.chat.send_message(*args, **kwargs)
+                    return await self.bot.send_message(chat_id=self.chat.id, *args, **kwargs)
                     
                 async def answer_photo(self, *args, **kwargs):
-                    return await self.chat.send_photo(*args, **kwargs)
+                    return await self.bot.send_photo(chat_id=self.chat.id, *args, **kwargs)
             
-            fake_message = FakeMessage(callback_query.message.chat)
+            fake_message = FakeMessage(callback_query.bot, callback_query.message.chat.id)
             await send_crypto_chart(fake_message, crypto, "7d", loading_msg)
             await callback_query.answer()
             return
@@ -315,23 +329,27 @@ async def process_price_chart_callback(callback_query: CallbackQuery):
         if parts[1] == 'chart':
             _, _, crypto, period = callback_query.data.split('_')
             
-            chat = callback_query.message.chat
+            chat_id = callback_query.message.chat.id
             
             await callback_query.message.delete()
             
-            loading_msg = await chat.send_message("📊 Обновляю график...")
+            loading_msg = await callback_query.bot.send_message(
+                chat_id=chat_id,
+                text="📊 Обновляю график..."
+            )
             
             class FakeMessage:
-                def __init__(self, chat):
-                    self.chat = chat
+                def __init__(self, bot, chat_id):
+                    self.bot = bot
+                    self.chat = type('obj', (object,), {'id': chat_id})
                     
                 async def answer(self, *args, **kwargs):
-                    return await self.chat.send_message(*args, **kwargs)
+                    return await self.bot.send_message(chat_id=self.chat.id, *args, **kwargs)
                     
                 async def answer_photo(self, *args, **kwargs):
-                    return await self.chat.send_photo(*args, **kwargs)
+                    return await self.bot.send_photo(chat_id=self.chat.id, *args, **kwargs)
             
-            fake_message = FakeMessage(chat)
+            fake_message = FakeMessage(callback_query.bot, chat_id)
             await send_crypto_chart(fake_message, crypto, period, loading_msg)
             
         await callback_query.answer()

@@ -6,17 +6,12 @@ All notable changes to this project will be documented in this file.
 
 ### Added
 
-- New command `/price` for viewing cryptocurrency prices
-- Real-time price data from MEXC exchange
-- Price change percentage for 24h and 7d periods
-- Special handling for USDT stablecoin
-- Delete button for price messages
+- ARS,  VND, BGN, HRK currencies
+- Crypto graphics /price (for exact crypto use /price TON)
 
 ### Changed
 
-- Updated crypto currencies list
-- Improved error handling for API requests
-- Enhanced message formatting with emojis
+- Rewrite parsing system from scratch
 
 ### Fixed (1.0.9)
 

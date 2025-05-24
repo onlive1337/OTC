@@ -1,0 +1,28 @@
+version: '3.8'
+
+services:
+  otc-bot:
+    build: .
+    container_name: otc_telegram_bot
+    restart: unless-stopped
+    environment:
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
+      - TZ=Europe/Moscow
+    volumes:
+      - ./user_data.json:/app/user_data.json
+      - ./chat_data.json:/app/chat_data.json
+      - ./logs:/app/logs
+    networks:
+      - bot-network
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 512M
+        reservations:
+          cpus: '0.5'
+          memory: 256M
+
+networks:
+  bot-network:
+    driver: bridge

@@ -920,6 +920,7 @@ async def main():
     dp.callback_query.register(back_to_settings, F.data == "back_to_settings")
     dp.callback_query.register(back_to_chat_settings, F.data.startswith("back_to_chat_settings_"))
     dp.callback_query.register(delete_conversion_message, F.data == "delete_conversion")
+    dp.callback_query.register(process_price_chart_callback, F.data.startswith("price_chart_"))
     dp.callback_query.register(process_callback)
     
     dp.inline_query.register(inline_query_handler)

@@ -389,10 +389,8 @@ async def show_not_admin_message(message_or_callback: Union[Message, CallbackQue
         await message_or_callback.reply(error_text)
 
 async def get_binance_symbol_info(crypto: str) -> Optional[str]:
-    """Проверяет, существует ли пара на Binance и возвращает правильный символ"""
     try:
         async with aiohttp.ClientSession() as session:
-            # Сначала пробуем USDT пару
             url = "https://api.binance.com/api/v3/ticker/24hr"
             params = {'symbol': f"{crypto}USDT"}
             
@@ -400,17 +398,15 @@ async def get_binance_symbol_info(crypto: str) -> Optional[str]:
                 if response.status == 200:
                     return f"{crypto}USDT"
                     
-            # Если USDT не найден, пробуем BUSD
             params = {'symbol': f"{crypto}BUSD"}
             async with session.get(url, params=params) as response:
                 if response.status == 200:
                     return f"{crypto}BUSD"
                     
-            # Для некоторых монет может быть другое название
             crypto_mapping = {
                 'HMSTR': 'HMSTRUSDT',
                 'NOT': 'NOTUSDT',
-                'DUREV': None  # Этой монеты нет на Binance
+                'DUREV': None 
             }
             
             if crypto in crypto_mapping and crypto_mapping[crypto]:
@@ -426,19 +422,15 @@ async def get_binance_symbol_info(crypto: str) -> Optional[str]:
         return None
 
 async def get_crypto_history_binance(crypto: str, period: str = "7") -> Optional[dict]:
-    """Получает исторические данные с Binance"""
     try:
-        # Получаем правильный символ
         symbol = await get_binance_symbol_info(crypto)
         if not symbol:
-            # Если монеты нет на Binance, используем CoinGecko
             return await get_crypto_history_coingecko(crypto, period)
         
-        # Определяем интервал и лимит
         interval_map = {
-            "1": ("15m", 96),    # 24 часа
-            "7": ("1h", 168),    # 7 дней  
-            "30": ("4h", 180)    # 30 дней
+            "1": ("15m", 96),
+            "7": ("1h", 168),
+            "30": ("4h", 180) 
         }
         
         interval, limit = interval_map.get(period, ("1h", 168))
@@ -457,26 +449,21 @@ async def get_crypto_history_binance(crypto: str, period: str = "7") -> Optional
                 if response.status == 200:
                     data = await response.json()
                     
-                    # Binance возвращает: [timestamp, open, high, low, close, volume, ...]
                     return {
-                        'prices': [[int(item[0]), float(item[4])] for item in data],  # close price
+                        'prices': [[int(item[0]), float(item[4])] for item in data],
                         'volumes': [[int(item[0]), float(item[5])] for item in data],
                         'source': 'binance'
                     }
                 else:
                     logger.error(f"Binance API error: {response.status}")
-                    # Fallback на CoinGecko
                     return await get_crypto_history_coingecko(crypto, period)
                     
     except Exception as e:
         logger.error(f"Error fetching from Binance: {e}")
-        # Fallback на CoinGecko
         return await get_crypto_history_coingecko(crypto, period)
 
 async def get_crypto_history_coingecko(crypto: str, period: str = "7") -> Optional[dict]:
-    """Запасной вариант - получение данных с CoinGecko"""
     try:
-        # Маппинг криптовалют для CoinGecko
         crypto_id_map = {
             'BTC': 'bitcoin',
             'ETH': 'ethereum',
@@ -523,11 +510,9 @@ async def get_crypto_history_coingecko(crypto: str, period: str = "7") -> Option
         return None
 
 async def get_current_price_binance(crypto: str) -> tuple[Optional[float], Optional[float]]:
-    """Получает текущую цену с Binance"""
     try:
         symbol = await get_binance_symbol_info(crypto)
         if not symbol:
-            # Fallback на CoinGecko
             return await get_current_price_coingecko(crypto)
             
         async with aiohttp.ClientSession() as session:
@@ -541,7 +526,6 @@ async def get_current_price_binance(crypto: str) -> tuple[Optional[float], Optio
                     change_percent = float(data['priceChangePercent'])
                     return price, change_percent
                 else:
-                    # Fallback на CoinGecko
                     return await get_current_price_coingecko(crypto)
                     
     except Exception as e:
@@ -549,7 +533,6 @@ async def get_current_price_binance(crypto: str) -> tuple[Optional[float], Optio
         return await get_current_price_coingecko(crypto)
 
 async def get_current_price_coingecko(crypto: str) -> tuple[Optional[float], Optional[float]]:
-    """Запасной вариант - получение цены с CoinGecko"""
     try:
         crypto_id_map = {
             'BTC': 'bitcoin',
@@ -596,15 +579,12 @@ async def get_current_price_coingecko(crypto: str) -> tuple[Optional[float], Opt
         return None, None
 
 async def get_crypto_history(crypto: str, period: str = "7") -> Optional[dict]:
-    """Основная функция для получения истории"""
     return await get_crypto_history_binance(crypto, period)
 
 async def get_current_price(crypto: str) -> tuple[Optional[float], Optional[float]]:
-    """Основная функция для получения текущей цены"""
     return await get_current_price_binance(crypto)
 
 async def create_crypto_chart(crypto_id: str, period: str = "7d") -> Optional[bytes]:
-    """Создает график криптовалюты"""
     try:
         history_data = await get_crypto_history(crypto_id, period.replace('d', ''))
         if not history_data or not history_data['prices']:
@@ -618,13 +598,11 @@ async def create_crypto_chart(crypto_id: str, period: str = "7d") -> Optional[by
         timestamps = [datetime.fromtimestamp(p[0]/1000) for p in prices]
         values = [p[1] for p in prices]
         
-        # Создаем график
         plt.style.use('dark_background')
         fig, ax = plt.subplots(figsize=(12, 7))
         fig.patch.set_facecolor('#0d1117')
         ax.set_facecolor('#0d1117')
         
-        # Определяем цвет на основе изменения
         first_price = values[0]
         last_price = values[-1]
         period_change = ((last_price - first_price) / first_price) * 100
@@ -636,18 +614,14 @@ async def create_crypto_chart(crypto_id: str, period: str = "7d") -> Optional[by
             line_color = '#ff4747'
             fill_color = '#ff474720'
         
-        # График
         ax.plot(timestamps, values, color=line_color, linewidth=2.5, zorder=3)
         ax.fill_between(timestamps, values, color=fill_color, alpha=0.3, zorder=2)
         
-        # Сетка
         ax.grid(True, alpha=0.1, color='#30363d', linestyle='-', linewidth=0.5)
         
-        # Убираем рамки
         for spine in ax.spines.values():
             spine.set_visible(False)
         
-        # Форматирование дат
         if period == "1d":
             ax.xaxis.set_major_formatter(mdates.DateFormatter('%H:%M'))
             ax.xaxis.set_major_locator(mdates.HourLocator(interval=4))
@@ -658,17 +632,14 @@ async def create_crypto_chart(crypto_id: str, period: str = "7d") -> Optional[by
             ax.xaxis.set_major_formatter(mdates.DateFormatter('%d %b'))
             ax.xaxis.set_major_locator(mdates.DayLocator(interval=5))
         
-        # Стиль осей
         ax.tick_params(colors='#8b949e', labelsize=10)
         ax.yaxis.set_major_formatter(plt.FuncFormatter(lambda x, p: f'${x:,.2f}'))
         
-        # Заголовок
         period_names = {'1d': '24 часа', '7d': '7 дней', '30d': '30 дней'}
         ax.text(0.5, 0.98, f'{crypto_id}/USDT - {period_names.get(period, period)}',
                 transform=ax.transAxes, ha='center', va='top',
                 fontsize=18, fontweight='bold', color='#ffffff')
         
-        # Цена и изменение
         price_y = 0.90
         ax.text(0.02, price_y, f'${current_price:,.4f}',
                 transform=ax.transAxes, fontsize=24, fontweight='bold',
@@ -679,17 +650,14 @@ async def create_crypto_chart(crypto_id: str, period: str = "7d") -> Optional[by
                 transform=ax.transAxes, fontsize=18, fontweight='bold',
                 color=change_color, va='top')
         
-        # Мин/макс
         min_price = min(values)
         max_price = max(values)
         min_idx = values.index(min_price)
         max_idx = values.index(max_price)
         
-        # Отметки мин/макс
         ax.scatter(timestamps[min_idx], min_price, color='#ff4747', s=60, zorder=5)
         ax.scatter(timestamps[max_idx], max_price, color='#00d964', s=60, zorder=5)
         
-        # Подписи мин/макс
         ax.annotate(f'${min_price:.4f}',
                    xy=(timestamps[min_idx], min_price),
                    xytext=(10, -20), textcoords='offset points',
@@ -704,7 +672,6 @@ async def create_crypto_chart(crypto_id: str, period: str = "7d") -> Optional[by
                    bbox=dict(boxstyle='round,pad=0.3', facecolor='#0d1117',
                             edgecolor='#00d964', alpha=0.8))
         
-        # Источник данных
         source = history_data.get('source', 'unknown')
         ax.text(0.99, 0.01, f'OTC Bot • {source.capitalize()}',
                 transform=ax.transAxes, ha='right', va='bottom',
@@ -712,7 +679,6 @@ async def create_crypto_chart(crypto_id: str, period: str = "7d") -> Optional[by
         
         plt.tight_layout()
         
-        # Сохранение
         buffer = io.BytesIO()
         plt.savefig(buffer, format='png', dpi=120, facecolor='#0d1117')
         buffer.seek(0)

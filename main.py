@@ -1,7 +1,9 @@
 import asyncio
+from datetime import datetime
 import logging
 import re
-from typing import Dict, Any, List, Tuple, Union
+import time
+from typing import Dict, Any, List, Optional, Tuple, Union
 from aiogram import Bot, Dispatcher, types, F
 from aiogram.types import Message, InlineQuery, InlineQueryResultArticle, InputTextMessageContent, CallbackQuery, ChatMemberUpdated, BufferedInputFile
 from aiogram.utils.keyboard import InlineKeyboardBuilder
@@ -12,7 +14,7 @@ from config.config import (
     BOT_TOKEN, ADMIN_IDS, CRYPTO_CURRENCIES, CURRENT_VERSION,
     ALL_CURRENCIES
 )
-from utils.utils import get_chart_image, get_crypto_history, get_exchange_rates, convert_currency, format_large_number, parse_amount_and_currency, read_changelog, delete_conversion_message, save_settings, get_current_price
+from utils.utils import create_crypto_chart, get_chart_image, get_crypto_history, get_exchange_rates, convert_currency, format_large_number, parse_amount_and_currency, read_changelog, delete_conversion_message, save_settings, get_current_price
 from data.chat_settings import show_chat_settings, save_chat_settings, show_chat_currencies, show_chat_crypto, toggle_chat_crypto, toggle_chat_currency, back_to_chat_settings
 from data.user_settings import show_currencies, show_crypto, toggle_crypto, toggle_currency, toggle_quote_format, change_language, set_language
 from config.languages import LANGUAGES
@@ -20,6 +22,7 @@ from data import user_data
 from utils.log_handler import setup_telegram_logging
 
 cache: Dict[str, Any] = {}
+conversion_cache = {}
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', filename='logs.txt', filemode='a')
 logger = logging.getLogger(__name__)
@@ -29,6 +32,25 @@ class UserStates(StatesGroup):
     selecting_settings = State()
 
 user_data = user_data.UserData()
+
+async def get_conversion_from_cache(amount: float, from_currency: str, to_currencies: list) -> Optional[dict]:
+    cache_key = f"{amount}:{from_currency}:{':'.join(sorted(to_currencies))}"
+    
+    if cache_key in conversion_cache:
+        cached_data, timestamp = conversion_cache[cache_key]
+        if time.time() - timestamp < 60: 
+            return cached_data
+    
+    return None
+
+async def save_conversion_to_cache(amount: float, from_currency: str, to_currencies: list, results: dict):
+    cache_key = f"{amount}:{from_currency}:{':'.join(sorted(to_currencies))}"
+    conversion_cache[cache_key] = (results, time.time())
+    
+    if len(conversion_cache) > 1000:
+        sorted_cache = sorted(conversion_cache.items(), key=lambda x: x[1][1])
+        for key, _ in sorted_cache[:500]:
+            del conversion_cache[key]
 
 async def cmd_start(message: Message):
     user_data.update_user_data(message.from_user.id)
@@ -162,81 +184,166 @@ async def cmd_price(message: Message):
     try:
         parts = message.text.split()
         if len(parts) < 2:
+            kb = InlineKeyboardBuilder()
+            for i, crypto in enumerate(['BTC', 'ETH', 'BNB', 'SOL', 'TON', 'NOT']):
+                kb.button(text=f"{crypto}", callback_data=f"price_chart_{crypto}_7d")
+            kb.adjust(3)
+            
             await message.answer(
-                "Используйте формат: /price <криптовалюта>\n" +
-                "Например: /price BTC\n" +
-                f"Доступные криптовалюты: {', '.join(CRYPTO_CURRENCIES)}"
+                "💰 **Выберите криптовалюту для просмотра графика:**\n\n" +
+                "Или используйте формат: `/price BTC`\n" +
+                f"Доступные: {', '.join(CRYPTO_CURRENCIES)}",
+                reply_markup=kb.as_markup(),
+                parse_mode="Markdown"
             )
             return
             
         crypto = parts[1].upper()
         if crypto not in CRYPTO_CURRENCIES:
             await message.answer(
-                f"Неподдерживаемая криптовалюта: {crypto}\n" +
-                f"Доступные: {', '.join(CRYPTO_CURRENCIES)}"
+                f"❌ Неподдерживаемая криптовалюта: {crypto}\n" +
+                f"✅ Доступные: {', '.join(CRYPTO_CURRENCIES)}"
             )
             return
-            
-        await process_crypto_price(message, crypto, "7d")
+        
+        loading_msg = await message.answer("📊 Загружаю график...")
+        
+        await send_crypto_chart(message, crypto, "7d", loading_msg)
         
     except Exception as e:
         logger.error(f"Error in cmd_price: {e}")
-        await message.answer("Произошла ошибка при обработке запроса.")
+        await message.answer("❌ Произошла ошибка при обработке запроса.")
 
-async def process_crypto_price(message: Message, crypto: str, period: str):
+async def send_crypto_chart(message: Message, crypto: str, period: str = "7d", loading_msg: Message = None):
     try:
         if crypto == 'USDT':
-            price_info = (
-                f"💰 USDT/USD: $1.00\n"
-                f"ℹ️ USDT является стейблкоином, привязанным к доллару США"
-            )
-            
+            if loading_msg:
+                await loading_msg.delete()
+                
             kb = InlineKeyboardBuilder()
             kb.button(text="🗑 Удалить", callback_data="delete_conversion")
             kb.adjust(1)
             
             await message.answer(
-                price_info,
-                reply_markup=kb.as_markup()
+                "💰 **USDT/USD**\n\n" +
+                "💵 Цена: $1.00\n" +
+                "ℹ️ USDT является стейблкоином, привязанным к доллару США\n" +
+                "📊 График недоступен для стейблкоинов",
+                reply_markup=kb.as_markup(),
+                parse_mode="Markdown"
             )
             return
 
+        current_price, price_change = await get_current_price(crypto)
+        if current_price is None:
+            if loading_msg:
+                await loading_msg.edit_text("❌ Не удалось получить данные. Попробуйте позже.")
+            return
+
+        chart_image = await create_crypto_chart(crypto, period)
+        
+        if chart_image:
+            kb = InlineKeyboardBuilder()
+            periods = [
+                ("📊 24ч", "1d"),
+                ("📈 7д", "7d"),
+                ("📉 30д", "30d")
+            ]
+            
+            for text, p in periods:
+                if p == period:
+                    text = "✅ " + text
+                kb.button(text=text, callback_data=f"price_chart_{crypto}_{p}")
+            
+            kb.button(text="🔄 Обновить", callback_data=f"price_chart_{crypto}_{period}")
+            kb.button(text="🗑 Удалить", callback_data="delete_conversion")
+            kb.adjust(3, 1, 1)
+            
+            period_names = {'1d': '24 часа', '7d': '7 дней', '30d': '30 дней'}
+            caption = (
+                f"💰 **{crypto}/USDT**\n\n" +
+                f"📊 График за {period_names.get(period, period)}\n" +
+                f"💵 Текущая цена: ${current_price:,.4f}\n" +
+                f"{'📈' if price_change >= 0 else '📉'} Изменение: {price_change:+.2f}%\n\n" +
+                f"⏰ Обновлено: {datetime.now().strftime('%H:%M:%S')}"
+            )
+            
+            if loading_msg:
+                await loading_msg.delete()
+                
+            await message.answer_photo(
+                photo=BufferedInputFile(chart_image, filename=f"{crypto}_chart.png"),
+                caption=caption,
+                reply_markup=kb.as_markup(),
+                parse_mode="Markdown"
+            )
+        else:
+            if loading_msg:
+                await loading_msg.delete()
+                
+            await process_crypto_price(message, crypto, period)
+            
+    except Exception as e:
+        logger.error(f"Error in send_crypto_chart: {e}")
+        if loading_msg:
+            await loading_msg.edit_text("❌ Произошла ошибка при создании графика.")
+
+async def process_price_chart_callback(callback_query: CallbackQuery):
+    try:
+        _, _, crypto, period = callback_query.data.split('_')
+        
+        loading_msg = await callback_query.message.answer("📊 Обновляю график...")
+        
+        await callback_query.message.delete()
+        
+        await send_crypto_chart(callback_query.message, crypto, period, loading_msg)
+        
+        await callback_query.answer()
+        
+    except Exception as e:
+        logger.error(f"Error in price chart callback: {e}")
+        await callback_query.answer("❌ Произошла ошибка. Попробуйте позже.", show_alert=True)
+
+async def process_crypto_price(message: Message, crypto: str, period: str):
+    try:
         current_price, price_24h_change = await get_current_price(crypto)
         if current_price is None:
-            await message.answer("Не удалось получить данные. Попробуйте позже.")
+            await message.answer("❌ Не удалось получить данные. Попробуйте позже.")
             return
 
-        history_data = await get_crypto_history(crypto, "7")
-        if not history_data:
+        history_data = await get_crypto_history(crypto, period.replace('d', ''))
+        if history_data and history_data['prices']:
+            first_price = history_data['prices'][0][1]
+            last_price = history_data['prices'][-1][1]
+            period_change = ((last_price - first_price) / first_price) * 100
+            
             price_info = (
-                f"💰 {crypto}/USDT: ${current_price:.4f}\n"
-                f"{'🟢' if price_24h_change >= 0 else '🔴'} Изменение за 24ч: {price_24h_change:+.2f}%"
+                f"💰 **{crypto}/USDT**\n\n" +
+                f"💵 Цена: ${current_price:.4f}\n" +
+                f"{'📈' if price_24h_change >= 0 else '📉'} 24ч: {price_24h_change:+.2f}%\n" +
+                f"{'📈' if period_change >= 0 else '📉'} {period.replace('d', '')}д: {period_change:+.2f}%"
             )
-            await message.answer(price_info)
-            return
-
-        first_price = history_data['prices'][0][1]
-        last_price = history_data['prices'][-1][1]
-        week_change = ((last_price - first_price) / first_price) * 100
-
-        price_info = (
-            f"💰 {crypto}/USDT: ${current_price:.4f}\n"
-            f"{'🟢' if price_24h_change >= 0 else '🔴'} Изменение за 24ч: {price_24h_change:+.2f}%\n"
-            f"{'🟢' if week_change >= 0 else '🔴'} Изменение за 7д: {week_change:+.2f}%"
-        )
+        else:
+            price_info = (
+                f"💰 **{crypto}/USDT**\n\n" +
+                f"💵 Цена: ${current_price:.4f}\n" +
+                f"{'📈' if price_24h_change >= 0 else '📉'} 24ч: {price_24h_change:+.2f}%"
+            )
 
         kb = InlineKeyboardBuilder()
+        kb.button(text="📊 График", callback_data=f"price_chart_{crypto}_7d")
         kb.button(text="🗑 Удалить", callback_data="delete_conversion")
         kb.adjust(1)
 
         await message.answer(
             price_info,
-            reply_markup=kb.as_markup()
+            reply_markup=kb.as_markup(),
+            parse_mode="Markdown"
         )
         
     except Exception as e:
         logger.error(f"Error in process_crypto_price: {e}")
-        await message.answer("Произошла ошибка при обработке запроса.")
+        await message.answer("❌ Произошла ошибка при обработке запроса.")
 
 async def process_price_callback(callback_query: CallbackQuery):
     try:
@@ -476,18 +583,28 @@ async def handle_message(message: types.Message):
     user_lang = user_data.get_user_language(user_id)
 
     if message.text.startswith('/'):
-        logger.info(f"Received command: {message.text} from user {user_id}")
-        if message.text == '/start':
-            await cmd_start(message)
-        elif message.text == '/stats':
-            await cmd_stats(message)
-        return
+        return 
 
-    requests = re.split(r';|\s+и\s+|\s+and\s+', message.text)
+    separators = [
+        r'\s+и\s+', r'\s+and\s+', r'\s+а\s+также\s+', 
+        r';', r'\n', r',\s+(?=\d)', r'\s+\+\s+'
+    ]
+    
+    separator_pattern = '|'.join(separators)
+    
+    parts = re.split(f'({separator_pattern})', message.text, flags=re.IGNORECASE)
+    
+    requests = []
+    for i, part in enumerate(parts):
+        if i % 2 == 0 and part.strip(): 
+            requests.append(part.strip())
+    
+    if len(requests) == 0:
+        requests = [message.text]
+    
     valid_requests = []
     
     for request in requests:
-        request = re.sub(r'(\d+),(\d{3})', r'\1\2', request)
         parsed_result = parse_amount_and_currency(request)
         if parsed_result[0] is not None and parsed_result[1] is not None:
             valid_requests.append(parsed_result)
@@ -499,6 +616,21 @@ async def handle_message(message: types.Message):
             amount, currency = valid_requests[0]
             await process_conversion(message, amount, currency)
     else:
+        if any(word in message.text.lower() for word in ['конвертировать', 'перевести', 'convert', 'сколько']):
+            kb = InlineKeyboardBuilder()
+            kb.button(text="❓ Помощь", callback_data="howto")
+            kb.adjust(1)
+            
+            await message.reply(
+                f"❌ Не удалось распознать сумму и валюту.\n\n"
+                f"Попробуйте написать в формате:\n"
+                f"• 100 USD\n"
+                f"• 50 евро\n"
+                f"• 1000 рублей\n"
+                f"• 10к долларов",
+                reply_markup=kb.as_markup()
+            )
+        
         logger.info(f"No valid conversion requests found in message: {message.text} from user {user_id}")
 
 async def process_multiple_conversions(message: types.Message, requests: List[Tuple[float, str]]):

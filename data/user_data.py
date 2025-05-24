@@ -56,12 +56,15 @@ class UserData:
 
     def initialize_user_data(self, user_id):
         today = datetime.now().strftime('%Y-%m-%d')
+        
+        default_lang = "ru" if user_id > 0 else "en"
+        
         return {
             "interactions": 0,
             "last_seen": today,
             "selected_currencies": ACTIVE_CURRENCIES[:5],
-            "selected_crypto": CRYPTO_CURRENCIES,
-            "language": "en",
+            "selected_crypto": CRYPTO_CURRENCIES[:5], 
+            "language": default_lang,
             "first_seen": today,
             "use_quote_format": True
         }

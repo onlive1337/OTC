@@ -662,18 +662,24 @@ async def handle_message(message: types.Message):
             amount, currency = valid_requests[0]
             await process_conversion(message, amount, currency)
     else:
-        if any(word in message.text.lower() for word in ['конвертировать', 'перевести', 'convert', 'сколько']):
+        trigger_words = {
+            'ru': ['конвертировать', 'перевести', 'convert'],
+            'en': ['convert', 'exchange', 'convert']
+        }
+        
+        has_numbers = any(char.isdigit() for char in message.text)
+        has_trigger_word = any(word in message.text.lower() for word in trigger_words.get(user_lang, trigger_words['en']))
+        
+        if has_trigger_word and has_numbers:
             kb = InlineKeyboardBuilder()
-            kb.button(text="❓ Помощь", callback_data="howto")
+            kb.button(text=LANGUAGES[user_lang].get('help_button', '❓ Help'), callback_data="howto")
             kb.adjust(1)
             
+            error_message = LANGUAGES[user_lang].get('conversion_help_message', 
+                LANGUAGES['en']['conversion_help_message'])
+            
             await message.reply(
-                f"❌ Не удалось распознать сумму и валюту.\n\n"
-                f"Попробуйте написать в формате:\n"
-                f"• 100 USD\n"
-                f"• 50 евро\n"
-                f"• 1000 рублей\n"
-                f"• 10к долларов",
+                error_message,
                 reply_markup=kb.as_markup()
             )
         

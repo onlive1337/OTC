@@ -109,6 +109,13 @@ LANGUAGES = {
    'setting_updated': "Настройка обновлена",
    'language_changed': "Язык изменён",
    'negative_or_zero_amount': "Результат вычисления отрицательный или равен нулю. Пожалуйста, введите положительную сумму.",
+   'conversion_help_message': """❌ Не удалось распознать сумму и валюту.
+
+Попробуйте написать в формате:
+- 100 USD
+- 50 евро
+- 1000 рублей
+- 10к долларов""",
     },
     'en': {
         'welcome': """
@@ -220,5 +227,12 @@ Need help? Check help button in private chat. Enjoy converting! 🌟
    'setting_updated': "Settings has been updated",
    'language_changed': "The language has been changed",
    'negative_or_zero_amount': "The result of the calculation is negative or zero. Please enter a positive amount.",
+   'conversion_help_message': """❌ Could not recognize amount and currency.
+
+Try writing in format:
+- 100 USD
+- 50 euro
+- 1000 rubles
+- 10k dollars""",
     }
 }

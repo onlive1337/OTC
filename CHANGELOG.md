@@ -2,6 +2,16 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.1.1] - 2025-05-30
+
+### Added
+
+- Strings for conversion_help_message string
+
+### Fixed
+
+- Trigger System
+
 ## [1.1.0] - 2025-02-03
 
 ### Added

@@ -1,5 +1,6 @@
 aiogram==3.0.0
 aiohttp>=3.8.5,<4.0.0
 python-dotenv==0.19.2
+numpy<2
 matplotlib==3.7.1
 pillow==10.0.0

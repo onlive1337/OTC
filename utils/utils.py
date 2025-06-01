@@ -310,12 +310,22 @@ def parse_amount_and_currency(text: str) -> Tuple[Optional[float], Optional[str]
     
     return None, None
 
-def format_large_number(number, is_crypto=False):
+def format_large_number(number, is_crypto=False, is_original_amount=False):
     if abs(number) > 1e100:
         return "♾️ Бесконечность"
     
     sign = "-" if number < 0 else ""
     number = abs(number)
+    
+    if is_original_amount:
+        if number == int(number):
+            return f"{sign}{int(number):,}".replace(',', ' ')
+        else:
+            formatted = f"{sign}{number:,.10f}".rstrip('0').rstrip('.')
+            parts = formatted.split('.')
+            if len(parts) == 2:
+                return parts[0].replace(',', ' ') + '.' + parts[1]
+            return parts[0].replace(',', ' ')
     
     if is_crypto:
         if number == 0:

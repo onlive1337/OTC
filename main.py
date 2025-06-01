@@ -529,7 +529,7 @@ async def inline_query_handler(query: InlineQuery):
             await query.answer(results=[no_currency_result], cache_time=1)
             return
 
-        result_content = f"{format_large_number(amount)} {ALL_CURRENCIES[from_currency]} {from_currency}\n\n"
+        result_content = f"{format_large_number(amount, is_original_amount=True)} {ALL_CURRENCIES[from_currency]} {from_currency}\n\n"
         
         if user_currencies:
             result_content += f"<b>{LANGUAGES[user_lang].get('fiat_currencies', 'Fiat currencies')}</b>\n"
@@ -710,7 +710,7 @@ async def process_multiple_conversions(message: types.Message, requests: List[Tu
             if amount <= 0 or amount > 1e100 or amount < -1e100:
                 continue
             
-            response = f"{format_large_number(amount)} {ALL_CURRENCIES.get(from_currency, '')} {from_currency}\n"
+            response = f"{format_large_number(amount, is_original_amount=True)} {ALL_CURRENCIES.get(from_currency, '')} {from_currency}\n"
             conversion_parts = []
             
             if user_currencies:
@@ -779,7 +779,7 @@ async def process_conversion(message: types.Message, amount: float, from_currenc
             user_crypto = user_data.get_user_crypto(user_id)
         
         response_parts = []
-        response_parts.append(f"{format_large_number(amount)} {ALL_CURRENCIES.get(from_currency, '')} {from_currency}\n")
+        response_parts.append(f"{format_large_number(amount, is_original_amount=True)} {ALL_CURRENCIES.get(from_currency, '')} {from_currency}\n")
         
         if user_currencies:
             response_parts.append(f"\n{LANGUAGES[user_lang]['fiat_currencies']}")

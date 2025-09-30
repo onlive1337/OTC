@@ -1,24 +1,23 @@
-from datetime import datetime, timedelta
-from typing import Dict, Any, Tuple, Optional, Union, List
-import time
 import logging
-import aiohttp
 import os
-import math
 import re
-import operator
-from aiogram.types import CallbackQuery, Message
-from data import user_data
-from config.config import CACHE_EXPIRATION_TIME, ACTIVE_CURRENCIES, CRYPTO_CURRENCIES, CURRENCY_ABBREVIATIONS, ALL_CURRENCIES, CURRENCY_SYMBOLS
-from config.languages import LANGUAGES
+import time
+from datetime import datetime
+from typing import Dict, Any, Tuple, Optional, Union
+
+import aiohttp
 import matplotlib
-matplotlib.use('Agg') 
+from aiogram.types import CallbackQuery, Message
+
+from config.config import CACHE_EXPIRATION_TIME, ACTIVE_CURRENCIES, CRYPTO_CURRENCIES, CURRENCY_ABBREVIATIONS, \
+    ALL_CURRENCIES, CURRENCY_SYMBOLS
+from config.languages import LANGUAGES
+from data import user_data
+
+matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
-from matplotlib.patches import Rectangle
 import io
-from PIL import Image, ImageDraw, ImageFont
-import numpy as np
 
 user_data = user_data.UserData()
 
@@ -35,8 +34,7 @@ EXTENDED_CURRENCY_ABBREVIATIONS = {
     'доллар': 'USD', 'долларов': 'USD', 'доллары': 'USD', 'доллара': 'USD', 'долл': 'USD', 'дол': 'USD',
     'юань': 'CNY', 'юаней': 'CNY', 'юаня': 'CNY',
     'рублей': 'RUB', 'рубль': 'RUB', 'рубля': 'RUB', 'руб': 'RUB', 'рублях': 'RUB',
-    'тенге': 'KZT', 'тенге': 'KZT',
-    'евро': 'EUR', 'евр': 'EUR',
+    'тенге': 'KZT', 'евро': 'EUR', 'евр': 'EUR',
     'фунт': 'GBP', 'фунтов': 'GBP', 'фунта': 'GBP',
     'йен': 'JPY', 'йены': 'JPY', 'иен': 'JPY', 'иены': 'JPY',
     'вон': 'KRW', 'воны': 'KRW', 'вона': 'KRW',
@@ -75,7 +73,7 @@ EXTENDED_CURRENCY_ABBREVIATIONS = {
 
 EXTENDED_CURRENCY_ABBREVIATIONS.update(CURRENCY_ABBREVIATIONS)
 
-async def get_cached_data(key: str) -> Dict[str, float]:
+async def get_cached_data(key: str) -> Optional[Any]:
     if key in cache:
         cached_data, timestamp = cache[key]
         if time.time() - timestamp < CACHE_EXPIRATION_TIME:
@@ -124,22 +122,23 @@ async def get_exchange_rates() -> Dict[str, float]:
         
         if missing_currencies:
             logger.warning(f"Missing currencies: {missing_currencies}. Attempting to fetch from alternative sources.")
-            
-            missing_fiat = missing_currencies.intersection(set(ACTIVE_CURRENCIES))
-            if missing_fiat:
-                async with session.get(f'https://api.exchangerate-api.com/v4/latest/USD') as response:
-                    alt_fiat_data = await response.json()
-                for currency in missing_fiat:
-                    if currency in alt_fiat_data['rates']:
-                        rates[currency] = alt_fiat_data['rates'][currency]
-            
-            missing_crypto = missing_currencies.intersection(set(CRYPTO_CURRENCIES))
-            if missing_crypto:
-                for crypto in missing_crypto:
-                    async with session.get(f'https://api.coincap.io/v2/assets/{crypto.lower()}') as response:
-                        alt_crypto_data = await response.json()
-                    if 'data' in alt_crypto_data and 'priceUsd' in alt_crypto_data['data']:
-                        rates[crypto] = 1 / float(alt_crypto_data['data']['priceUsd'])
+
+            async with aiohttp.ClientSession() as session:
+                missing_fiat = missing_currencies.intersection(set(ACTIVE_CURRENCIES))
+                if missing_fiat:
+                    async with session.get('https://api.exchangerate-api.com/v4/latest/USD') as response:
+                        alt_fiat_data = await response.json()
+                    for currency in missing_fiat:
+                        if 'rates' in alt_fiat_data and currency in alt_fiat_data['rates']:
+                            rates[currency] = alt_fiat_data['rates'][currency]
+                
+                missing_crypto = missing_currencies.intersection(set(CRYPTO_CURRENCIES))
+                if missing_crypto:
+                    for crypto in missing_crypto:
+                        async with session.get(f'https://api.coincap.io/v2/assets/{crypto.lower()}') as response:
+                            alt_crypto_data = await response.json()
+                        if 'data' in alt_crypto_data and 'priceUsd' in alt_crypto_data['data']:
+                            rates[crypto] = 1 / float(alt_crypto_data['data']['priceUsd'])
 
         await set_cached_data('exchange_rates', rates)
         logger.info("Successfully fetched and cached exchange rates")
@@ -170,7 +169,7 @@ def read_changelog():
 def smart_number_parse(text: str) -> str:
     text = re.sub(r'(\d)\s+(\d)', r'\1\2', text)
     
-    number_match = re.match(r'^([\d\s,\.]+)', text)
+    number_match = re.match(r'^([\d\s,.]+)', text)
     if not number_match:
         return text
     

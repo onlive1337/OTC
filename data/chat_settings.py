@@ -3,10 +3,10 @@ from config.config import ACTIVE_CURRENCIES, ALL_CURRENCIES, CRYPTO_CURRENCIES
 from config.languages import LANGUAGES
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 from aiogram.types import CallbackQuery, Message
+from aiogram.exceptions import TelegramBadRequest
 import logging
 from utils.utils import check_admin_rights, show_not_admin_message
 
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', filename='logs.txt', filemode='a')
 logger = logging.getLogger(__name__)
 
 user_data = user_data.UserData()
@@ -46,10 +46,14 @@ async def show_chat_currencies(callback_query: CallbackQuery):
               callback_data=f"back_to_chat_settings_{chat_id}")
     kb.adjust(1)
     
-    await callback_query.message.edit_text(
-        LANGUAGES[user_lang]['currencies'], 
-        reply_markup=kb.as_markup()
-    )
+    try:
+        await callback_query.message.edit_text(
+            LANGUAGES[user_lang]['currencies'], 
+            reply_markup=kb.as_markup()
+        )
+    except TelegramBadRequest as e:
+        if "message is not modified" not in str(e):
+            raise
 
 async def show_chat_crypto(callback_query: CallbackQuery):
     chat_id = int(callback_query.data.split('_')[3])
@@ -72,10 +76,14 @@ async def show_chat_crypto(callback_query: CallbackQuery):
               callback_data=f"back_to_chat_settings_{chat_id}")
     kb.adjust(2)
     
-    await callback_query.message.edit_text(
-        LANGUAGES[user_lang]['cryptocurrencies'], 
-        reply_markup=kb.as_markup()
-    )
+    try:
+        await callback_query.message.edit_text(
+            LANGUAGES[user_lang]['cryptocurrencies'], 
+            reply_markup=kb.as_markup()
+        )
+    except TelegramBadRequest as e:
+        if "message is not modified" not in str(e):
+            raise
 
 async def toggle_chat_currency(callback_query: CallbackQuery):
     parts = callback_query.data.split('_')
@@ -168,7 +176,11 @@ async def save_chat_settings(callback_query: CallbackQuery):
         return
     
     user_lang = user_data.get_user_language(user_id)
-    await callback_query.message.edit_text(LANGUAGES[user_lang]['save_settings'])
+    try:
+        await callback_query.message.edit_text(LANGUAGES[user_lang]['save_settings'])
+    except TelegramBadRequest as e:
+        if "message is not modified" not in str(e):
+            raise
     await callback_query.answer()
 
 async def back_to_chat_settings(callback_query: CallbackQuery):
@@ -204,4 +216,8 @@ async def back_to_chat_settings(callback_query: CallbackQuery):
     quote_status = LANGUAGES[user_lang]['on'] if use_quote else LANGUAGES[user_lang]['off']
     settings_text = f"{LANGUAGES[user_lang]['chat_settings']}\n\n{LANGUAGES[user_lang]['quote_format_status']}: {quote_status}"
     
-    await callback_query.message.edit_text(settings_text, reply_markup=kb.as_markup())
+    try:
+        await callback_query.message.edit_text(settings_text, reply_markup=kb.as_markup())
+    except TelegramBadRequest as e:
+        if "message is not modified" not in str(e):
+            raise

@@ -4,12 +4,35 @@ from dotenv import load_dotenv
 load_dotenv()
 
 BOT_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')
+if not BOT_TOKEN:
+    raise RuntimeError("TELEGRAM_BOT_TOKEN is not set. Put it into environment or .env")
+
+# Logging and admin
 LOG_CHAT_ID = "-4558354811"
 ADMIN_IDS = [810587766]
+LOG_LEVEL = os.getenv('LOG_LEVEL', 'INFO')
+
+# Storage files
 USER_DATA_FILE = 'user_data.json'
+CHAT_DATA_FILE = 'chat_data.json'
+
 CURRENT_VERSION = "1.1.1"
 
-CACHE_EXPIRATION_TIME = 600
+# Cache
+CACHE_EXPIRATION_TIME = 600  # seconds
+STALE_WHILE_REVALIDATE = 300  # seconds
+
+# HTTP defaults
+HTTP_TOTAL_TIMEOUT = 5
+HTTP_CONNECT_TIMEOUT = 2
+HTTP_RETRIES = 2
+SEMAPHORE_LIMITS = {
+    'open.er-api.com': 5,
+    'api.coingecko.com': 3,
+    'min-api.cryptocompare.com': 3,
+    'api.exchangerate-api.com': 3,
+    'api.coincap.io': 3,
+}
 
 ALL_CURRENCIES = {
     'USD': '🇺🇸', 'EUR': '🇪🇺', 'GBP': '🇬🇧', 'JPY': '🇯🇵', 'CHF': '🇨🇭', 'CNY': '🇨🇳', 'RUB': '🇷🇺',

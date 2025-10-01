@@ -1,10 +1,12 @@
 import json
+import os
+import tempfile
 from datetime import datetime
 from typing import List
-from config.config import USER_DATA_FILE, ACTIVE_CURRENCIES, CRYPTO_CURRENCIES
 import logging
+import portalocker
+from config.config import USER_DATA_FILE, ACTIVE_CURRENCIES, CRYPTO_CURRENCIES, CHAT_DATA_FILE
 
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', filename='logs.txt', filemode='a')
 logger = logging.getLogger(__name__)
 
 class UserData:
@@ -13,27 +15,35 @@ class UserData:
         self.chat_data = self.load_chat_data()
         self.bot_launch_date = datetime.now().strftime('%Y-%m-%d')
 
-    def load_user_data(self):
+    def _atomic_write(self, path: str, data: dict):
+        dir_name = os.path.dirname(path) or '.'
+        with tempfile.NamedTemporaryFile('w', dir=dir_name, delete=False) as tf:
+            json.dump(data, tf, indent=4)
+            tmp_name = tf.name
+        os.replace(tmp_name, path)
+
+    def _locked_load(self, path: str):
         try:
-            with open(USER_DATA_FILE, 'r') as file:
-                return json.load(file)
+            with open(path, 'r') as f:
+                portalocker.lock(f, portalocker.LOCK_SH)
+                try:
+                    return json.load(f)
+                finally:
+                    portalocker.unlock(f)
         except (FileNotFoundError, json.JSONDecodeError):
             return {}
+
+    def load_user_data(self):
+        return self._locked_load(USER_DATA_FILE)
 
     def load_chat_data(self):
-        try:
-            with open('chat_data.json', 'r') as file:
-                return json.load(file)
-        except (FileNotFoundError, json.JSONDecodeError):
-            return {}
+        return self._locked_load(CHAT_DATA_FILE)
 
     def save_user_data(self):
-        with open(USER_DATA_FILE, 'w') as file:
-            json.dump(self.user_data, file, indent=4)
+        self._atomic_write(USER_DATA_FILE, self.user_data)
 
     def save_chat_data(self):
-        with open('chat_data.json', 'w') as file:
-            json.dump(self.chat_data, file, indent=4)
+        self._atomic_write(CHAT_DATA_FILE, self.chat_data)
 
     def reload_data(self):
         self.user_data = self.load_user_data()

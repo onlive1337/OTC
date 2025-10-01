@@ -22,4 +22,7 @@ RUN mkdir -p /app/logs
 RUN useradd -m -u 1000 botuser && chown -R botuser:botuser /app
 USER botuser
 
+HEALTHCHECK --interval=30s --timeout=5s --retries=3 \
+  CMD python -c "print('ok')" || exit 1
+
 CMD ["python", "main.py"]

@@ -10,7 +10,7 @@ import matplotlib
 from aiogram.types import CallbackQuery, Message
 
 from config.config import CACHE_EXPIRATION_TIME, ACTIVE_CURRENCIES, CRYPTO_CURRENCIES, CURRENCY_ABBREVIATIONS, \
-    ALL_CURRENCIES, CURRENCY_SYMBOLS
+    ALL_CURRENCIES, CURRENCY_SYMBOLS, HTTP_TOTAL_TIMEOUT, HTTP_CONNECT_TIMEOUT, HTTP_RETRIES, SEMAPHORE_LIMITS, STALE_WHILE_REVALIDATE
 from config.languages import LANGUAGES
 from data import user_data
 
@@ -23,8 +23,49 @@ user_data = user_data.UserData()
 
 cache: Dict[str, Any] = {}
 
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', filename='logs.txt', filemode='a')
 logger = logging.getLogger(__name__)
+
+import asyncio, random, urllib.parse
+
+_http_session: Optional[aiohttp.ClientSession] = None
+_domain_semaphores: Dict[str, asyncio.Semaphore] = {}
+_rates_refreshing = False
+
+def set_http_session(session: aiohttp.ClientSession):
+    global _http_session
+    _http_session = session
+
+async def close_http_session():
+    global _http_session
+    if _http_session is not None:
+        try:
+            await _http_session.close()
+        finally:
+            _http_session = None
+
+def _host_of(url: str) -> str:
+    return urllib.parse.urlparse(url).netloc
+
+def _get_semaphore(host: str) -> asyncio.Semaphore:
+    if host not in _domain_semaphores:
+        _domain_semaphores[host] = asyncio.Semaphore(SEMAPHORE_LIMITS.get(host, 5))
+    return _domain_semaphores[host]
+
+async def _with_retries(coro_factory, host: str, retries: int = HTTP_RETRIES):
+    last_exc = None
+    sem = _get_semaphore(host)
+    for attempt in range(retries + 1):
+        try:
+            async with sem:
+                return await coro_factory()
+        except (asyncio.TimeoutError, aiohttp.ClientError) as e:
+            last_exc = e
+            if attempt == retries:
+                break
+            await asyncio.sleep(0.3 * (2 ** attempt) + random.random() * 0.2)
+    if last_exc:
+        raise last_exc
+    raise RuntimeError("_with_retries failed without exception")
 
 EXTENDED_CURRENCY_ABBREVIATIONS = {
     'сум': 'UZS', 'сумов': 'UZS', 'сума': 'UZS', 'сумы': 'UZS',
@@ -90,62 +131,137 @@ async def get_exchange_rates() -> Dict[str, float]:
             logger.info("Using cached exchange rates")
             return cached_rates
 
-        rates = {}
-        async with aiohttp.ClientSession() as session:
-            async with session.get('https://open.er-api.com/v6/latest/USD') as response:
-                fiat_data = await response.json()
-            if fiat_data['result'] == 'success':
-                rates.update(fiat_data['rates'])
+        stale_item = cache.get('exchange_rates')  # (data, ts)
+        now = time.time()
+        if stale_item:
+            data, ts = stale_item
+            if now - ts < (CACHE_EXPIRATION_TIME + STALE_WHILE_REVALIDATE):
+                if not _rates_refreshing:
+                    asyncio.create_task(_refresh_rates())
+                logger.info("Returning stale exchange rates while refreshing in background")
+                return data
 
-            crypto_ids = "bitcoin,ethereum,tether,binancecoin,ripple,cardano,solana,polkadot,dogecoin,matic-network,the-open-network,litecoin"
-            async with session.get(f'https://api.coingecko.com/api/v3/simple/price?ids={crypto_ids}&vs_currencies=usd') as response:
-                crypto_data = await response.json()
-            
-            crypto_mapping = {
-                'BTC': 'bitcoin', 'ETH': 'ethereum', 'USDT': 'tether', 'BNB': 'binancecoin',
-                'XRP': 'ripple', 'ADA': 'cardano', 'SOL': 'solana', 'DOT': 'polkadot',
-                'DOGE': 'dogecoin', 'MATIC': 'matic-network', 'TON': 'the-open-network',
-                'LTC': 'litecoin'
-            }
-            for crypto, id in crypto_mapping.items():
-                if id in crypto_data:
-                    rates[crypto] = 1 / crypto_data[id]['usd']
+        return await _refresh_rates()
+    except Exception as e:
+        logger.error(f"Error fetching exchange rates: {e}")
+        return {}
 
-            async with session.get('https://min-api.cryptocompare.com/data/pricemulti?fsyms=NOT,DUREV,HMSTR&tsyms=USD') as response:
-                additional_crypto_data = await response.json()
-            for crypto in ['NOT', 'DUREV', 'HMSTR']:
-                if crypto in additional_crypto_data:
-                    rates[crypto] = 1 / additional_crypto_data[crypto]['USD']
+async def _refresh_rates() -> Dict[str, float]:
+    global _rates_refreshing
+    if _rates_refreshing:
+        for _ in range(10):
+            await asyncio.sleep(0.2)
+            fresh = await get_cached_data('exchange_rates')
+            if fresh:
+                return fresh
+    _rates_refreshing = True
+    session_to_close = None
+    try:
+        session = _http_session
+        if session is None:
+            session_to_close = aiohttp.ClientSession()
+            session = session_to_close
+
+        rates: Dict[str, float] = {}
+        timeout = aiohttp.ClientTimeout(total=HTTP_TOTAL_TIMEOUT, connect=HTTP_CONNECT_TIMEOUT)
+
+        url_fiat = 'https://open.er-api.com/v6/latest/USD'
+        host = _host_of(url_fiat)
+        async def _fiat():
+            resp = await session.get(url_fiat, timeout=timeout)
+            async with resp:
+                return await resp.json()
+        fiat_data = await _with_retries(_fiat, host)
+        if isinstance(fiat_data, dict) and fiat_data.get('result') == 'success' and 'rates' in fiat_data:
+            rates.update(fiat_data['rates'])
+
+        crypto_ids = "bitcoin,ethereum,tether,binancecoin,ripple,cardano,solana,polkadot,dogecoin,matic-network,the-open-network,litecoin"
+        url_cg = f'https://api.coingecko.com/api/v3/simple/price?ids={crypto_ids}&vs_currencies=usd'
+        host = _host_of(url_cg)
+        async def _cg():
+            resp = await session.get(url_cg, timeout=timeout)
+            async with resp:
+                return await resp.json()
+        crypto_data = await _with_retries(_cg, host)
+
+        crypto_mapping = {
+            'BTC': 'bitcoin', 'ETH': 'ethereum', 'USDT': 'tether', 'BNB': 'binancecoin',
+            'XRP': 'ripple', 'ADA': 'cardano', 'SOL': 'solana', 'DOT': 'polkadot',
+            'DOGE': 'dogecoin', 'MATIC': 'matic-network', 'TON': 'the-open-network',
+            'LTC': 'litecoin'
+        }
+        for crypto, id in crypto_mapping.items():
+            if isinstance(crypto_data, dict) and id in crypto_data and isinstance(crypto_data[id], dict):
+                usd_price = crypto_data[id].get('usd')
+                try:
+                    usd_price = float(usd_price)
+                except (TypeError, ValueError):
+                    usd_price = None
+                if usd_price and usd_price > 0:
+                    rates[crypto] = 1.0 / usd_price
+
+        url_cc = 'https://min-api.cryptocompare.com/data/pricemulti?fsyms=NOT,DUREV,HMSTR&tsyms=USD'
+        host = _host_of(url_cc)
+        async def _cc():
+            resp = await session.get(url_cc, timeout=timeout)
+            async with resp:
+                return await resp.json()
+        additional_crypto_data = await _with_retries(_cc, host)
+        for crypto in ['NOT', 'DUREV', 'HMSTR']:
+            if isinstance(additional_crypto_data, dict) and crypto in additional_crypto_data and isinstance(additional_crypto_data[crypto], dict):
+                usd_price = additional_crypto_data[crypto].get('USD')
+                try:
+                    usd_price = float(usd_price)
+                except (TypeError, ValueError):
+                    usd_price = None
+                if usd_price and usd_price > 0:
+                    rates[crypto] = 1.0 / usd_price
 
         all_currencies = set(ACTIVE_CURRENCIES + CRYPTO_CURRENCIES)
         missing_currencies = all_currencies - set(rates.keys())
-        
         if missing_currencies:
             logger.warning(f"Missing currencies: {missing_currencies}. Attempting to fetch from alternative sources.")
 
-            async with aiohttp.ClientSession() as session:
-                missing_fiat = missing_currencies.intersection(set(ACTIVE_CURRENCIES))
-                if missing_fiat:
-                    async with session.get('https://api.exchangerate-api.com/v4/latest/USD') as response:
-                        alt_fiat_data = await response.json()
+            missing_fiat = missing_currencies.intersection(set(ACTIVE_CURRENCIES))
+            if missing_fiat:
+                url_ex = 'https://api.exchangerate-api.com/v4/latest/USD'
+                host = _host_of(url_ex)
+                async def _ex():
+                    resp = await session.get(url_ex, timeout=timeout)
+                    async with resp:
+                        return await resp.json()
+                alt_fiat_data = await _with_retries(_ex, host)
+                if isinstance(alt_fiat_data, dict) and 'rates' in alt_fiat_data:
                     for currency in missing_fiat:
-                        if 'rates' in alt_fiat_data and currency in alt_fiat_data['rates']:
+                        if currency in alt_fiat_data['rates']:
                             rates[currency] = alt_fiat_data['rates'][currency]
-                
-                missing_crypto = missing_currencies.intersection(set(CRYPTO_CURRENCIES))
-                if missing_crypto:
-                    for crypto in missing_crypto:
-                        async with session.get(f'https://api.coincap.io/v2/assets/{crypto.lower()}') as response:
-                            alt_crypto_data = await response.json()
-                        if 'data' in alt_crypto_data and 'priceUsd' in alt_crypto_data['data']:
-                            rates[crypto] = 1 / float(alt_crypto_data['data']['priceUsd'])
+
+            missing_crypto = missing_currencies.intersection(set(CRYPTO_CURRENCIES))
+            for crypto in missing_crypto:
+                url_cap = f'https://api.coincap.io/v2/assets/{crypto.lower()}'
+                host = _host_of(url_cap)
+                async def _cap(u=url_cap):
+                    resp = await session.get(u, timeout=timeout)
+                    async with resp:
+                        return await resp.json()
+                alt_crypto_data = await _with_retries(_cap, host)
+                try:
+                    price_usd = float(alt_crypto_data.get('data', {}).get('priceUsd'))
+                except (TypeError, ValueError, AttributeError):
+                    price_usd = None
+                if price_usd and price_usd > 0:
+                    rates[crypto] = 1.0 / price_usd
 
         await set_cached_data('exchange_rates', rates)
         logger.info("Successfully fetched and cached exchange rates")
         return rates
     except Exception as e:
-        logger.error(f"Error fetching exchange rates: {e}")
+        logger.error(f"Error refreshing exchange rates: {e}")
         return {}
+    finally:
+        _rates_refreshing = False
+        if session_to_close is not None:
+            await session_to_close.close()
 
 def convert_currency(amount: float, from_currency: str, to_currency: str, rates: Dict[str, float]) -> float:
     if from_currency == 'USD':

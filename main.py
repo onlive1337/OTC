@@ -1,6 +1,7 @@
 import asyncio
 from datetime import datetime
 import logging
+from aiohttp import ClientSession, ClientTimeout
 import re
 import time
 from typing import Dict, Any, List, Optional, Tuple, Union
@@ -12,20 +13,42 @@ from aiogram.fsm.state import State, StatesGroup
 from aiogram.filters import Command, CommandStart
 from config.config import (
     BOT_TOKEN, ADMIN_IDS, CRYPTO_CURRENCIES, CURRENT_VERSION,
-    ALL_CURRENCIES
+    ALL_CURRENCIES, LOG_LEVEL, HTTP_TOTAL_TIMEOUT, HTTP_CONNECT_TIMEOUT
 )
-from utils.utils import create_crypto_chart, get_crypto_history, get_exchange_rates, convert_currency, format_large_number, parse_amount_and_currency, read_changelog, delete_conversion_message, save_settings, get_current_price
+from utils.utils import create_crypto_chart, get_crypto_history, get_exchange_rates, convert_currency, format_large_number, parse_amount_and_currency, read_changelog, delete_conversion_message, save_settings, get_current_price, set_http_session, close_http_session
 from data.chat_settings import show_chat_settings, save_chat_settings, show_chat_currencies, show_chat_crypto, toggle_chat_crypto, toggle_chat_currency, back_to_chat_settings
 from data.user_settings import show_currencies, show_crypto, toggle_crypto, toggle_currency, toggle_quote_format, change_language, set_language
 from config.languages import LANGUAGES
 from data import user_data
 from utils.log_handler import setup_telegram_logging
 
+logging.basicConfig(
+    level=getattr(logging, LOG_LEVEL.upper(), logging.INFO),
+    format='%(asctime)s %(levelname)s [%(name)s]: %(message)s'
+)
+logger = logging.getLogger(__name__)
+
 cache: Dict[str, Any] = {}
 conversion_cache = {}
 
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', filename='logs.txt', filemode='a')
-logger = logging.getLogger(__name__)
+async def _warmup_rates():
+    try:
+        await get_exchange_rates()
+        logger.info("Rates cache warmed up")
+    except Exception:
+        logger.exception("Warmup failed")
+
+async def on_startup(bot: Bot):
+    await setup_telegram_logging(bot)
+    session = ClientSession(timeout=ClientTimeout(total=HTTP_TOTAL_TIMEOUT, connect=HTTP_CONNECT_TIMEOUT))
+    set_http_session(session)
+    asyncio.create_task(_warmup_rates())
+
+async def on_shutdown():
+    try:
+        await close_http_session()
+    except Exception:
+        logger.exception("Error during HTTP session shutdown")
 
 class UserStates(StatesGroup):
     selecting_crypto = State()
@@ -780,7 +803,7 @@ async def process_conversion(message: types.Message, amount: float, from_currenc
         
         response_parts = []
         response_parts.append(f"{format_large_number(amount, is_original_amount=True)} {ALL_CURRENCIES.get(from_currency, '')} {from_currency}\n")
-        
+
         if user_currencies:
             response_parts.append(f"\n{LANGUAGES[user_lang]['fiat_currencies']}")
             fiat_conversions = []
@@ -936,6 +959,9 @@ async def process_callback(callback_query: CallbackQuery, state: FSMContext):
 async def main():
     bot = Bot(token=BOT_TOKEN)
     dp = Dispatcher()
+
+    dp.startup.register(on_startup)
+    dp.shutdown.register(on_shutdown)
     
     dp.message.register(cmd_start, CommandStart())
     dp.message.register(cmd_stats, Command("stats"))
@@ -977,8 +1003,7 @@ async def main():
     
     dp.inline_query.register(inline_query_handler)
     dp.my_chat_member.register(handle_my_chat_member)
-    
-    await setup_telegram_logging(bot)
+
     await dp.start_polling(bot)
 
 if __name__ == "__main__":

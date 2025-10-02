@@ -1,172 +1,305 @@
-import json
-import os
-import tempfile
+import sqlite3
 from datetime import datetime
-from typing import List
+from typing import List, Dict, Any
 import logging
-import portalocker
-from config.config import USER_DATA_FILE, ACTIVE_CURRENCIES, CRYPTO_CURRENCIES, CHAT_DATA_FILE
+
+from config.config import ACTIVE_CURRENCIES, CRYPTO_CURRENCIES, DB_PATH
 
 logger = logging.getLogger(__name__)
 
+INIT_SQL = [
+    "PRAGMA journal_mode=WAL;",
+    "PRAGMA synchronous=NORMAL;",
+    """
+    CREATE TABLE IF NOT EXISTS users (
+        user_id INTEGER PRIMARY KEY,
+        interactions INTEGER NOT NULL DEFAULT 0,
+        last_seen TEXT,
+        first_seen TEXT,
+        language TEXT NOT NULL DEFAULT 'ru',
+        use_quote_format INTEGER NOT NULL DEFAULT 1
+    );
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS user_currencies (
+        user_id INTEGER NOT NULL,
+        currency TEXT NOT NULL,
+        PRIMARY KEY(user_id, currency)
+    );
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS user_crypto (
+        user_id INTEGER NOT NULL,
+        symbol TEXT NOT NULL,
+        PRIMARY KEY(user_id, symbol)
+    );
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS chats (
+        chat_id INTEGER PRIMARY KEY,
+        quote_format INTEGER NOT NULL DEFAULT 0
+    );
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS chat_currencies (
+        chat_id INTEGER NOT NULL,
+        currency TEXT NOT NULL,
+        PRIMARY KEY(chat_id, currency)
+    );
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS chat_crypto (
+        chat_id INTEGER NOT NULL,
+        symbol TEXT NOT NULL,
+        PRIMARY KEY(chat_id, symbol)
+    );
+    """,
+]
+
 class UserData:
     def __init__(self):
-        self.user_data = self.load_user_data()
-        self.chat_data = self.load_chat_data()
+        self._init_db()
+        self.user_data: Dict[str, Any] = {}
+        self.chat_data: Dict[str, Any] = {}
         self.bot_launch_date = datetime.now().strftime('%Y-%m-%d')
 
-    def _atomic_write(self, path: str, data: dict):
-        dir_name = os.path.dirname(path) or '.'
-        with tempfile.NamedTemporaryFile('w', dir=dir_name, delete=False) as tf:
-            json.dump(data, tf, indent=4)
-            tmp_name = tf.name
-        os.replace(tmp_name, path)
+    def _connect(self):
+        return sqlite3.connect(DB_PATH)
 
-    def _locked_load(self, path: str):
-        try:
-            with open(path, 'r') as f:
-                portalocker.lock(f, portalocker.LOCK_SH)
-                try:
-                    return json.load(f)
-                finally:
-                    portalocker.unlock(f)
-        except (FileNotFoundError, json.JSONDecodeError):
-            return {}
+    def _init_db(self):
+        with self._connect() as conn:
+            cur = conn.cursor()
+            for stmt in INIT_SQL:
+                cur.execute(stmt)
+            conn.commit()
 
-    def load_user_data(self):
-        return self._locked_load(USER_DATA_FILE)
-
-    def load_chat_data(self):
-        return self._locked_load(CHAT_DATA_FILE)
-
-    def save_user_data(self):
-        self._atomic_write(USER_DATA_FILE, self.user_data)
-
-    def save_chat_data(self):
-        self._atomic_write(CHAT_DATA_FILE, self.chat_data)
-
-    def reload_data(self):
-        self.user_data = self.load_user_data()
-        self.chat_data = self.load_chat_data()
-
-    def get_user_data(self, user_id):
-        user_id_str = str(user_id)
-        self.reload_data()
-        if user_id_str not in self.user_data:
-            self.user_data[user_id_str] = self.initialize_user_data(user_id)
-            self.save_user_data()
-        return self.user_data[user_id_str]
-
-    def get_chat_data(self, chat_id):
-        chat_id_str = str(chat_id)
-        self.reload_data()
-        if chat_id_str not in self.chat_data:
-            self.initialize_chat_settings(chat_id)
-        return self.chat_data[chat_id_str]
-
-    def initialize_user_data(self, user_id):
+    def _ensure_user(self, user_id: int):
         today = datetime.now().strftime('%Y-%m-%d')
-        
-        default_lang = "ru" if user_id > 0 else "en"
-        
+        with self._connect() as conn:
+            cur = conn.cursor()
+            cur.execute("SELECT user_id FROM users WHERE user_id=?", (user_id,))
+            if cur.fetchone() is None:
+                default_lang = 'ru' if user_id > 0 else 'en'
+                cur.execute(
+                    "INSERT INTO users(user_id, interactions, last_seen, first_seen, language, use_quote_format) VALUES(?, 0, ?, ?, ?, 1)",
+                    (user_id, today, today, default_lang)
+                )
+                for cur_code in ACTIVE_CURRENCIES[:5]:
+                    cur.execute("INSERT OR IGNORE INTO user_currencies(user_id, currency) VALUES(?, ?)", (user_id, cur_code))
+                for sym in CRYPTO_CURRENCIES[:5]:
+                    cur.execute("INSERT OR IGNORE INTO user_crypto(user_id, symbol) VALUES(?, ?)", (user_id, sym))
+                conn.commit()
+
+    def _ensure_chat(self, chat_id: int):
+        with self._connect() as conn:
+            cur = conn.cursor()
+            cur.execute("SELECT chat_id FROM chats WHERE chat_id=?", (chat_id,))
+            if cur.fetchone() is None:
+                cur.execute("INSERT INTO chats(chat_id, quote_format) VALUES(?, 0)", (chat_id,))
+                for cur_code in ACTIVE_CURRENCIES[:5]:
+                    cur.execute("INSERT OR IGNORE INTO chat_currencies(chat_id, currency) VALUES(?, ?)", (chat_id, cur_code))
+                for sym in CRYPTO_CURRENCIES[:5]:
+                    cur.execute("INSERT OR IGNORE INTO chat_crypto(chat_id, symbol) VALUES(?, ?)", (chat_id, sym))
+                conn.commit()
+            self.chat_data[str(chat_id)] = True
+
+
+    def get_user_data(self, user_id: int):
+        self._ensure_user(user_id)
+        with self._connect() as conn:
+            cur = conn.cursor()
+            cur.execute("SELECT interactions, last_seen, first_seen, language, use_quote_format FROM users WHERE user_id=?", (user_id,))
+            row = cur.fetchone()
+            interactions, last_seen, first_seen, language, use_quote = row
+            cur.execute("SELECT currency FROM user_currencies WHERE user_id=?", (user_id,))
+            currencies = [r[0] for r in cur.fetchall()]
+            cur.execute("SELECT symbol FROM user_crypto WHERE user_id=?", (user_id,))
+            crypto = [r[0] for r in cur.fetchall()]
+        data = {
+            "interactions": interactions,
+            "last_seen": last_seen,
+            "selected_currencies": currencies or ACTIVE_CURRENCIES[:5],
+            "selected_crypto": crypto or CRYPTO_CURRENCIES[:5],
+            "language": language or 'ru',
+            "first_seen": first_seen,
+            "use_quote_format": bool(use_quote),
+        }
+        self.user_data[str(user_id)] = data
+        return data
+
+    def get_chat_data(self, chat_id: int):
+        self._ensure_chat(chat_id)
+        with self._connect() as conn:
+            cur = conn.cursor()
+            cur.execute("SELECT quote_format FROM chats WHERE chat_id=?", (chat_id,))
+            row = cur.fetchone()
+            quote_format = bool(row[0]) if row else False
+            cur.execute("SELECT currency FROM chat_currencies WHERE chat_id=?", (chat_id,))
+            currencies = [r[0] for r in cur.fetchall()]
+            cur.execute("SELECT symbol FROM chat_crypto WHERE chat_id=?", (chat_id,))
+            crypto = [r[0] for r in cur.fetchall()]
+        data = {
+            'currencies': currencies or ACTIVE_CURRENCIES[:5],
+            'crypto': crypto or CRYPTO_CURRENCIES[:5],
+            'quote_format': quote_format,
+        }
+        self.chat_data[str(chat_id)] = data
+        return data
+
+
+    def initialize_user_data(self, user_id: int):
+        today = datetime.now().strftime('%Y-%m-%d')
+        default_lang = 'ru' if user_id > 0 else 'en'
         return {
             "interactions": 0,
             "last_seen": today,
             "selected_currencies": ACTIVE_CURRENCIES[:5],
-            "selected_crypto": CRYPTO_CURRENCIES[:5], 
+            "selected_crypto": CRYPTO_CURRENCIES[:5],
             "language": default_lang,
             "first_seen": today,
-            "use_quote_format": True
+            "use_quote_format": True,
         }
 
     def initialize_chat_settings(self, chat_id: int):
-        if str(chat_id) not in self.chat_data:
-            self.chat_data[str(chat_id)] = {
-                'currencies': ACTIVE_CURRENCIES[:5],
-                'crypto': CRYPTO_CURRENCIES[:5],
-                'quote_format': False
-            }
-            self.save_chat_data()
+        self._ensure_chat(chat_id)
         logger.info(f"Initialized settings for chat {chat_id}")
 
-    def update_user_data(self, user_id):
-        user_data = self.get_user_data(user_id)
-        user_data["interactions"] += 1
-        user_data["last_seen"] = datetime.now().strftime('%Y-%m-%d')
-        self.save_user_data()
+    def update_user_data(self, user_id: int):
+        self._ensure_user(user_id)
+        today = datetime.now().strftime('%Y-%m-%d')
+        with self._connect() as conn:
+            cur = conn.cursor()
+            cur.execute("UPDATE users SET interactions = interactions + 1, last_seen=? WHERE user_id=?", (today, user_id))
+            conn.commit()
+        if str(user_id) in self.user_data:
+            self.user_data[str(user_id)]["interactions"] += 1
+            self.user_data[str(user_id)]["last_seen"] = today
 
     def update_chat_cache(self, chat_id: int):
-        chat_id_str = str(chat_id)
-        self.reload_data()
-        if chat_id_str not in self.chat_data:
-            self.initialize_chat_settings(chat_id)
+        self.chat_data[str(chat_id)] = True
         logger.info(f"Updated chat cache for chat {chat_id}")
 
-    def get_user_currencies(self, user_id):
-        return self.get_user_data(user_id).get("selected_currencies", ACTIVE_CURRENCIES[:5])
+    def get_user_currencies(self, user_id: int):
+        self._ensure_user(user_id)
+        with self._connect() as conn:
+            cur = conn.cursor()
+            cur.execute("SELECT currency FROM user_currencies WHERE user_id=?", (user_id,))
+            rows = cur.fetchall()
+        return [r[0] for r in rows] or ACTIVE_CURRENCIES[:5]
 
-    def set_user_currencies(self, user_id, currencies):
-        user_data = self.get_user_data(user_id)
-        user_data["selected_currencies"] = currencies
-        self.save_user_data()
+    def set_user_currencies(self, user_id: int, currencies: List[str]):
+        self._ensure_user(user_id)
+        with self._connect() as conn:
+            cur = conn.cursor()
+            cur.execute("DELETE FROM user_currencies WHERE user_id=?", (user_id,))
+            cur.executemany("INSERT OR IGNORE INTO user_currencies(user_id, currency) VALUES(?, ?)", [(user_id, c) for c in currencies])
+            conn.commit()
 
     def get_user_crypto(self, user_id: int) -> List[str]:
-        return self.get_user_data(user_id).get("selected_crypto", CRYPTO_CURRENCIES)
+        self._ensure_user(user_id)
+        with self._connect() as conn:
+            cur = conn.cursor()
+            cur.execute("SELECT symbol FROM user_crypto WHERE user_id=?", (user_id,))
+            rows = cur.fetchall()
+        return [r[0] for r in rows] or CRYPTO_CURRENCIES[:5]
 
     def set_user_crypto(self, user_id: int, crypto_list: List[str]):
-        user_data = self.get_user_data(user_id)
-        user_data["selected_crypto"] = crypto_list
-        self.save_user_data()
+        self._ensure_user(user_id)
+        with self._connect() as conn:
+            cur = conn.cursor()
+            cur.execute("DELETE FROM user_crypto WHERE user_id=?", (user_id,))
+            cur.executemany("INSERT OR IGNORE INTO user_crypto(user_id, symbol) VALUES(?, ?)", [(user_id, s) for s in crypto_list])
+            conn.commit()
 
-    def get_user_language(self, user_id):
-        return self.get_user_data(user_id).get("language", "en")
-    
-    def set_user_language(self, user_id, language):
-        user_data = self.get_user_data(user_id)
-        user_data["language"] = language
-        self.save_user_data()
+    def get_user_language(self, user_id: int):
+        self._ensure_user(user_id)
+        with self._connect() as conn:
+            cur = conn.cursor()
+            cur.execute("SELECT language FROM users WHERE user_id=?", (user_id,))
+            row = cur.fetchone()
+        return row[0] if row and row[0] else 'ru'
 
-    def get_user_quote_format(self, user_id):
-        return self.get_user_data(user_id).get("use_quote_format", True)
+    def set_user_language(self, user_id: int, language: str):
+        self._ensure_user(user_id)
+        with self._connect() as conn:
+            cur = conn.cursor()
+            cur.execute("UPDATE users SET language=? WHERE user_id=?", (language, user_id))
+            conn.commit()
 
-    def set_user_quote_format(self, user_id, use_quote):
-        user_data = self.get_user_data(user_id)
-        user_data["use_quote_format"] = use_quote
-        self.save_user_data()
+    def get_user_quote_format(self, user_id: int):
+        self._ensure_user(user_id)
+        with self._connect() as conn:
+            cur = conn.cursor()
+            cur.execute("SELECT use_quote_format FROM users WHERE user_id=?", (user_id,))
+            row = cur.fetchone()
+        return bool(row[0]) if row else True
 
-    def get_chat_quote_format(self, chat_id):
-        return self.get_chat_data(chat_id).get("quote_format", False)
+    def set_user_quote_format(self, user_id: int, use_quote: bool):
+        self._ensure_user(user_id)
+        with self._connect() as conn:
+            cur = conn.cursor()
+            cur.execute("UPDATE users SET use_quote_format=? WHERE user_id=?", (1 if use_quote else 0, user_id))
+            conn.commit()
 
-    def set_chat_quote_format(self, chat_id, use_quote):
-        chat_data = self.get_chat_data(chat_id)
-        chat_data["quote_format"] = use_quote
-        self.save_chat_data()
+    def get_chat_quote_format(self, chat_id: int):
+        self._ensure_chat(chat_id)
+        with self._connect() as conn:
+            cur = conn.cursor()
+            cur.execute("SELECT quote_format FROM chats WHERE chat_id=?", (chat_id,))
+            row = cur.fetchone()
+        return bool(row[0]) if row else False
 
-    def get_chat_currencies(self, chat_id):
-        return self.get_chat_data(chat_id).get("currencies", ACTIVE_CURRENCIES[:5])
+    def set_chat_quote_format(self, chat_id: int, use_quote: bool):
+        self._ensure_chat(chat_id)
+        with self._connect() as conn:
+            cur = conn.cursor()
+            cur.execute("UPDATE chats SET quote_format=? WHERE chat_id=?", (1 if use_quote else 0, chat_id))
+            conn.commit()
 
-    def set_chat_currencies(self, chat_id, currencies):
-        chat_data = self.get_chat_data(chat_id)
-        chat_data["currencies"] = currencies
-        self.save_chat_data()
+    def get_chat_currencies(self, chat_id: int):
+        self._ensure_chat(chat_id)
+        with self._connect() as conn:
+            cur = conn.cursor()
+            cur.execute("SELECT currency FROM chat_currencies WHERE chat_id=?", (chat_id,))
+            rows = cur.fetchall()
+        return [r[0] for r in rows] or ACTIVE_CURRENCIES[:5]
 
-    def get_chat_crypto(self, chat_id):
-        return self.get_chat_data(chat_id).get("crypto", CRYPTO_CURRENCIES[:5])
+    def set_chat_currencies(self, chat_id: int, currencies: List[str]):
+        self._ensure_chat(chat_id)
+        with self._connect() as conn:
+            cur = conn.cursor()
+            cur.execute("DELETE FROM chat_currencies WHERE chat_id=?", (chat_id,))
+            cur.executemany("INSERT OR IGNORE INTO chat_currencies(chat_id, currency) VALUES(?, ?)", [(chat_id, c) for c in currencies])
+            conn.commit()
 
-    def set_chat_crypto(self, chat_id, crypto_list):
-        chat_data = self.get_chat_data(chat_id)
-        chat_data["crypto"] = crypto_list
-        self.save_chat_data()
+    def get_chat_crypto(self, chat_id: int):
+        self._ensure_chat(chat_id)
+        with self._connect() as conn:
+            cur = conn.cursor()
+            cur.execute("SELECT symbol FROM chat_crypto WHERE chat_id=?", (chat_id,))
+            rows = cur.fetchall()
+        return [r[0] for r in rows] or CRYPTO_CURRENCIES[:5]
+
+    def set_chat_crypto(self, chat_id: int, crypto_list: List[str]):
+        self._ensure_chat(chat_id)
+        with self._connect() as conn:
+            cur = conn.cursor()
+            cur.execute("DELETE FROM chat_crypto WHERE chat_id=?", (chat_id,))
+            cur.executemany("INSERT OR IGNORE INTO chat_crypto(chat_id, symbol) VALUES(?, ?)", [(chat_id, s) for s in crypto_list])
+            conn.commit()
 
     def get_statistics(self):
-        self.reload_data()
         today = datetime.now().strftime('%Y-%m-%d')
-        total_users = len(self.user_data)
-        active_today = sum(1 for user in self.user_data.values() if user['last_seen'] == today)
-        new_today = sum(1 for user in self.user_data.values() if user['first_seen'] == today)
-
+        with self._connect() as conn:
+            cur = conn.cursor()
+            cur.execute("SELECT COUNT(*) FROM users")
+            total_users = cur.fetchone()[0]
+            cur.execute("SELECT COUNT(*) FROM users WHERE last_seen=?", (today,))
+            active_today = cur.fetchone()[0]
+            cur.execute("SELECT COUNT(*) FROM users WHERE first_seen=?", (today,))
+            new_today = cur.fetchone()[0]
         return {
             "total_users": total_users,
             "active_today": active_today,
-            "new_today": new_today
+            "new_today": new_today,
         }

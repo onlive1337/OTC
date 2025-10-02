@@ -108,7 +108,6 @@ async def toggle_chat_currency(callback_query: CallbackQuery):
         chat_currencies.append(currency)
     
     user_data.set_chat_currencies(chat_id, chat_currencies)
-    user_data.save_chat_data()
     user_data.update_chat_cache(chat_id)
     
     new_data = f"show_chat_currencies_{chat_id}_{page}"
@@ -135,7 +134,6 @@ async def toggle_chat_crypto(callback_query: CallbackQuery):
         chat_crypto.append(crypto)
     
     user_data.set_chat_crypto(chat_id, chat_crypto)
-    user_data.save_chat_data()
     user_data.update_chat_cache(chat_id)
     
     await show_chat_crypto(callback_query)

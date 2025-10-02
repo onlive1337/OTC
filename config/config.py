@@ -12,9 +12,8 @@ LOG_CHAT_ID = "-4558354811"
 ADMIN_IDS = [810587766]
 LOG_LEVEL = os.getenv('LOG_LEVEL', 'INFO')
 
-# Storage files
-USER_DATA_FILE = 'user_data.json'
-CHAT_DATA_FILE = 'chat_data.json'
+# Storage
+DB_PATH = os.getenv('DB_PATH', 'otc.db')
 
 CURRENT_VERSION = "1.1.1"
 

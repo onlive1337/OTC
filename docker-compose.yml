@@ -9,8 +9,7 @@ services:
       - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
       - TZ=Europe/Moscow
     volumes:
-      - ./user_data.json:/app/user_data.json
-      - ./chat_data.json:/app/chat_data.json
+      - ./otc.db:/app/otc.db
       - ./logs:/app/logs
     networks:
       - bot-network

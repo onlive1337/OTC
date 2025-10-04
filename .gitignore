@@ -120,9 +120,11 @@ dmypy.json
 
 # Logs
 logs/
-*.log
 
 # Bot-specific files
 chat_data.json
 user_data.json
 logs.txt
+otc.db
+otc.db-shm
+otc.db-wal

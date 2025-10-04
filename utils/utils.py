@@ -344,7 +344,7 @@ def parse_mathematical_expression(expr: str) -> Optional[float]:
 def parse_amount_and_currency(text: str) -> Tuple[Optional[float], Optional[str]]:
     if not text:
         return None, None
-    
+
     original_text = text
     text = text.strip()
     
@@ -464,22 +464,11 @@ def format_large_number(number, is_crypto=False, is_original_amount=False):
     else:
         if number == 0:
             return "0"
-        elif number < 0.01:
+        if number < 0.01:
             return f"{sign}{number:.6f}".rstrip('0').rstrip('.')
-        elif number < 1:
+        if number < 1:
             return f"{sign}{number:.4f}".rstrip('0').rstrip('.')
-        elif number < 100:
-            return f"{sign}{number:.2f}".rstrip('0').rstrip('.')
-        elif number < 1000000:
-            return f"{sign}{number:,.2f}".rstrip('0').rstrip('.')
-        elif number < 1000000000:
-            return f"{sign}{number/1000000:.2f}M"
-        elif number < 1000000000000:
-            return f"{sign}{number/1000000000:.2f}B"
-        elif number < 1000000000000000:
-            return f"{sign}{number/1000000000000:.2f}T"
-        else:
-            return f"{sign}{number:.2e}"
+        return f"{sign}{number:,.2f}"
 
 def format_response(response: str, use_quote: bool) -> str:
     response = response.strip()

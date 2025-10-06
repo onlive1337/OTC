@@ -8,8 +8,9 @@ services:
     environment:
       - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
       - TZ=Europe/Moscow
+      - DB_PATH=/app/data/otc.db
     volumes:
-      - ./otc.db:/app/otc.db
+      - ./data:/app/data
       - ./logs:/app/logs
     networks:
       - bot-network

@@ -262,7 +262,7 @@ class UserData:
             cur = conn.cursor()
             cur.execute("SELECT currency FROM chat_currencies WHERE chat_id=?", (chat_id,))
             rows = cur.fetchall()
-        return [r[0] for r in rows] or ACTIVE_CURRENCIES[:5]
+        return [r[0] for r in rows]
 
     def set_chat_currencies(self, chat_id: int, currencies: List[str]):
         self._ensure_chat(chat_id)
@@ -278,7 +278,7 @@ class UserData:
             cur = conn.cursor()
             cur.execute("SELECT symbol FROM chat_crypto WHERE chat_id=?", (chat_id,))
             rows = cur.fetchall()
-        return [r[0] for r in rows] or CRYPTO_CURRENCIES[:5]
+        return [r[0] for r in rows]
 
     def set_chat_crypto(self, chat_id: int, crypto_list: List[str]):
         self._ensure_chat(chat_id)

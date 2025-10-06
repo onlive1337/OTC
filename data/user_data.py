@@ -118,8 +118,8 @@ class UserData:
         data = {
             "interactions": interactions,
             "last_seen": last_seen,
-            "selected_currencies": currencies or ACTIVE_CURRENCIES[:5],
-            "selected_crypto": crypto or CRYPTO_CURRENCIES[:5],
+            "selected_currencies": currencies,
+            "selected_crypto": crypto,
             "language": language or 'ru',
             "first_seen": first_seen,
             "use_quote_format": bool(use_quote),
@@ -139,8 +139,8 @@ class UserData:
             cur.execute("SELECT symbol FROM chat_crypto WHERE chat_id=?", (chat_id,))
             crypto = [r[0] for r in cur.fetchall()]
         data = {
-            'currencies': currencies or ACTIVE_CURRENCIES[:5],
-            'crypto': crypto or CRYPTO_CURRENCIES[:5],
+            'currencies': currencies,
+            'crypto': crypto,
             'quote_format': quote_format,
         }
         self.chat_data[str(chat_id)] = data
@@ -185,7 +185,7 @@ class UserData:
             cur = conn.cursor()
             cur.execute("SELECT currency FROM user_currencies WHERE user_id=?", (user_id,))
             rows = cur.fetchall()
-        return [r[0] for r in rows] or ACTIVE_CURRENCIES[:5]
+        return [r[0] for r in rows]
 
     def set_user_currencies(self, user_id: int, currencies: List[str]):
         self._ensure_user(user_id)
@@ -201,7 +201,7 @@ class UserData:
             cur = conn.cursor()
             cur.execute("SELECT symbol FROM user_crypto WHERE user_id=?", (user_id,))
             rows = cur.fetchall()
-        return [r[0] for r in rows] or CRYPTO_CURRENCIES[:5]
+        return [r[0] for r in rows]
 
     def set_user_crypto(self, user_id: int, crypto_list: List[str]):
         self._ensure_user(user_id)

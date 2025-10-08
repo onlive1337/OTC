@@ -2,6 +2,4 @@ aiogram==3.22.0
 aiohttp>=3.13.0,<4.0.0
 python-dotenv==1.1.1
 numpy==2.0.2
-matplotlib==3.9.4
-pillow==11.3.0
 portalocker==3.2.0

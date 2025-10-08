@@ -15,7 +15,7 @@ from config.config import (
     BOT_TOKEN, ADMIN_IDS, CRYPTO_CURRENCIES, CURRENT_VERSION,
     ALL_CURRENCIES, LOG_LEVEL, HTTP_TOTAL_TIMEOUT, HTTP_CONNECT_TIMEOUT
 )
-from utils.utils import create_crypto_chart, get_crypto_history, get_exchange_rates, convert_currency, format_large_number, parse_amount_and_currency, read_changelog, delete_conversion_message, save_settings, get_current_price, set_http_session, close_http_session
+from utils.utils import get_exchange_rates, convert_currency, format_large_number, parse_amount_and_currency, read_changelog, delete_conversion_message, save_settings, set_http_session, close_http_session
 from data.chat_settings import show_chat_settings, save_chat_settings, show_chat_currencies, show_chat_crypto, toggle_chat_crypto, toggle_chat_currency, back_to_chat_settings
 from data.user_settings import show_currencies, show_crypto, toggle_crypto, toggle_currency, toggle_quote_format, change_language, set_language
 from config.languages import LANGUAGES
@@ -203,224 +203,9 @@ async def process_settings(callback_query_or_message: Union[CallbackQuery, Messa
     
     await callback_query.message.edit_text(settings_text, reply_markup=kb.as_markup())
 
-async def cmd_price(message: Message):
-    try:
-        parts = message.text.split()
-        if len(parts) < 2:
-            kb = InlineKeyboardBuilder()
-            for i, crypto in enumerate(['BTC', 'ETH', 'BNB', 'SOL', 'TON', 'NOT']):
-                kb.button(text=f"{crypto}", callback_data=f"price_select_{crypto}")
-            kb.adjust(3)
-            
-            await message.answer(
-                "💰 **Выберите криптовалюту для просмотра графика:**\n\n" +
-                "Или используйте формат: `/price BTC`\n" +
-                f"Доступные: {', '.join(CRYPTO_CURRENCIES)}",
-                reply_markup=kb.as_markup(),
-                parse_mode="Markdown"
-            )
-            return
-            
-        crypto = parts[1].upper()
-        if crypto not in CRYPTO_CURRENCIES:
-            await message.answer(
-                f"❌ Неподдерживаемая криптовалюта: {crypto}\n" +
-                f"✅ Доступные: {', '.join(CRYPTO_CURRENCIES)}"
-            )
-            return
-        
-        loading_msg = await message.answer("📊 Загружаю график...")
-        
-        await send_crypto_chart(message, crypto, "7d", loading_msg)
-        
-    except Exception as e:
-        logger.error(f"Error in cmd_price: {e}")
-        await message.answer("❌ Произошла ошибка при обработке запроса.")
 
-async def send_crypto_chart(message: Message, crypto: str, period: str = "7d", loading_msg: Message = None):
-    try:
-        if crypto == 'USDT':
-            if loading_msg:
-                await loading_msg.delete()
-                
-            kb = InlineKeyboardBuilder()
-            kb.button(text="🗑 Удалить", callback_data="delete_conversion")
-            kb.adjust(1)
-            
-            await message.answer(
-                "💰 **USDT/USD**\n\n" +
-                "💵 Цена: $1.00\n" +
-                "ℹ️ USDT является стейблкоином, привязанным к доллару США\n" +
-                "📊 График недоступен для стейблкоинов",
-                reply_markup=kb.as_markup(),
-                parse_mode="Markdown"
-            )
-            return
 
-        current_price, price_24h_change = await get_current_price(crypto)
-        if current_price is None:
-            if loading_msg:
-                await loading_msg.edit_text("❌ Не удалось получить данные. Попробуйте позже.")
-            return
 
-        history_data = await get_crypto_history(crypto, period.replace('d', ''))
-        
-        if history_data and history_data['prices'] and len(history_data['prices']) > 0:
-            first_price = history_data['prices'][0][1]
-            last_price = history_data['prices'][-1][1]
-            period_change = ((last_price - first_price) / first_price) * 100
-        else:
-            period_change = price_24h_change
-
-        chart_image = await create_crypto_chart(crypto, period)
-        
-        if chart_image:
-            kb = InlineKeyboardBuilder()
-            periods = [
-                ("📊 24ч", "1d"),
-                ("📈 7д", "7d"),
-                ("📉 30д", "30d")
-            ]
-            
-            for text, p in periods:
-                if p == period:
-                    text = "✅ " + text
-                kb.button(text=text, callback_data=f"price_chart_{crypto}_{p}")
-            
-            kb.button(text="🔄 Обновить", callback_data=f"price_chart_{crypto}_{period}")
-            kb.button(text="🗑 Удалить", callback_data="delete_conversion")
-            kb.adjust(3, 1, 1)
-            
-            period_names = {'1d': '24 часа', '7d': '7 дней', '30d': '30 дней'}
-            
-            caption = (
-                f"💰 **{crypto}/USDT**\n\n" +
-                f"📊 График за {period_names.get(period, period)}\n" +
-                f"💵 Текущая цена: ${current_price:,.4f}\n" +
-                f"{'📈' if period_change >= 0 else '📉'} Изменение за период: {period_change:+.2f}%\n\n" +
-                f"⏰ Обновлено: {datetime.now().strftime('%H:%M:%S')}"
-            )
-            
-            if loading_msg:
-                await loading_msg.delete()
-                
-            await message.answer_photo(
-                photo=BufferedInputFile(chart_image, filename=f"{crypto}_chart.png"),
-                caption=caption,
-                reply_markup=kb.as_markup(),
-                parse_mode="Markdown"
-            )
-        else:
-            if loading_msg:
-                await loading_msg.delete()
-                
-            await process_crypto_price(message, crypto, period)
-            
-    except Exception as e:
-        logger.error(f"Error in send_crypto_chart: {e}")
-        if loading_msg:
-            await loading_msg.edit_text("❌ Произошла ошибка при создании графика.")
-
-async def process_price_chart_callback(callback_query: CallbackQuery):
-    try:
-        parts = callback_query.data.split('_')
-        
-        if parts[1] == 'select':
-            crypto = parts[2]
-            await callback_query.message.delete()
-            loading_msg = await callback_query.bot.send_message(
-                chat_id=callback_query.message.chat.id,
-                text="📊 Загружаю график..."
-            )
-            
-            class FakeMessage:
-                def __init__(self, bot, chat_id):
-                    self.bot = bot
-                    self.chat = type('obj', (object,), {'id': chat_id})
-                    
-                async def answer(self, *args, **kwargs):
-                    return await self.bot.send_message(chat_id=self.chat.id, *args, **kwargs)
-                    
-                async def answer_photo(self, *args, **kwargs):
-                    return await self.bot.send_photo(chat_id=self.chat.id, *args, **kwargs)
-            
-            fake_message = FakeMessage(callback_query.bot, callback_query.message.chat.id)
-            await send_crypto_chart(fake_message, crypto, "7d", loading_msg)
-            await callback_query.answer()
-            return
-        
-        if parts[1] == 'chart':
-            _, _, crypto, period = callback_query.data.split('_')
-            
-            chat_id = callback_query.message.chat.id
-            
-            await callback_query.message.delete()
-            
-            loading_msg = await callback_query.bot.send_message(
-                chat_id=chat_id,
-                text="📊 Обновляю график..."
-            )
-            
-            class FakeMessage:
-                def __init__(self, bot, chat_id):
-                    self.bot = bot
-                    self.chat = type('obj', (object,), {'id': chat_id})
-                    
-                async def answer(self, *args, **kwargs):
-                    return await self.bot.send_message(chat_id=self.chat.id, *args, **kwargs)
-                    
-                async def answer_photo(self, *args, **kwargs):
-                    return await self.bot.send_photo(chat_id=self.chat.id, *args, **kwargs)
-            
-            fake_message = FakeMessage(callback_query.bot, chat_id)
-            await send_crypto_chart(fake_message, crypto, period, loading_msg)
-            
-        await callback_query.answer()
-        
-    except Exception as e:
-        logger.error(f"Error in price chart callback: {e}")
-        await callback_query.answer("❌ Произошла ошибка. Попробуйте позже.", show_alert=True)
-
-async def process_crypto_price(message: Message, crypto: str, period: str):
-    try:
-        current_price, price_24h_change = await get_current_price(crypto)
-        if current_price is None:
-            await message.answer("❌ Не удалось получить данные. Попробуйте позже.")
-            return
-
-        history_data = await get_crypto_history(crypto, period.replace('d', ''))
-        if history_data and history_data['prices']:
-            first_price = history_data['prices'][0][1]
-            last_price = history_data['prices'][-1][1]
-            period_change = ((last_price - first_price) / first_price) * 100
-            
-            price_info = (
-                f"💰 **{crypto}/USDT**\n\n" +
-                f"💵 Цена: ${current_price:.4f}\n" +
-                f"{'📈' if price_24h_change >= 0 else '📉'} 24ч: {price_24h_change:+.2f}%\n" +
-                f"{'📈' if period_change >= 0 else '📉'} {period.replace('d', '')}д: {period_change:+.2f}%"
-            )
-        else:
-            price_info = (
-                f"💰 **{crypto}/USDT**\n\n" +
-                f"💵 Цена: ${current_price:.4f}\n" +
-                f"{'📈' if price_24h_change >= 0 else '📉'} 24ч: {price_24h_change:+.2f}%"
-            )
-
-        kb = InlineKeyboardBuilder()
-        kb.button(text="📊 График", callback_data=f"price_chart_{crypto}_7d")
-        kb.button(text="🗑 Удалить", callback_data="delete_conversion")
-        kb.adjust(1)
-
-        await message.answer(
-            price_info,
-            reply_markup=kb.as_markup(),
-            parse_mode="Markdown"
-        )
-        
-    except Exception as e:
-        logger.error(f"Error in process_crypto_price: {e}")
-        await message.answer("❌ Произошла ошибка при обработке запроса.")
 
 async def process_support(callback_query: CallbackQuery):
     user_data.update_user_data(callback_query.from_user.id)
@@ -967,7 +752,6 @@ async def main():
     dp.message.register(cmd_stats, Command("stats"))
     dp.message.register(cmd_settings, Command("settings"))
     dp.message.register(cmd_help, Command("help"))
-    dp.message.register(cmd_price, Command("price"))
     dp.message.register(handle_message)
     dp.message.register(handle_conversion)
     dp.message.register(handle_all_messages)
@@ -997,8 +781,6 @@ async def main():
     dp.callback_query.register(back_to_settings, F.data == "back_to_settings")
     dp.callback_query.register(back_to_chat_settings, F.data.startswith("back_to_chat_settings_"))
     dp.callback_query.register(delete_conversion_message, F.data == "delete_conversion")
-    dp.callback_query.register(process_price_chart_callback, F.data.startswith("price_chart_"))
-    dp.callback_query.register(process_price_chart_callback, F.data.startswith("price_select_"))
     dp.callback_query.register(process_callback)
     
     dp.inline_query.register(inline_query_handler)

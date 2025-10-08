@@ -17,6 +17,9 @@ All notable changes to this project will be documented in this file.
 - Centralized logging (basicConfig in main.py); duplicate basicConfig from modules removed.
 - Number formatting: M/B abbreviations disabled for fiat currencies — now the full value is displayed with separators.
 
+### Removed
+- /price command and the entire crypto chart feature (Binance/Coingecko history, matplotlib rendering). The bot no longer builds or sends crypto price charts.
+
 ### Fixed
 - Fixed the critical error “Session is closed” and other issues when receiving rates; added timeouts, retries, and value checks (no division by zero/KeyError).
 - TelegramBadRequest handling: “message is not modified” is ignored when re-editing a message in settings.

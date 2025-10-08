@@ -2,6 +2,26 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.2.0] - 2025-10-09
+
+### Added
+- Local SQLite storage (otc.db) instead of JSON; automatic table creation and PRAGMA WAL.
+- Global aiohttp ClientSession for the entire lifetime of the application; warming up the course cache at startup.
+- Retries with exponential delay and parallelism limitation (semaphores) for HTTP requests to exchange rate providers.
+- Stale-While-Revalidate (SWR) cache mode for exchange rates.
+- Healthcheck in Dockerfile.
+- Anti-flood for Telegram logs; only ERROR messages are sent to the log chat.
+
+### Changed
+- Complete removal of JSON files; constants and calls related to JSON have been removed. docker-compose now mounts the ./data directory and uses DB_PATH=/app/data/otc.db.
+- Centralized logging (basicConfig in main.py); duplicate basicConfig from modules removed.
+- Number formatting: M/B abbreviations disabled for fiat currencies — now the full value is displayed with separators.
+
+### Fixed
+- Fixed the critical error “Session is closed” and other issues when receiving rates; added timeouts, retries, and value checks (no division by zero/KeyError).
+- TelegramBadRequest handling: “message is not modified” is ignored when re-editing a message in settings.
+- User and chat settings: if all currencies/cryptocurrencies are removed, defaults are no longer substituted, and the corresponding sections are hidden.
+
 ## [1.1.1] - 2025-05-30
 
 ### Added
@@ -21,7 +41,7 @@ All notable changes to this project will be documented in this file.
 
 ### Changed
 
-- Rewrite parsing system from scratch
+- Rewrite the parsing system from scratch
 
 ### Fixed (1.0.9)
 

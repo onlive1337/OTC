@@ -15,7 +15,7 @@ LOG_LEVEL = os.getenv('LOG_LEVEL', 'INFO')
 # Storage
 DB_PATH = os.getenv('DB_PATH', 'otc.db')
 
-CURRENT_VERSION = "1.1.1"
+CURRENT_VERSION = "1.2.0"
 
 # Cache
 CACHE_EXPIRATION_TIME = 600  # seconds

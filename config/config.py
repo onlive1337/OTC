@@ -11,6 +11,7 @@ if not BOT_TOKEN:
 LOG_CHAT_ID = "-4558354811"
 ADMIN_IDS = [810587766]
 LOG_LEVEL = os.getenv('LOG_LEVEL', 'INFO')
+COINCAP_API_KEY = os.getenv('COINCAP_API_KEY')
 
 # Storage
 DB_PATH = os.getenv('DB_PATH', 'otc.db')

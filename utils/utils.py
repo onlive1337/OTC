@@ -458,7 +458,11 @@ def parse_amount_and_currency(text: str) -> Tuple[Optional[float], Optional[str]
     sorted_patterns = sorted(all_currency_patterns.items(), key=lambda x: len(x[0]), reverse=True)
     
     for pattern, curr_code in sorted_patterns:
-        regex = rf'\b{re.escape(pattern.lower())}\b'
+        is_symbol = pattern in CURRENCY_SYMBOLS or re.match(r'^\W+$', pattern, re.UNICODE) is not None
+        if is_symbol:
+            regex = re.escape(pattern.lower())
+        else:
+            regex = rf'(?<!\w){re.escape(pattern.lower())}(?!\w)'
         match = re.search(regex, text_lower)
         if match:
             currency = curr_code

@@ -12,7 +12,7 @@ from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.filters import Command, CommandStart
 from config.config import (
-    BOT_TOKEN, ADMIN_IDS, CRYPTO_CURRENCIES, CURRENT_VERSION,
+    BOT_TOKEN, ADMIN_IDS, CURRENT_VERSION,
     ALL_CURRENCIES, LOG_LEVEL, HTTP_TOTAL_TIMEOUT, HTTP_CONNECT_TIMEOUT
 )
 from utils.utils import get_exchange_rates, convert_currency, format_large_number, parse_amount_and_currency, read_changelog, delete_conversion_message, save_settings, set_http_session, close_http_session
@@ -202,10 +202,6 @@ async def process_settings(callback_query_or_message: Union[CallbackQuery, Messa
     settings_text = f"{LANGUAGES[user_lang]['settings']}\n\n{LANGUAGES[user_lang]['quote_format_status']}: {quote_status}"
     
     await callback_query.message.edit_text(settings_text, reply_markup=kb.as_markup())
-
-
-
-
 
 async def process_support(callback_query: CallbackQuery):
     user_data.update_user_data(callback_query.from_user.id)

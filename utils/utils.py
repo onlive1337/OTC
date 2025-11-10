@@ -208,7 +208,7 @@ async def _refresh_rates() -> Dict[str, float]:
         if not fiat_fetched:
             logger.error("All fiat currency sources failed!")
 
-        crypto_ids = "bitcoin,ethereum,tether,binancecoin,ripple,cardano,solana,polkadot,dogecoin,matic-network,the-open-network,litecoin"
+        crypto_ids = "bitcoin,ethereum,tether,binancecoin,ripple,cardano,solana,polkadot,dogecoin,the-open-network,litecoin"
         url_cg = f'https://api.coingecko.com/api/v3/simple/price?ids={crypto_ids}&vs_currencies=usd'
 
         try:
@@ -224,7 +224,7 @@ async def _refresh_rates() -> Dict[str, float]:
             crypto_mapping = {
                 'BTC': 'bitcoin', 'ETH': 'ethereum', 'USDT': 'tether', 'BNB': 'binancecoin',
                 'XRP': 'ripple', 'ADA': 'cardano', 'SOL': 'solana', 'DOT': 'polkadot',
-                'DOGE': 'dogecoin', 'MATIC': 'matic-network', 'TON': 'the-open-network',
+                'DOGE': 'dogecoin', 'TON': 'the-open-network',
                 'LTC': 'litecoin'
             }
 
@@ -282,7 +282,7 @@ async def _refresh_rates() -> Dict[str, float]:
                         'BTC': 'bitcoin', 'ETH': 'ethereum', 'USDT': 'tether',
                         'BNB': 'binance-coin', 'XRP': 'xrp', 'ADA': 'cardano',
                         'SOL': 'solana', 'DOT': 'polkadot', 'DOGE': 'dogecoin',
-                        'MATIC': 'polygon', 'TON': 'toncoin', 'LTC': 'litecoin',
+                        'TON': 'toncoin', 'LTC': 'litecoin',
                         'NOT': 'notcoin', 'DUREV': 'durev', 'HMSTR': 'hamster-kombat'
                     }
                     asset_id = coincap_mapping.get(crypto, crypto.lower())
@@ -311,7 +311,7 @@ async def _refresh_rates() -> Dict[str, float]:
                     'BTC': 'bitcoin', 'ETH': 'ethereum', 'USDT': 'tether',
                     'BNB': 'binancecoin', 'XRP': 'ripple', 'ADA': 'cardano',
                     'SOL': 'solana', 'DOT': 'polkadot', 'DOGE': 'dogecoin',
-                    'MATIC': 'matic-network', 'TON': 'the-open-network', 'LTC': 'litecoin'
+                    'TON': 'the-open-network', 'LTC': 'litecoin'
                 }
 
                 for crypto in missing_crypto:

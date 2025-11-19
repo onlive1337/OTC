@@ -42,6 +42,7 @@ async def on_startup(bot: Bot):
     await setup_telegram_logging(bot)
     session = ClientSession(timeout=ClientTimeout(total=HTTP_TOTAL_TIMEOUT, connect=HTTP_CONNECT_TIMEOUT))
     set_http_session(session)
+    await user_data.init_db()
     asyncio.create_task(_warmup_rates())
 
 async def on_shutdown():
@@ -76,10 +77,10 @@ async def save_conversion_to_cache(amount: float, from_currency: str, to_currenc
             del conversion_cache[key]
 
 async def cmd_start(message: Message):
-    user_data.update_user_data(message.from_user.id)
+    await user_data.update_user_data(message.from_user.id)
     logger.info(f"User {message.from_user.id} started the bot in chat {message.chat.id}")
     
-    user_lang = user_data.get_user_language(message.from_user.id)
+    user_lang = await user_data.get_user_language(message.from_user.id)
     
     if message.chat.type in ['group', 'supergroup']:
         chat_member = await message.chat.get_member(message.from_user.id)
@@ -104,7 +105,7 @@ async def cmd_start(message: Message):
 async def cmd_settings(message: Message):
     user_id = message.from_user.id
     chat_id = message.chat.id
-    user_lang = user_data.get_user_language(user_id)
+    user_lang = await user_data.get_user_language(user_id)
 
     if message.chat.type == 'private':
         kb = InlineKeyboardBuilder()
@@ -116,7 +117,7 @@ async def cmd_settings(message: Message):
         kb.button(text=LANGUAGES[user_lang]['back'], callback_data="back_to_main")
         kb.adjust(2, 2, 1, 1)
         
-        use_quote = user_data.get_user_quote_format(user_id)
+        use_quote = await user_data.get_user_quote_format(user_id)
         quote_status = LANGUAGES[user_lang]['on'] if use_quote else LANGUAGES[user_lang]['off']
         settings_text = f"{LANGUAGES[user_lang]['settings']}\n\n{LANGUAGES[user_lang]['quote_format_status']}: {quote_status}"
         
@@ -131,7 +132,7 @@ async def cmd_settings(message: Message):
             kb.button(text=LANGUAGES[user_lang]['save_button'], callback_data=f"save_chat_settings_{chat_id}")
             kb.adjust(2, 1, 1)
             
-            use_quote = user_data.get_chat_quote_format(chat_id)
+            use_quote = await user_data.get_chat_quote_format(chat_id)
             quote_status = LANGUAGES[user_lang]['on'] if use_quote else LANGUAGES[user_lang]['off']
             settings_text = f"{LANGUAGES[user_lang]['settings']}\n\n{LANGUAGES[user_lang]['quote_format_status']}: {quote_status}"
             
@@ -140,9 +141,9 @@ async def cmd_settings(message: Message):
             await message.answer(LANGUAGES[user_lang]['admin_only'])
 
 async def process_howto(callback_query: CallbackQuery):
-    user_data.update_user_data(callback_query.from_user.id)
+    await user_data.update_user_data(callback_query.from_user.id)
     await callback_query.answer()
-    user_lang = user_data.get_user_language(callback_query.from_user.id)
+    user_lang = await user_data.get_user_language(callback_query.from_user.id)
     
     howto_message = LANGUAGES[user_lang]['help']
     
@@ -153,8 +154,8 @@ async def process_howto(callback_query: CallbackQuery):
     await callback_query.message.edit_text(howto_message, reply_markup=kb.as_markup())
 
 async def cmd_help(message: Message):
-    user_data.update_user_data(message.from_user.id)
-    user_lang = user_data.get_user_language(message.from_user.id)
+    await user_data.update_user_data(message.from_user.id)
+    user_lang = await user_data.get_user_language(message.from_user.id)
     
     howto_message = LANGUAGES[user_lang]['help']
     
@@ -168,9 +169,9 @@ async def cmd_help(message: Message):
     )
 
 async def process_feedback(callback_query: CallbackQuery):
-    user_data.update_user_data(callback_query.from_user.id)
+    await user_data.update_user_data(callback_query.from_user.id)
     await callback_query.answer()
-    user_lang = user_data.get_user_language(callback_query.from_user.id)
+    user_lang = await user_data.get_user_language(callback_query.from_user.id)
     feedback_message = LANGUAGES[user_lang]['feedback']
     
     kb = InlineKeyboardBuilder()
@@ -186,8 +187,8 @@ async def process_settings(callback_query_or_message: Union[CallbackQuery, Messa
         
     callback_query = callback_query_or_message
     user_id = callback_query.from_user.id
-    user_lang = user_data.get_user_language(user_id)
-    use_quote = user_data.get_user_quote_format(user_id)
+    user_lang = await user_data.get_user_language(user_id)
+    use_quote = await user_data.get_user_quote_format(user_id)
     
     kb = InlineKeyboardBuilder()
     kb.button(text=LANGUAGES[user_lang]['currencies'], callback_data="show_currencies_0")
@@ -204,9 +205,9 @@ async def process_settings(callback_query_or_message: Union[CallbackQuery, Messa
     await callback_query.message.edit_text(settings_text, reply_markup=kb.as_markup())
 
 async def process_support(callback_query: CallbackQuery):
-    user_data.update_user_data(callback_query.from_user.id)
+    await user_data.update_user_data(callback_query.from_user.id)
     await callback_query.answer()
-    user_lang = user_data.get_user_language(callback_query.from_user.id)
+    user_lang = await user_data.get_user_language(callback_query.from_user.id)
     
     support_message = LANGUAGES[user_lang]['support_message']
     
@@ -222,8 +223,8 @@ async def cmd_stats(message: Message):
         await message.answer("У вас нет прав для выполнения этой команды.")
         return
 
-    user_lang = user_data.get_user_language(message.from_user.id)
-    stats = user_data.get_statistics()
+    user_lang = await user_data.get_user_language(message.from_user.id)
+    stats = await user_data.get_statistics()
     stats_message = (
         f"{LANGUAGES[user_lang]['stats_title']}\n\n"
         f"{LANGUAGES[user_lang]['total_users']} {stats['total_users']}\n"
@@ -234,8 +235,8 @@ async def cmd_stats(message: Message):
     await message.answer(stats_message)
 
 async def handle_conversion(message: Message):
-    user_data.update_user_data(message.from_user.id)
-    user_lang = user_data.get_user_language(message.from_user.id)
+    await user_data.update_user_data(message.from_user.id)
+    user_lang = await user_data.get_user_language(message.from_user.id)
     try:
         parts = message.text.split()
         if len(parts) != 2:
@@ -244,8 +245,8 @@ async def handle_conversion(message: Message):
         amount = float(parts[0])
         from_currency = parts[1].upper()
 
-        user_currencies = user_data.get_user_currencies(message.from_user.id)
-        user_crypto = user_data.get_user_crypto(message.from_user.id)
+        user_currencies = await user_data.get_user_currencies(message.from_user.id)
+        user_crypto = await user_data.get_user_crypto(message.from_user.id)
 
         rates = await get_exchange_rates()
         if not rates:
@@ -277,9 +278,9 @@ async def handle_conversion(message: Message):
         await message.answer(LANGUAGES[user_lang]['error'])
 
 async def inline_query_handler(query: InlineQuery):
-    user_data.update_user_data(query.from_user.id)
-    user_lang = user_data.get_user_language(query.from_user.id)
-    use_quote = user_data.get_user_quote_format(query.from_user.id)
+    await user_data.update_user_data(query.from_user.id)
+    user_lang = await user_data.get_user_language(query.from_user.id)
+    use_quote = await user_data.get_user_quote_format(query.from_user.id)
     
     if not query.query.strip():
         empty_input_result = InlineQueryResultArticle(
@@ -310,8 +311,8 @@ async def inline_query_handler(query: InlineQuery):
         return
 
     try:
-        user_currencies = user_data.get_user_currencies(query.from_user.id)
-        user_crypto = user_data.get_user_crypto(query.from_user.id)
+        user_currencies = await user_data.get_user_currencies(query.from_user.id)
+        user_crypto = await user_data.get_user_crypto(query.from_user.id)
 
         if from_currency not in ALL_CURRENCIES:
             raise ValueError(f"Invalid currency: {from_currency}")
@@ -401,7 +402,7 @@ async def handle_all_messages(message: types.Message, bot: Bot):
     if message.new_chat_members:
         for member in message.new_chat_members:
             if member.id == bot.id:
-                user_lang = user_data.get_user_language(message.from_user.id)
+                user_lang = await user_data.get_user_language(message.from_user.id)
                 welcome_message = LANGUAGES[user_lang]['welcome_group_message']
                 await message.answer(welcome_message)
                 logger.info(f"Bot added to chat {message.chat.id}. Welcome message sent.")
@@ -412,9 +413,9 @@ async def handle_my_chat_member(event: ChatMemberUpdated, bot: Bot):
     logger.info(f"Event content: {event.model_dump_json()}")
     
     if event.new_chat_member.status == "member":
-        user_data.initialize_chat_settings(event.chat.id)
+        await user_data.initialize_chat_settings(event.chat.id)
         
-        user_lang = user_data.get_user_language(event.from_user.id)
+        user_lang = await user_data.get_user_language(event.from_user.id)
         
         welcome_message = LANGUAGES[user_lang]['welcome_group_message']
         
@@ -429,8 +430,8 @@ async def handle_message(message: types.Message):
         return
 
     user_id = message.from_user.id
-    user_data.update_user_data(user_id)
-    user_lang = user_data.get_user_language(user_id)
+    await user_data.update_user_data(user_id)
+    user_lang = await user_data.get_user_language(user_id)
 
     if message.text.startswith('/'):
         return 
@@ -492,8 +493,8 @@ async def handle_message(message: types.Message):
 async def process_multiple_conversions(message: types.Message, requests: List[Tuple[float, str]]):
     user_id = message.from_user.id
     chat_id = message.chat.id
-    user_data.update_user_data(user_id)
-    user_lang = user_data.get_user_language(user_id)
+    await user_data.update_user_data(user_id)
+    user_lang = await user_data.get_user_language(user_id)
     
     try:
         rates = await get_exchange_rates()
@@ -502,11 +503,11 @@ async def process_multiple_conversions(message: types.Message, requests: List[Tu
             return
         
         if message.chat.type in ['group', 'supergroup']:
-            user_currencies = user_data.get_chat_currencies(chat_id)
-            user_crypto = user_data.get_chat_crypto(chat_id)
+            user_currencies = await user_data.get_chat_currencies(chat_id)
+            user_crypto = await user_data.get_chat_crypto(chat_id)
         else:
-            user_currencies = user_data.get_user_currencies(user_id)
-            user_crypto = user_data.get_user_crypto(user_id)
+            user_currencies = await user_data.get_user_currencies(user_id)
+            user_crypto = await user_data.get_user_crypto(user_id)
         
         final_response = ""
         
@@ -563,7 +564,7 @@ async def process_multiple_conversions(message: types.Message, requests: List[Tu
 async def process_conversion(message: types.Message, amount: float, from_currency: str):
     user_id = message.from_user.id
     chat_id = message.chat.id
-    user_lang = user_data.get_user_language(user_id)
+    user_lang = await user_data.get_user_language(user_id)
     
     try:
         if amount <= 0:
@@ -576,11 +577,11 @@ async def process_conversion(message: types.Message, amount: float, from_currenc
             return
         
         if message.chat.type in ['group', 'supergroup']:
-            user_currencies = user_data.get_chat_currencies(chat_id)
-            user_crypto = user_data.get_chat_crypto(chat_id)
+            user_currencies = await user_data.get_chat_currencies(chat_id)
+            user_crypto = await user_data.get_chat_crypto(chat_id)
         else:
-            user_currencies = user_data.get_user_currencies(user_id)
-            user_crypto = user_data.get_user_crypto(user_id)
+            user_currencies = await user_data.get_user_currencies(user_id)
+            user_crypto = await user_data.get_user_crypto(user_id)
         
         response_parts = []
         response_parts.append(f"{format_large_number(amount, is_original_amount=True)} {ALL_CURRENCIES.get(from_currency, '')} {from_currency}\n")
@@ -626,9 +627,9 @@ async def process_conversion(message: types.Message, amount: float, from_currenc
         await message.answer(LANGUAGES[user_lang]['error'])
 
 async def process_about(callback_query: CallbackQuery):
-    user_data.update_user_data(callback_query.from_user.id)
+    await user_data.update_user_data(callback_query.from_user.id)
     await callback_query.answer()
-    user_lang = user_data.get_user_language(callback_query.from_user.id)
+    user_lang = await user_data.get_user_language(callback_query.from_user.id)
     
     about_message = f"{LANGUAGES[user_lang]['about_message']}\n\n" \
                     f"{LANGUAGES[user_lang]['current_version']} {CURRENT_VERSION}"
@@ -641,9 +642,9 @@ async def process_about(callback_query: CallbackQuery):
     await callback_query.message.edit_text(about_message, reply_markup=kb.as_markup())
 
 async def view_changelog(callback_query: CallbackQuery):
-    user_data.update_user_data(callback_query.from_user.id)
+    await user_data.update_user_data(callback_query.from_user.id)
     await callback_query.answer()
-    user_lang = user_data.get_user_language(callback_query.from_user.id)
+    user_lang = await user_data.get_user_language(callback_query.from_user.id)
     
     changelog = read_changelog()
     
@@ -653,8 +654,8 @@ async def view_changelog(callback_query: CallbackQuery):
     await callback_query.message.edit_text(changelog, reply_markup=kb.as_markup())
 
 async def back_to_main(callback_query: CallbackQuery):
-    user_data.update_user_data(callback_query.from_user.id)
-    user_lang = user_data.get_user_language(callback_query.from_user.id)
+    await user_data.update_user_data(callback_query.from_user.id)
+    user_lang = await user_data.get_user_language(callback_query.from_user.id)
     
     kb = InlineKeyboardBuilder()
     kb.button(text=LANGUAGES[user_lang]['news_button'], url="https://t.me/OTC_InfoHub")
@@ -668,10 +669,10 @@ async def back_to_main(callback_query: CallbackQuery):
     await callback_query.message.edit_text(welcome_message, reply_markup=kb.as_markup())
 
 async def back_to_settings(callback_query: CallbackQuery):
-    user_data.update_user_data(callback_query.from_user.id)
+    await user_data.update_user_data(callback_query.from_user.id)
     user_id = callback_query.from_user.id
-    user_lang = user_data.get_user_language(user_id)
-    use_quote = user_data.get_user_quote_format(user_id)
+    user_lang = await user_data.get_user_language(user_id)
+    use_quote = await user_data.get_user_quote_format(user_id)
     
     kb = InlineKeyboardBuilder()
     kb.button(text=LANGUAGES[user_lang]['currencies'], callback_data="show_currencies_0")

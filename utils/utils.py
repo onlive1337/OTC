@@ -573,7 +573,7 @@ async def delete_conversion_message(callback_query: CallbackQuery):
     await callback_query.answer()
 
 async def save_settings(callback_query: CallbackQuery):
-    user_lang = user_data.get_user_language(callback_query.from_user.id)
+    user_lang = await user_data.get_user_language(callback_query.from_user.id)
     await callback_query.message.edit_text(LANGUAGES[user_lang]['save_settings'])
     await callback_query.answer()
 
@@ -586,7 +586,7 @@ async def check_admin_rights(message_or_callback: Union[Message, CallbackQuery],
         return False
 
 async def show_not_admin_message(message_or_callback: Union[Message, CallbackQuery], user_id: int):
-    user_lang = user_data.get_user_language(user_id)
+    user_lang = await user_data.get_user_language(user_id)
     error_text = LANGUAGES[user_lang].get('not_admin_message', 'You need to be an admin to change these settings.')
     
     if isinstance(message_or_callback, CallbackQuery):

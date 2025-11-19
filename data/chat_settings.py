@@ -21,8 +21,8 @@ async def show_chat_currencies(callback_query: CallbackQuery):
         return
     
     page = int(parts[4]) if len(parts) > 4 and parts[4].isdigit() else 0
-    chat_currencies = user_data.get_chat_currencies(chat_id)
-    user_lang = user_data.get_user_language(user_id)
+    chat_currencies = await user_data.get_chat_currencies(chat_id)
+    user_lang = await user_data.get_user_language(user_id)
     
     currencies_per_page = 5
     start = page * currencies_per_page
@@ -63,8 +63,8 @@ async def show_chat_crypto(callback_query: CallbackQuery):
         await show_not_admin_message(callback_query, user_id)
         return
     
-    chat_crypto = user_data.get_chat_crypto(chat_id)
-    user_lang = user_data.get_user_language(user_id)
+    chat_crypto = await user_data.get_chat_crypto(chat_id)
+    user_lang = await user_data.get_user_language(user_id)
     
     kb = InlineKeyboardBuilder()
     for crypto in CRYPTO_CURRENCIES:
@@ -98,16 +98,16 @@ async def toggle_chat_currency(callback_query: CallbackQuery):
     page = int(parts[5]) if len(parts) > 5 else 0
     
     if str(chat_id) not in user_data.chat_data:
-        user_data.initialize_chat_settings(chat_id)
+        await user_data.initialize_chat_settings(chat_id)
     
-    chat_currencies = user_data.get_chat_currencies(chat_id)
+    chat_currencies = await user_data.get_chat_currencies(chat_id)
     
     if currency in chat_currencies:
         chat_currencies.remove(currency)
     else:
         chat_currencies.append(currency)
     
-    user_data.set_chat_currencies(chat_id, chat_currencies)
+    await user_data.set_chat_currencies(chat_id, chat_currencies)
     user_data.update_chat_cache(chat_id)
     
     new_data = f"show_chat_currencies_{chat_id}_{page}"
@@ -124,16 +124,16 @@ async def toggle_chat_crypto(callback_query: CallbackQuery):
         return
     
     if str(chat_id) not in user_data.chat_data:
-        user_data.initialize_chat_settings(chat_id)
+        await user_data.initialize_chat_settings(chat_id)
     
-    chat_crypto = user_data.get_chat_crypto(chat_id)
+    chat_crypto = await user_data.get_chat_crypto(chat_id)
     
     if crypto in chat_crypto:
         chat_crypto.remove(crypto)
     else:
         chat_crypto.append(crypto)
     
-    user_data.set_chat_crypto(chat_id, chat_crypto)
+    await user_data.set_chat_crypto(chat_id, chat_crypto)
     user_data.update_chat_cache(chat_id)
     
     await show_chat_crypto(callback_query)
@@ -146,7 +146,7 @@ async def show_chat_settings(message: Message):
         await show_not_admin_message(message, user_id)
         return
     
-    user_lang = user_data.get_user_language(user_id)
+    user_lang = await user_data.get_user_language(user_id)
 
     kb = InlineKeyboardBuilder()
     kb.button(text=LANGUAGES[user_lang]['currencies'], 
@@ -159,7 +159,7 @@ async def show_chat_settings(message: Message):
               callback_data=f"save_chat_settings_{chat_id}")
     kb.adjust(2, 1, 1)
     
-    use_quote = user_data.get_chat_quote_format(chat_id)
+    use_quote = await user_data.get_chat_quote_format(chat_id)
     quote_status = LANGUAGES[user_lang]['on'] if use_quote else LANGUAGES[user_lang]['off']
     settings_text = f"{LANGUAGES[user_lang]['chat_settings']}\n\n{LANGUAGES[user_lang]['quote_format_status']}: {quote_status}"
     
@@ -173,7 +173,7 @@ async def save_chat_settings(callback_query: CallbackQuery):
         await show_not_admin_message(callback_query, user_id)
         return
     
-    user_lang = user_data.get_user_language(user_id)
+    user_lang = await user_data.get_user_language(user_id)
     try:
         await callback_query.message.edit_text(LANGUAGES[user_lang]['save_settings'])
     except TelegramBadRequest as e:
@@ -197,7 +197,7 @@ async def back_to_chat_settings(callback_query: CallbackQuery):
         await show_not_admin_message(callback_query, user_id)
         return
     
-    user_lang = user_data.get_user_language(user_id)
+    user_lang = await user_data.get_user_language(user_id)
 
     kb = InlineKeyboardBuilder()
     kb.button(text=LANGUAGES[user_lang]['currencies'], 
@@ -210,7 +210,7 @@ async def back_to_chat_settings(callback_query: CallbackQuery):
               callback_data=f"save_chat_settings_{chat_id}")
     kb.adjust(2, 1, 1)
     
-    use_quote = user_data.get_chat_quote_format(chat_id)
+    use_quote = await user_data.get_chat_quote_format(chat_id)
     quote_status = LANGUAGES[user_lang]['on'] if use_quote else LANGUAGES[user_lang]['off']
     settings_text = f"{LANGUAGES[user_lang]['chat_settings']}\n\n{LANGUAGES[user_lang]['quote_format_status']}: {quote_status}"
     

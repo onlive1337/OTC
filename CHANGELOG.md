@@ -2,6 +2,18 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.3.0] - 2025-11-19
+
+### Added
+- **Async Database**: Migrated from `sqlite3` to `aiosqlite` for non-blocking database operations.
+- **Modular Architecture**: Refactored `main.py` into a modular structure with `handlers/`, `loader.py`, and `states/`.
+- **Routers**: Implemented `aiogram` Routers for better code organization and scalability.
+- **Shared Loader**: Introduced `loader.py` for singleton management of `bot` and `user_data`.
+
+### Changed
+- **Performance**: Improved bot responsiveness by removing blocking synchronous database calls.
+- **Code Structure**: Split the monolithic `main.py` into smaller, maintainable modules.
+
 ## [1.2.0] - 2025-10-09
 
 ### Added

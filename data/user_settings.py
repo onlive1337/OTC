@@ -5,7 +5,7 @@ from config.config import ACTIVE_CURRENCIES, ALL_CURRENCIES, CRYPTO_CURRENCIES
 from config.languages import LANGUAGES
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
-user_data = user_data.UserData()
+from loader import user_data
 
 def get_process_settings():
     from main import process_settings

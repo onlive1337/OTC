@@ -9,7 +9,7 @@ from utils.utils import check_admin_rights, show_not_admin_message
 
 logger = logging.getLogger(__name__)
 
-user_data = user_data.UserData()
+from loader import user_data
 
 async def show_chat_currencies(callback_query: CallbackQuery):
     parts = callback_query.data.split('_')

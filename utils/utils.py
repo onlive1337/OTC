@@ -13,7 +13,7 @@ from config.config import CACHE_EXPIRATION_TIME, ACTIVE_CURRENCIES, CRYPTO_CURRE
 from config.languages import LANGUAGES
 from data import user_data
 
-user_data = user_data.UserData()
+from loader import user_data
 
 cache: Dict[str, Any] = {}
 

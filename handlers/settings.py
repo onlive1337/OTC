@@ -1,0 +1,125 @@
+from typing import Union
+
+from aiogram import Router, F
+from aiogram.types import Message, CallbackQuery
+from aiogram.filters import Command
+from aiogram.fsm.context import FSMContext
+from aiogram.utils.keyboard import InlineKeyboardBuilder
+
+from config.languages import LANGUAGES
+from loader import user_data
+from states.states import UserStates
+
+from data.chat_settings import (
+    show_chat_settings, save_chat_settings, show_chat_currencies, 
+    show_chat_crypto, toggle_chat_crypto, toggle_chat_currency, 
+    back_to_chat_settings
+)
+from data.user_settings import (
+    show_currencies, show_crypto, toggle_crypto, toggle_currency, 
+    toggle_quote_format, change_language, set_language
+)
+from utils.utils import save_settings
+
+router = Router()
+
+@router.message(Command("settings"))
+async def cmd_settings(message: Message):
+    user_id = message.from_user.id
+    chat_id = message.chat.id
+    user_lang = await user_data.get_user_language(user_id)
+
+    if message.chat.type == 'private':
+        kb = InlineKeyboardBuilder()
+        kb.button(text=LANGUAGES[user_lang]['currencies'], callback_data="show_currencies_0")
+        kb.button(text=LANGUAGES[user_lang]['cryptocurrencies'], callback_data="show_crypto")
+        kb.button(text=LANGUAGES[user_lang]['language'], callback_data="change_language")
+        kb.button(text=LANGUAGES[user_lang]['quote_format'], callback_data="toggle_quote_format")
+        kb.button(text=LANGUAGES[user_lang]['save_button'], callback_data="save_settings")
+        kb.button(text=LANGUAGES[user_lang]['back'], callback_data="back_to_main")
+        kb.adjust(2, 2, 1, 1)
+        
+        use_quote = await user_data.get_user_quote_format(user_id)
+        quote_status = LANGUAGES[user_lang]['on'] if use_quote else LANGUAGES[user_lang]['off']
+        settings_text = f"{LANGUAGES[user_lang]['settings']}\n\n{LANGUAGES[user_lang]['quote_format_status']}: {quote_status}"
+        
+        await message.answer(settings_text, reply_markup=kb.as_markup())
+    else:
+        chat_member = await message.chat.get_member(user_id)
+        if chat_member.status in ['creator', 'administrator']:
+            kb = InlineKeyboardBuilder()
+            kb.button(text=LANGUAGES[user_lang]['currencies'], callback_data=f"show_chat_currencies_{chat_id}_0")
+            kb.button(text=LANGUAGES[user_lang]['cryptocurrencies'], callback_data=f"show_chat_crypto_{chat_id}")
+            kb.button(text=LANGUAGES[user_lang]['quote_format'], callback_data=f"toggle_chat_quote_format_{chat_id}")
+            kb.button(text=LANGUAGES[user_lang]['save_button'], callback_data=f"save_chat_settings_{chat_id}")
+            kb.adjust(2, 1, 1)
+            
+            use_quote = await user_data.get_chat_quote_format(chat_id)
+            quote_status = LANGUAGES[user_lang]['on'] if use_quote else LANGUAGES[user_lang]['off']
+            settings_text = f"{LANGUAGES[user_lang]['settings']}\n\n{LANGUAGES[user_lang]['quote_format_status']}: {quote_status}"
+            
+            await message.answer(settings_text, reply_markup=kb.as_markup())
+        else:
+            await message.answer(LANGUAGES[user_lang]['admin_only'])
+
+@router.callback_query(F.data == "settings")
+async def process_settings(callback_query_or_message: Union[CallbackQuery, Message], state: FSMContext):
+    if isinstance(callback_query_or_message, Message):
+        await cmd_settings(callback_query_or_message)
+        return
+        
+    callback_query = callback_query_or_message
+    user_id = callback_query.from_user.id
+    user_lang = await user_data.get_user_language(user_id)
+    use_quote = await user_data.get_user_quote_format(user_id)
+    
+    kb = InlineKeyboardBuilder()
+    kb.button(text=LANGUAGES[user_lang]['currencies'], callback_data="show_currencies_0")
+    kb.button(text=LANGUAGES[user_lang]['cryptocurrencies'], callback_data="show_crypto")
+    kb.button(text=LANGUAGES[user_lang]['language'], callback_data="change_language")
+    kb.button(text=LANGUAGES[user_lang]['quote_format'], callback_data="toggle_quote_format")
+    kb.button(text=LANGUAGES[user_lang]['save_button'], callback_data="save_settings")
+    kb.button(text=LANGUAGES[user_lang]['back'], callback_data="back_to_main")
+    kb.adjust(2, 2, 1, 1)
+    
+    quote_status = LANGUAGES[user_lang]['on'] if use_quote else LANGUAGES[user_lang]['off']
+    settings_text = f"{LANGUAGES[user_lang]['settings']}\n\n{LANGUAGES[user_lang]['quote_format_status']}: {quote_status}"
+    
+    await callback_query.message.edit_text(settings_text, reply_markup=kb.as_markup())
+
+@router.callback_query(F.data == "back_to_settings")
+async def back_to_settings(callback_query: CallbackQuery):
+    await user_data.update_user_data(callback_query.from_user.id)
+    user_id = callback_query.from_user.id
+    user_lang = await user_data.get_user_language(user_id)
+    use_quote = await user_data.get_user_quote_format(user_id)
+    
+    kb = InlineKeyboardBuilder()
+    kb.button(text=LANGUAGES[user_lang]['currencies'], callback_data="show_currencies_0")
+    kb.button(text=LANGUAGES[user_lang]['cryptocurrencies'], callback_data="show_crypto")
+    kb.button(text=LANGUAGES[user_lang]['language'], callback_data="change_language")
+    kb.button(text=LANGUAGES[user_lang]['quote_format'], callback_data="toggle_quote_format")
+    kb.button(text=LANGUAGES[user_lang]['save_button'], callback_data="save_settings")
+    kb.button(text=LANGUAGES[user_lang]['back'], callback_data="back_to_main")
+    kb.adjust(2, 2, 1, 1)
+    
+    quote_status = LANGUAGES[user_lang]['on'] if use_quote else LANGUAGES[user_lang]['off']
+    settings_text = f"{LANGUAGES[user_lang]['settings']}\n\n{LANGUAGES[user_lang]['quote_format_status']}: {quote_status}"
+    
+    await callback_query.message.edit_text(settings_text, reply_markup=kb.as_markup())
+
+router.callback_query.register(show_currencies, F.data.startswith("show_currencies_"))
+router.callback_query.register(show_crypto, F.data == "show_crypto")
+router.callback_query.register(toggle_currency, F.data.startswith("toggle_currency_"))
+router.callback_query.register(toggle_crypto, F.data.startswith("toggle_crypto_"))
+router.callback_query.register(save_settings, F.data == "save_settings")
+router.callback_query.register(change_language, F.data == "change_language")
+router.callback_query.register(set_language, F.data.startswith("set_language_"))
+router.callback_query.register(toggle_quote_format, F.data == "toggle_quote_format")
+
+router.callback_query.register(show_chat_currencies, F.data.startswith("show_chat_currencies_"))
+router.callback_query.register(show_chat_crypto, F.data.startswith("show_chat_crypto_"))
+router.callback_query.register(toggle_chat_currency, F.data.startswith("toggle_chat_currency_"))
+router.callback_query.register(toggle_chat_crypto, F.data.startswith("toggle_chat_crypto_"))
+router.callback_query.register(save_chat_settings, F.data.startswith("save_chat_settings_"))
+router.callback_query.register(back_to_chat_settings, F.data.startswith("back_to_chat_settings_"))

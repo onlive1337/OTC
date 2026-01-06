@@ -41,6 +41,7 @@ ALL_CURRENCIES = {
     'PLN': '🇵🇱', 'THB': '🇹🇭', 'IDR': '🇮🇩', 'HUF': '🇭🇺', 'CZK': '🇨🇿', 'ILS': '🇮🇱', 'CLP': '🇨🇱',
     'PHP': '🇵🇭', 'AED': '🇦🇪', 'COP': '🇨🇴', 'SAR': '🇸🇦', 'MYR': '🇲🇾', 'RON': '🇷🇴',
     'UZS': '🇺🇿', 'UAH': '🇺🇦', 'KZT': '🇰🇿', 'ARS': '🇦🇷', 'VND': '🇻🇳', 'BGN': '🇧🇬', 'HRK': '🇭🇷',
+    'BYN': '🇧🇾',
     'BTC': 'BTC', 'ETH': 'ETH', 'USDT': 'USDT', 'BNB': 'BNB', 'XRP': 'XRP', 'ADA': 'ADA', 'SOL': 'SOL', 'DOT': 'DOT',
     'DOGE': 'DOGE', 'TON': 'TON', 'NOT': 'NOT', 'DUREV': 'DUREV', 'LTC': 'LTC', 'HMSTR': 'HMSTR'  
 }
@@ -50,7 +51,7 @@ ACTIVE_CURRENCIES = [cur for cur in ALL_CURRENCIES if cur not in CRYPTO_CURRENCI
 
 CURRENCY_SYMBOLS = {
     '$': 'USD', '€': 'EUR', '£': 'GBP', '¥': 'JPY', '₽': 'RUB', '₣': 'CHF', '₹': 'INR', '₺': 'TRY',
-    '₴': 'UAH', '₿': 'BTC', 'сум': 'UZS', 'грн': 'UAH', '₸': 'KZT'
+    '₴': 'UAH', '₿': 'BTC', 'сум': 'UZS', 'грн': 'UAH', '₸': 'KZT', 'Br': 'BYN'
 }
 
 CURRENCY_ABBREVIATIONS = {

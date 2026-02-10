@@ -2,6 +2,23 @@
 
 All notable changes to this project will be documented in this file.
 
+## Changelog
+
+## [1.4.0] - 2026-02-10
+
+### ✨ New Features
+- **Targeted Conversion**: convert to specific currency (e.g., `100 USD EUR`).
+- **Broadcast**: `/broadcast` command for mass messaging (supports text, photo, video).
+- **Improved Help**: updated and compact `/help` text.
+- **Styled Buttons**: all buttons are now styled with emojis and colors.
+
+### 🛠 Technical Improvements
+- **SQLite Auto-Reconnect**: automatic database connection recovery.
+- **Middlewares**: added Rate Limiting (anti-spam) and Auto-Retry (message queuing).
+- **Healthcheck**: `/health` command for monitoring bot status.
+- **Refactoring**: optimized keyboard handling and safe background task execution.
+- **Removed numpy**: removed numpy dependency.
+
 ## [1.3.0] - 2025-11-19
 
 ### Added

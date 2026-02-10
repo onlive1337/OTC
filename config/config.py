@@ -19,7 +19,7 @@ if not COINCAP_API_KEY:
 # Storage
 DB_PATH = os.getenv('DB_PATH', 'otc.db')
 
-CURRENT_VERSION = "1.3.0"
+CURRENT_VERSION = "1.4.0"
 
 # Cache
 CACHE_EXPIRATION_TIME = 600  # seconds

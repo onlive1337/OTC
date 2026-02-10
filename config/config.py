@@ -42,8 +42,8 @@ ALL_CURRENCIES = {
     'PHP': '🇵🇭', 'AED': '🇦🇪', 'COP': '🇨🇴', 'SAR': '🇸🇦', 'MYR': '🇲🇾', 'RON': '🇷🇴',
     'UZS': '🇺🇿', 'UAH': '🇺🇦', 'KZT': '🇰🇿', 'ARS': '🇦🇷', 'VND': '🇻🇳', 'BGN': '🇧🇬', 'HRK': '🇭🇷',
     'BYN': '🇧🇾',
-    'BTC': 'BTC', 'ETH': 'ETH', 'USDT': 'USDT', 'BNB': 'BNB', 'XRP': 'XRP', 'ADA': 'ADA', 'SOL': 'SOL', 'DOT': 'DOT',
-    'DOGE': 'DOGE', 'TON': 'TON', 'NOT': 'NOT', 'DUREV': 'DUREV', 'LTC': 'LTC', 'HMSTR': 'HMSTR'  
+    'BTC': '₿', 'ETH': 'Ξ', 'USDT': '₮', 'BNB': 'BNB', 'XRP': 'XRP', 'ADA': 'ADA', 'SOL': 'SOL', 'DOT': 'DOT',
+    'DOGE': 'Ð', 'TON': 'TON', 'NOT': 'NOT', 'DUREV': 'DUREV', 'LTC': 'Ł', 'HMSTR': 'HMSTR'
 }
 
 CRYPTO_CURRENCIES = ['BTC', 'ETH', 'USDT', 'BNB', 'XRP', 'ADA', 'SOL', 'DOT', 'DOGE', 'TON', 'NOT', 'DUREV', 'LTC', 'HMSTR']

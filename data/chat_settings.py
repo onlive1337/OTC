@@ -6,6 +6,7 @@ from aiogram.types import CallbackQuery, Message
 from aiogram.exceptions import TelegramBadRequest
 import logging
 from utils.utils import check_admin_rights, show_not_admin_message
+from utils.button_styles import primary_button, success_button, EMOJI
 
 logger = logging.getLogger(__name__)
 
@@ -32,19 +33,21 @@ async def show_chat_currencies(callback_query: CallbackQuery):
     kb = InlineKeyboardBuilder()
     for currency in current_currencies:
         status = "✅" if currency in chat_currencies else "❌"
-        kb.button(text=f"{ALL_CURRENCIES[currency]} {currency} {status}", 
-                 callback_data=f"toggle_chat_currency_{chat_id}_{currency}_{page}")
+        kb.row(primary_button(f"{ALL_CURRENCIES[currency]} {currency} {status}",
+                 f"toggle_chat_currency_{chat_id}_{currency}_{page}"))
     
+    nav_buttons = []
     if page > 0:
-        kb.button(text=f"⬅️ {LANGUAGES[user_lang]['back']}", 
-                 callback_data=f"show_chat_currencies_{chat_id}_{page-1}")
+        nav_buttons.append(primary_button(LANGUAGES[user_lang]['back'],
+                 f"show_chat_currencies_{chat_id}_{page-1}", emoji=EMOJI['back']))
     if end < len(ACTIVE_CURRENCIES):
-        kb.button(text=f"{LANGUAGES[user_lang]['forward']} ➡️", 
-                 callback_data=f"show_chat_currencies_{chat_id}_{page+1}")
+        nav_buttons.append(primary_button(LANGUAGES[user_lang]['forward'],
+                 f"show_chat_currencies_{chat_id}_{page+1}", emoji=EMOJI['forward']))
+    if nav_buttons:
+        kb.row(*nav_buttons)
     
-    kb.button(text=LANGUAGES[user_lang]['back_to_settings'], 
-              callback_data=f"back_to_chat_settings_{chat_id}")
-    kb.adjust(1)
+    kb.row(primary_button(LANGUAGES[user_lang]['back_to_settings'],
+              f"back_to_chat_settings_{chat_id}", emoji=EMOJI['settings']))
     
     try:
         await callback_query.message.edit_text(
@@ -69,12 +72,12 @@ async def show_chat_crypto(callback_query: CallbackQuery):
     kb = InlineKeyboardBuilder()
     for crypto in CRYPTO_CURRENCIES:
         status = "✅" if crypto in chat_crypto else "❌"
-        kb.button(text=f"{ALL_CURRENCIES[crypto]} {crypto} {status}", 
-                 callback_data=f"toggle_chat_crypto_{chat_id}_{crypto}")
+        kb.row(primary_button(f"{ALL_CURRENCIES[crypto]} {crypto} {status}",
+                 f"toggle_chat_crypto_{chat_id}_{crypto}"))
     
-    kb.button(text=LANGUAGES[user_lang]['back_to_settings'], 
-              callback_data=f"back_to_chat_settings_{chat_id}")
-    kb.adjust(2)
+    kb.row(primary_button(LANGUAGES[user_lang]['back_to_settings'],
+              f"back_to_chat_settings_{chat_id}", emoji=EMOJI['settings']))
+    kb.adjust(2, 2, 2, 2, 2, 2, 2, 1)
     
     try:
         await callback_query.message.edit_text(
@@ -149,15 +152,12 @@ async def show_chat_settings(message: Message):
     user_lang = await user_data.get_user_language(user_id)
 
     kb = InlineKeyboardBuilder()
-    kb.button(text=LANGUAGES[user_lang]['currencies'], 
-              callback_data=f"show_chat_currencies_{chat_id}_0")
-    kb.button(text=LANGUAGES[user_lang]['cryptocurrencies'], 
-              callback_data=f"show_chat_crypto_{chat_id}")
-    kb.button(text=LANGUAGES[user_lang]['quote_format'], 
-              callback_data=f"toggle_chat_quote_format_{chat_id}")
-    kb.button(text=LANGUAGES[user_lang]['save_button'], 
-              callback_data=f"save_chat_settings_{chat_id}")
-    kb.adjust(2, 1, 1)
+    kb.row(
+        primary_button(LANGUAGES[user_lang]['currencies'], f"show_chat_currencies_{chat_id}_0", emoji=EMOJI['currencies']),
+        primary_button(LANGUAGES[user_lang]['cryptocurrencies'], f"show_chat_crypto_{chat_id}", emoji=EMOJI['crypto'])
+    )
+    kb.row(primary_button(LANGUAGES[user_lang]['quote_format'], f"toggle_chat_quote_format_{chat_id}", emoji=EMOJI['quote_format']))
+    kb.row(success_button(LANGUAGES[user_lang]['save_button'], f"save_chat_settings_{chat_id}", emoji=EMOJI['save']))
     
     use_quote = await user_data.get_chat_quote_format(chat_id)
     quote_status = LANGUAGES[user_lang]['on'] if use_quote else LANGUAGES[user_lang]['off']
@@ -187,7 +187,7 @@ async def back_to_chat_settings(callback_query: CallbackQuery):
     
     if chat_id is None:
         logger.error(f"Invalid callback data for back_to_chat_settings: {callback_query.data}")
-        await callback_query.answer("Произошла ошибка. Пожалуйста, попробуйте еще раз.")
+        await callback_query.answer("Error. Please try again.")
         return
 
     chat_id = int(chat_id)
@@ -200,15 +200,12 @@ async def back_to_chat_settings(callback_query: CallbackQuery):
     user_lang = await user_data.get_user_language(user_id)
 
     kb = InlineKeyboardBuilder()
-    kb.button(text=LANGUAGES[user_lang]['currencies'], 
-              callback_data=f"show_chat_currencies_{chat_id}_0")
-    kb.button(text=LANGUAGES[user_lang]['cryptocurrencies'], 
-              callback_data=f"show_chat_crypto_{chat_id}")
-    kb.button(text=LANGUAGES[user_lang]['quote_format'], 
-              callback_data=f"toggle_chat_quote_format_{chat_id}")
-    kb.button(text=LANGUAGES[user_lang]['save_button'], 
-              callback_data=f"save_chat_settings_{chat_id}")
-    kb.adjust(2, 1, 1)
+    kb.row(
+        primary_button(LANGUAGES[user_lang]['currencies'], f"show_chat_currencies_{chat_id}_0", emoji=EMOJI['currencies']),
+        primary_button(LANGUAGES[user_lang]['cryptocurrencies'], f"show_chat_crypto_{chat_id}", emoji=EMOJI['crypto'])
+    )
+    kb.row(primary_button(LANGUAGES[user_lang]['quote_format'], f"toggle_chat_quote_format_{chat_id}", emoji=EMOJI['quote_format']))
+    kb.row(success_button(LANGUAGES[user_lang]['save_button'], f"save_chat_settings_{chat_id}", emoji=EMOJI['save']))
     
     use_quote = await user_data.get_chat_quote_format(chat_id)
     quote_status = LANGUAGES[user_lang]['on'] if use_quote else LANGUAGES[user_lang]['off']

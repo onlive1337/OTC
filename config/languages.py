@@ -1,238 +1,178 @@
 LANGUAGES = {
     'ru': {
-        'welcome': """
-🌟 Добро пожаловать в OTC! 🌟
+        'welcome': """Добро пожаловать в OTC!
 
-Этот бот поможет вам быстро и легко конвертировать валюты. Вот что вы можете делать:
+Введите сумму и валюту для конвертации (например, 100 USD).
 
-💱 Конвертировать валюты: Просто введите сумму и код валюты (например, '100 USD')
-🌐 Использовать инлайн-режим: Введите @onlive_twilight_bot в любом чате для быстрой конвертации
-⚙️ Настраивать параметры: Выбирайте предпочитаемые валюты и многое другое
+Инлайн-режим: @onlive_twilight_bot в любом чате.
+Настройки: /settings
+Помощь: /help
+Канал: @OTC_InfoHub""",
 
-Чтобы начать:
-1️⃣ Используйте /settings для настройки вашего опыта
-2️⃣ Проверьте /help для подробных инструкций
-3️⃣ Присоединяйтесь к нашему каналу @OTC_InfoHub для последних обновлений
+        'help': """Руководство OTC
 
-Приятной конвертации! 💰✨
-        """,
+Использование:
+- Введите сумму и код валюты: 100 USD, 50 EUR
+- Бот ответит конвертацией в выбранные валюты
 
-        'help': """
-📚 Руководство по использованию OTC 📚
+Инлайн-режим: @onlive_twilight_bot 100 USD в любом чате
 
-🔢 Основное использование:
-• Введите сумму, за которой следует код валюты (например, '100 USD', '50 EUR', '1000 JPY')
-• Бот ответит конвертацией в выбранные вами валюты
+Команды:
+/start — запуск бота
+/settings — настройки валют
+/help — справка
 
-💡 Продвинутые функции:
-• Инлайн-режим: Введите @onlive_twilight_bot 100 USD в любом чате
-• Групповой чат: Работает так же, как и в личных чатах
-• Настраиваемый: Установите предпочитаемые валюты в /settings (чат)
+Сокращения:
+- к — тысячи: 5к USD = 5000 USD
+- м — миллионы: 1м EUR = 1000000 EUR
 
-⚙️ Команды:
-/start - Перезапустить бота
-/settings - Настроить предпочтения валют
-/help - Показать это справочное сообщение
+Связь: @onswix""",
 
-💪 Советы профи:
-• Используйте 'к' для тысяч: '5к USD' равно '5000 USD'
-• Используйте 'м' для миллионов: '1м EUR' равно '1000000 EUR'
-• Поддерживает большинство основных валют и популярных криптовалют
-
-🆘 Нужна дополнительная помощь? Свяжитесь со мной: @onswix 
-
-Приятной конвертации! 🌈💰
-        """,
-
-        'feedback': "📬 Обратная связь:\n\nМы всегда рады вашим предложениям и замечаниям!\nCвяжитесь со мной в Telegram: @onswix",
+        'feedback': "Обратная связь:\n\nПредложения и замечания — @onswix",
         'settings': "Выберите раздел настроек:",
         'currencies': "Выберите валюты:",
         'cryptocurrencies': "Выберите криптовалюты:",
         'language': "Выберите язык:",
         'save_settings': "Настройки сохранены!",
-        'invalid_input': "Неверный ввод. Пожалуйста, введите сумму и код валюты, например, '100 USD' или '100 USD EUR'.",
-        'error': "Произошла ошибка. Пожалуйста, попробуйте снова.",
+        'invalid_input': "Неверный ввод. Введите сумму и код валюты, например: 100 USD.",
+        'error': "Произошла ошибка. Попробуйте снова.",
         'fiat_currencies': "Фиатные валюты:",
         'cryptocurrencies_output': "Криптовалюты:",
         'back': "Назад",
-        'help_button': "❓ Помощь",
-        'news_button': "🗞 Новости",
-        'feedback_button': "💭 Обратная связь",
-        'settings_button': "⚙️ Настройки",
+        'help_button': "Помощь",
+        'news_button': "Новости",
+        'feedback_button': "Обратная связь",
+        'settings_button': "Настройки",
         'save_button': "Сохранить настройки",
         'back_to_settings': "Назад к настройкам",
         'forward': "Вперёд",
-        'stats_title': "📊 Статистика бота:",
-        'total_users': "👥 Общее количество пользователей:",
-        'active_users': "🔵 Активных пользователей сегодня:",
-        'new_users': "🆕 Новых пользователей сегодня:",
+        'stats_title': "Статистика бота:",
+        'total_users': "Всего пользователей:",
+        'active_users': "Активных сегодня:",
+        'new_users': "Новых сегодня:",
         'no_currencies_selected': "Валюты не выбраны",
-        'select_currencies_message': "Пожалуйста, выберите валюты в настройках",
-        'select_currencies_full_message': "Вы не выбрали ни одной валюты. Пожалуйста, перейдите в настройки бота, чтобы выбрать валюты для конвертации.",
+        'select_currencies_message': "Выберите валюты в настройках",
+        'select_currencies_full_message': "Вы не выбрали ни одной валюты. Перейдите в настройки для выбора.",
         'conversion_result': "Результат конвертации",
-        'number_too_large': "Число слишком большое для обработки.",
-        'about_button': "ℹ️ О боте",
-        'about_message': "Информация о боте Onlive Twilight Convert",
-        'current_version': "Текущая версия:",
-        'view_changelog': "Посмотреть список изменений",
-        'invalid_currency': "Извините, я не могу распознать валюту '{currency}'. Пожалуйста, используйте стандартные коды валют, например: USD, EUR, RUB.",
+        'number_too_large': "Число слишком большое.",
+        'about_button': "О боте",
+        'about_message': "Onlive Twilight Convert",
+        'current_version': "Версия:",
+        'view_changelog': "Список изменений",
+        'invalid_currency': "Не удалось распознать валюту '{currency}'. Используйте коды: USD, EUR, RUB.",
         'delete_button': "Удалить",
         'quote_format': "Формат цитаты",
         'quote_format_status': "Статус формата цитаты",
-        'on': "Включен",
-        'off': "Выключен",
+        'on': "Вкл",
+        'off': "Выкл",
         'chat_settings': "Настройки чата",
         'admin_only': "Только администраторы могут изменять настройки чата.",
-        'support_button': "❤️ Поддержать",
-        'support_message': "✨ Спасибо за использование моего бота! Если вы хотите поддержать разработчика и помочь в дальнейшем развитии проекта, вы можете сделать это, отправив добровольный взнос, нажав на кнопку. Если вы с Узбекистана или с России обратитесь в ко мне лично пожалуйста. Ваша поддержка очень ценна! ❤️",
-        'donate_button': "❤️ Поддержать",
+        'support_button': "Поддержать",
+        'support_message': "Если вы хотите поддержать разработку проекта, вы можете сделать это, нажав на кнопку ниже. Из Узбекистана или России — напишите @onswix лично.",
+        'donate_button': "Поддержать",
         'empty_input_title': "Введите сумму и валюту",
-        'empty_input_description': "Например, '100 USD' или '10 982 RUB'",
-        'empty_input_message': "Пожалуйста, введите сумму и код валюты для конвертации, например, '100 USD' или '10 982 RUB'.",
-        'invalid_input_description': "Пожалуйста, проверьте формат ввода",
-        'not_admin_message': 'Чтобы изменить эти настройки, необходимо быть администратором.',
-        'welcome_group_message': """
-👋 Привет! Я OTC, теперь к вашим услугам в этой группе!
+        'empty_input_description': "Например: 100 USD или 10 982 RUB",
+        'empty_input_message': "Введите сумму и код валюты: 100 USD или 10 982 RUB.",
+        'invalid_input_description': "Проверьте формат ввода",
+        'not_admin_message': 'Для изменения настроек нужны права администратора.',
+        'welcome_group_message': """OTC добавлен в группу!
 
-Вот как я могу помочь:
-💱 Быстрая конвертация: Просто введите сумму и валюту (например, '500 EUR')
-🔢 Множество валют: Я покажу конвертацию для всех выбранных валют
-⚙️ Настраиваемый: Администраторы могут установить предпочитаемые валюты для группы
-
-Чтобы настроить меня:
-1️⃣ Администраторы, используйте /settings для настройки предпочтений группы
-2️⃣ Все могут использовать меня для конвертации прямо сейчас!
-3️⃣ Для личного использования начните чат со мной
-
-Нужна помощь? Используйте /help для получения дополнительной информации. Наслаждайтесь конвертацией! 🌟
-        """,
+Введите сумму и валюту для конвертации (например, 500 EUR).
+Администраторы: /settings для настройки валют группы.
+Помощь: /help""",
    'setting_updated': "Настройка обновлена",
    'language_changed': "Язык изменён",
-   'negative_or_zero_amount': "Результат вычисления отрицательный или равен нулю. Пожалуйста, введите положительную сумму.",
-   'conversion_help_message': """❌ Не удалось распознать сумму и валюту.
+   'negative_or_zero_amount': "Сумма должна быть положительной.",
+   'conversion_help_message': """Не удалось распознать сумму и валюту.
 
-Попробуйте написать в формате:
-- 100 USD
-- 50 евро
-- 1000 рублей
-- 10к долларов""",
+Формат: 100 USD, 50 евро, 1000 рублей, 10к долларов""",
     },
     'en': {
-        'welcome': """
-🌟 Welcome to the OTC! 🌟
+        'welcome': """Welcome to OTC!
 
-This bot helps you convert currencies quickly and easily. Here's what you can do:
+Type an amount and currency to convert (e.g., 100 USD).
 
-💱 Convert currencies: Just type an amount followed by a currency code (e.g., '100 USD')
-🌐 Use inline mode: Type @onlive_twilight_bot in any chat to convert on the go
-⚙️ Customize settings: Choose your preferred currencies and more
+Inline mode: @onlive_twilight_bot in any chat.
+Settings: /settings
+Help: /help
+Channel: @OTC_InfoHub""",
 
-To get started:
-1️⃣ Use /settings to customize your experience (chat)
-2️⃣ Check /help for detailed instructions
-3️⃣ Join our channel @OTC_InfoHub for the latest updates
+        'help': """OTC Help Guide
 
-Happy converting! 💰✨
-        """,
+Usage:
+- Type amount and currency code: 100 USD, 50 EUR
+- Bot will reply with conversions to your selected currencies
 
-        'help': """
-📚 OTC Bot Help Guide 📚
+Inline mode: @onlive_twilight_bot 100 USD in any chat
 
-🔢 Basic Usage:
-• Type an amount followed by a currency code (e.g., '100 USD', '50 EUR', '1000 JPY')
-• The bot will reply with conversions to your selected currencies
+Commands:
+/start — restart bot
+/settings — currency preferences
+/help — this guide
 
-💡 Advanced Features:
-• Inline mode: Type @onlive_twilight_bot 100 USD in any chat
-• Group chat: Works the same as in private chats
-• Customizable: Set your preferred currencies in /settings (chat)
+Shortcuts:
+- k — thousands: 5k USD = 5000 USD
+- m — millions: 1m EUR = 1000000 EUR
 
-⚙️ Commands:
-/start - Restart the bot
-/settings - Customize your currency preferences (chat)
-/help - Show this help message
+Contact: @onswix""",
 
-💪 Pro Tips:
-• Use 'k' for thousands: '5k USD' equals '5000 USD'
-• Use 'm' for millions: '1m EUR' equals '1000000 EUR'
-• Supports most major currencies and popular cryptocurrencies
-
-🆘 Need more help? Contact me at @onswix
-
-Happy converting! 🌈💰
-        """,
-
-        'feedback': "📬 Feedback:\n\nWe always appreciate your suggestions and comments!\nContact me on Telegram: @onswix",
+        'feedback': "Feedback:\n\nSuggestions and comments — @onswix",
         'settings': "Choose a settings section:",
         'currencies': "Select currencies:",
         'cryptocurrencies': "Select cryptocurrencies:",
         'language': "Select language:",
         'save_settings': "Settings saved!",
-        'invalid_input': "Invalid input. Please enter an amount and currency code, e.g., '100 USD' or '100 USD EUR'.",
+        'invalid_input': "Invalid input. Enter amount and currency code, e.g.: 100 USD.",
         'error': "An error occurred. Please try again.",
         'fiat_currencies': "Fiat currencies:",
         'cryptocurrencies_output': "Cryptocurrencies:",
         'back': "Back",
-        'help_button': "❓ Help",
-        'news_button': "🗞 News",
-        'feedback_button': "💭 Feedback",
-        'settings_button': "⚙️ Settings",
+        'help_button': "Help",
+        'news_button': "News",
+        'feedback_button': "Feedback",
+        'settings_button': "Settings",
         'save_button': "Save settings",
         'back_to_settings': "Back to settings",
         'forward': "Next",
-        'stats_title': "📊 Bot Statistics:",
-        'total_users': "👥 Total number of users:",
-        'active_users': "🔵 Active users today:",
-        'new_users': "🆕 New users today:",
+        'stats_title': "Bot Statistics:",
+        'total_users': "Total users:",
+        'active_users': "Active today:",
+        'new_users': "New today:",
         'no_currencies_selected': "No currencies selected",
-        'select_currencies_message': "Please select currencies in settings",
-        'select_currencies_full_message': "You haven't selected any currencies. Please go to bot settings to select currencies for conversion.",
+        'select_currencies_message': "Select currencies in settings",
+        'select_currencies_full_message': "No currencies selected. Go to settings to choose.",
         'conversion_result': "Conversion Result",
-        'number_too_large': "The number is too large to process.",
-        'about_button': "ℹ️ About",
-        'about_message': "About Onlive Twilight Convert bot",
-        'current_version': "Current version:",
+        'number_too_large': "Number is too large.",
+        'about_button': "About",
+        'about_message': "Onlive Twilight Convert",
+        'current_version': "Version:",
         'view_changelog': "View changelog",
-        'invalid_currency': "Sorry, I can't recognize the currency '{currency}'. Please use standard currency codes, for example: USD, EUR, RUB.",
+        'invalid_currency': "Can't recognize currency '{currency}'. Use codes: USD, EUR, RUB.",
         'delete_button': "Delete",
         'quote_format': "Quote format",
         'quote_format_status': "Quote format status",
         'on': "On",
         'off': "Off",
         'chat_settings': "Chat settings",
-        'admin_only': "Only administrators can change chat settings.",
-        'support_button': "❤️ Support",
-        'support_message': "✨ Thank you for using my bot! If you would like to support the developer and help with the further development of the project, you can do so by making a voluntary donation by clicking the button. If you are from Uzbekistan or Russia, please contact me personally. Your support is greatly appreciated! ❤️",
-        'donate_button': "❤️ Support",
+        'admin_only': "Only admins can change chat settings.",
+        'support_button': "Support",
+        'support_message': "If you'd like to support the project, click the button below. From Uzbekistan or Russia — contact @onswix directly.",
+        'donate_button': "Support",
         'empty_input_title': "Enter amount and currency",
-        'empty_input_description': "For example, '100 USD' or '10,982 KZT'",
-        'empty_input_message': "Please enter an amount and currency code to convert, e.g., '100 USD' or '10,982 KZT'.",
-        'invalid_input_description': "Please check your input format",
-        'not_admin_message': 'You need to be an admin to change these settings.',
-        'welcome_group_message': """
-👋 Hello! I'm the OTC, now at your service in this group!
+        'empty_input_description': "For example: 100 USD or 10,982 KZT",
+        'empty_input_message': "Enter amount and currency code: 100 USD or 10,982 KZT.",
+        'invalid_input_description': "Check your input format",
+        'not_admin_message': 'Admin rights required to change settings.',
+        'welcome_group_message': """OTC added to group!
 
-Here's how I can help:
-💱 Quick conversions: Just type an amount and currency (e.g., '500 EUR')
-🔢 Multiple currencies: I'll show conversions for all selected currencies
-⚙️ Customizable: Admins can set preferred currencies for the group
+Type amount and currency to convert (e.g., 500 EUR).
+Admins: /settings to customize group currencies.
+Help: /help""",
+   'setting_updated': "Settings updated",
+   'language_changed': "Language changed",
+   'negative_or_zero_amount': "Amount must be positive.",
+   'conversion_help_message': """Could not recognize amount and currency.
 
-To set me up:
-1️⃣ Admins, use /settings to customize group preferences
-2️⃣ Everyone can use me for conversions right away!
-3️⃣ For private use, start a chat with me
-
-Need help? Check help button in private chat. Enjoy converting! 🌟
-        """,
-   'setting_updated': "Settings has been updated",
-   'language_changed': "The language has been changed",
-   'negative_or_zero_amount': "The result of the calculation is negative or zero. Please enter a positive amount.",
-   'conversion_help_message': """❌ Could not recognize amount and currency.
-
-Try writing in format:
-- 100 USD
-- 50 euro
-- 1000 rubles
-- 10k dollars""",
+Format: 100 USD, 50 euro, 1000 rubles, 10k dollars""",
     }
 }

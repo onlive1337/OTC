@@ -9,6 +9,7 @@ from aiogram.utils.keyboard import InlineKeyboardBuilder
 from config.languages import LANGUAGES
 from loader import user_data
 from states.states import UserStates
+from utils.button_styles import primary_button, success_button, EMOJI
 
 from data.chat_settings import (
     show_chat_settings, save_chat_settings, show_chat_currencies, 
@@ -23,6 +24,28 @@ from utils.utils import save_settings
 
 router = Router()
 
+def build_settings_kb(user_lang, is_chat=False, chat_id=None):
+    kb = InlineKeyboardBuilder()
+    if is_chat:
+        kb.row(
+            primary_button(LANGUAGES[user_lang]['currencies'], f"show_chat_currencies_{chat_id}_0", emoji=EMOJI['currencies']),
+            primary_button(LANGUAGES[user_lang]['cryptocurrencies'], f"show_chat_crypto_{chat_id}", emoji=EMOJI['crypto'])
+        )
+        kb.row(primary_button(LANGUAGES[user_lang]['quote_format'], f"toggle_chat_quote_format_{chat_id}", emoji=EMOJI['quote_format']))
+        kb.row(success_button(LANGUAGES[user_lang]['save_button'], f"save_chat_settings_{chat_id}", emoji=EMOJI['save']))
+    else:
+        kb.row(
+            primary_button(LANGUAGES[user_lang]['currencies'], "show_currencies_0", emoji=EMOJI['currencies']),
+            primary_button(LANGUAGES[user_lang]['cryptocurrencies'], "show_crypto", emoji=EMOJI['crypto'])
+        )
+        kb.row(
+            primary_button(LANGUAGES[user_lang]['language'], "change_language", emoji=EMOJI['language']),
+            primary_button(LANGUAGES[user_lang]['quote_format'], "toggle_quote_format", emoji=EMOJI['quote_format'])
+        )
+        kb.row(success_button(LANGUAGES[user_lang]['save_button'], "save_settings", emoji=EMOJI['save']))
+        kb.row(primary_button(LANGUAGES[user_lang]['back'], "back_to_main", emoji=EMOJI['back']))
+    return kb
+
 @router.message(Command("settings"))
 async def cmd_settings(message: Message):
     user_id = message.from_user.id
@@ -30,14 +53,7 @@ async def cmd_settings(message: Message):
     user_lang = await user_data.get_user_language(user_id)
 
     if message.chat.type == 'private':
-        kb = InlineKeyboardBuilder()
-        kb.button(text=LANGUAGES[user_lang]['currencies'], callback_data="show_currencies_0")
-        kb.button(text=LANGUAGES[user_lang]['cryptocurrencies'], callback_data="show_crypto")
-        kb.button(text=LANGUAGES[user_lang]['language'], callback_data="change_language")
-        kb.button(text=LANGUAGES[user_lang]['quote_format'], callback_data="toggle_quote_format")
-        kb.button(text=LANGUAGES[user_lang]['save_button'], callback_data="save_settings")
-        kb.button(text=LANGUAGES[user_lang]['back'], callback_data="back_to_main")
-        kb.adjust(2, 2, 1, 1)
+        kb = build_settings_kb(user_lang)
         
         use_quote = await user_data.get_user_quote_format(user_id)
         quote_status = LANGUAGES[user_lang]['on'] if use_quote else LANGUAGES[user_lang]['off']
@@ -47,12 +63,7 @@ async def cmd_settings(message: Message):
     else:
         chat_member = await message.chat.get_member(user_id)
         if chat_member.status in ['creator', 'administrator']:
-            kb = InlineKeyboardBuilder()
-            kb.button(text=LANGUAGES[user_lang]['currencies'], callback_data=f"show_chat_currencies_{chat_id}_0")
-            kb.button(text=LANGUAGES[user_lang]['cryptocurrencies'], callback_data=f"show_chat_crypto_{chat_id}")
-            kb.button(text=LANGUAGES[user_lang]['quote_format'], callback_data=f"toggle_chat_quote_format_{chat_id}")
-            kb.button(text=LANGUAGES[user_lang]['save_button'], callback_data=f"save_chat_settings_{chat_id}")
-            kb.adjust(2, 1, 1)
+            kb = build_settings_kb(user_lang, is_chat=True, chat_id=chat_id)
             
             use_quote = await user_data.get_chat_quote_format(chat_id)
             quote_status = LANGUAGES[user_lang]['on'] if use_quote else LANGUAGES[user_lang]['off']
@@ -73,14 +84,7 @@ async def process_settings(callback_query_or_message: Union[CallbackQuery, Messa
     user_lang = await user_data.get_user_language(user_id)
     use_quote = await user_data.get_user_quote_format(user_id)
     
-    kb = InlineKeyboardBuilder()
-    kb.button(text=LANGUAGES[user_lang]['currencies'], callback_data="show_currencies_0")
-    kb.button(text=LANGUAGES[user_lang]['cryptocurrencies'], callback_data="show_crypto")
-    kb.button(text=LANGUAGES[user_lang]['language'], callback_data="change_language")
-    kb.button(text=LANGUAGES[user_lang]['quote_format'], callback_data="toggle_quote_format")
-    kb.button(text=LANGUAGES[user_lang]['save_button'], callback_data="save_settings")
-    kb.button(text=LANGUAGES[user_lang]['back'], callback_data="back_to_main")
-    kb.adjust(2, 2, 1, 1)
+    kb = build_settings_kb(user_lang)
     
     quote_status = LANGUAGES[user_lang]['on'] if use_quote else LANGUAGES[user_lang]['off']
     settings_text = f"{LANGUAGES[user_lang]['settings']}\n\n{LANGUAGES[user_lang]['quote_format_status']}: {quote_status}"
@@ -94,14 +98,7 @@ async def back_to_settings(callback_query: CallbackQuery):
     user_lang = await user_data.get_user_language(user_id)
     use_quote = await user_data.get_user_quote_format(user_id)
     
-    kb = InlineKeyboardBuilder()
-    kb.button(text=LANGUAGES[user_lang]['currencies'], callback_data="show_currencies_0")
-    kb.button(text=LANGUAGES[user_lang]['cryptocurrencies'], callback_data="show_crypto")
-    kb.button(text=LANGUAGES[user_lang]['language'], callback_data="change_language")
-    kb.button(text=LANGUAGES[user_lang]['quote_format'], callback_data="toggle_quote_format")
-    kb.button(text=LANGUAGES[user_lang]['save_button'], callback_data="save_settings")
-    kb.button(text=LANGUAGES[user_lang]['back'], callback_data="back_to_main")
-    kb.adjust(2, 2, 1, 1)
+    kb = build_settings_kb(user_lang)
     
     quote_status = LANGUAGES[user_lang]['on'] if use_quote else LANGUAGES[user_lang]['off']
     settings_text = f"{LANGUAGES[user_lang]['settings']}\n\n{LANGUAGES[user_lang]['quote_format_status']}: {quote_status}"

@@ -10,6 +10,7 @@ from config.config import ALL_CURRENCIES
 from config.languages import LANGUAGES
 from loader import user_data
 from utils.utils import get_exchange_rates, convert_currency, format_large_number, parse_amount_and_currency
+from utils.button_styles import danger_button, primary_button, EMOJI
 
 logger = logging.getLogger(__name__)
 router = Router()
@@ -73,7 +74,7 @@ async def process_multiple_conversions(message: types.Message, requests: List[Tu
         
         if final_response:
             kb = InlineKeyboardBuilder()
-            kb.button(text=LANGUAGES[user_lang].get('delete_button', "Delete"), callback_data="delete_conversion")
+            kb.row(danger_button(LANGUAGES[user_lang].get('delete_button', "Delete"), "delete_conversion", emoji=EMOJI['delete']))
             
             await message.reply(
                 text=final_response.strip(),
@@ -137,7 +138,7 @@ async def process_conversion(message: types.Message, amount: float, from_currenc
             response_parts.append("<blockquote expandable>" + "\n".join(crypto_conversions) + "</blockquote>")
         
         kb = InlineKeyboardBuilder()
-        kb.button(text=LANGUAGES[user_lang].get('delete_button', "Delete"), callback_data="delete_conversion")
+        kb.row(danger_button(LANGUAGES[user_lang].get('delete_button', "Delete"), "delete_conversion", emoji=EMOJI['delete']))
         
         final_response = "".join(response_parts).strip()
         
@@ -206,8 +207,7 @@ async def handle_message(message: types.Message):
         
         if has_trigger_word and has_numbers:
             kb = InlineKeyboardBuilder()
-            kb.button(text=LANGUAGES[user_lang].get('help_button', '❓ Help'), callback_data="howto")
-            kb.adjust(1)
+            kb.row(primary_button(LANGUAGES[user_lang].get('help_button', 'Help'), "howto", emoji=EMOJI['help']))
             
             error_message = LANGUAGES[user_lang].get('conversion_help_message', 
                 LANGUAGES['en']['conversion_help_message'])

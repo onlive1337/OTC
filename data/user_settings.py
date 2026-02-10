@@ -6,6 +6,7 @@ from config.languages import LANGUAGES
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
 from loader import user_data
+from utils.button_styles import primary_button, success_button, EMOJI
 
 def get_process_settings():
     from main import process_settings
@@ -25,11 +26,12 @@ async def toggle_quote_format(callback_query: CallbackQuery):
         settings_text = f"{LANGUAGES[user_lang]['chat_settings']}\n\n{LANGUAGES[user_lang]['quote_format_status']}: {quote_status}"
         
         kb = InlineKeyboardBuilder()
-        kb.button(text=LANGUAGES[user_lang]['currencies'], callback_data=f"show_chat_currencies_{chat_id}_0")
-        kb.button(text=LANGUAGES[user_lang]['cryptocurrencies'], callback_data=f"show_chat_crypto_{chat_id}")
-        kb.button(text=LANGUAGES[user_lang]['quote_format'], callback_data=f"toggle_chat_quote_format_{chat_id}")
-        kb.button(text=LANGUAGES[user_lang]['save_button'], callback_data=f"save_chat_settings_{chat_id}")
-        kb.adjust(2, 1, 1)
+        kb.row(
+            primary_button(LANGUAGES[user_lang]['currencies'], f"show_chat_currencies_{chat_id}_0", emoji=EMOJI['currencies']),
+            primary_button(LANGUAGES[user_lang]['cryptocurrencies'], f"show_chat_crypto_{chat_id}", emoji=EMOJI['crypto'])
+        )
+        kb.row(primary_button(LANGUAGES[user_lang]['quote_format'], f"toggle_chat_quote_format_{chat_id}", emoji=EMOJI['quote_format']))
+        kb.row(success_button(LANGUAGES[user_lang]['save_button'], f"save_chat_settings_{chat_id}", emoji=EMOJI['save']))
         
         try:
             await callback_query.message.edit_text(settings_text, reply_markup=kb.as_markup())
@@ -45,13 +47,16 @@ async def toggle_quote_format(callback_query: CallbackQuery):
         settings_text = f"{LANGUAGES[user_lang]['settings']}\n\n{LANGUAGES[user_lang]['quote_format_status']}: {quote_status}"
         
         kb = InlineKeyboardBuilder()
-        kb.button(text=LANGUAGES[user_lang]['currencies'], callback_data="show_currencies_0")
-        kb.button(text=LANGUAGES[user_lang]['cryptocurrencies'], callback_data="show_crypto")
-        kb.button(text=LANGUAGES[user_lang]['language'], callback_data="change_language")
-        kb.button(text=LANGUAGES[user_lang]['quote_format'], callback_data="toggle_quote_format")
-        kb.button(text=LANGUAGES[user_lang]['save_button'], callback_data="save_settings")
-        kb.button(text=LANGUAGES[user_lang]['back'], callback_data="back_to_main")
-        kb.adjust(2, 2, 1, 1)
+        kb.row(
+            primary_button(LANGUAGES[user_lang]['currencies'], "show_currencies_0", emoji=EMOJI['currencies']),
+            primary_button(LANGUAGES[user_lang]['cryptocurrencies'], "show_crypto", emoji=EMOJI['crypto'])
+        )
+        kb.row(
+            primary_button(LANGUAGES[user_lang]['language'], "change_language", emoji=EMOJI['language']),
+            primary_button(LANGUAGES[user_lang]['quote_format'], "toggle_quote_format", emoji=EMOJI['quote_format'])
+        )
+        kb.row(success_button(LANGUAGES[user_lang]['save_button'], "save_settings", emoji=EMOJI['save']))
+        kb.row(primary_button(LANGUAGES[user_lang]['back'], "back_to_main", emoji=EMOJI['back']))
         
         try:
             await callback_query.message.edit_text(settings_text, reply_markup=kb.as_markup())
@@ -76,15 +81,17 @@ async def show_currencies(callback_query: CallbackQuery):
     kb = InlineKeyboardBuilder()
     for currency in current_currencies:
         status = "✅" if currency in user_currencies else "❌"
-        kb.button(text=f"{ALL_CURRENCIES[currency]} {currency} {status}", callback_data=f"toggle_currency_{currency}_{page}")
+        kb.row(primary_button(f"{ALL_CURRENCIES[currency]} {currency} {status}", f"toggle_currency_{currency}_{page}"))
     
+    nav_buttons = []
     if page > 0:
-        kb.button(text=f"⬅️ {LANGUAGES[user_lang]['back']}", callback_data=f"show_currencies_{page-1}")
+        nav_buttons.append(primary_button(LANGUAGES[user_lang]['back'], f"show_currencies_{page-1}", emoji=EMOJI['back']))
     if end < len(ACTIVE_CURRENCIES):
-        kb.button(text=f"{LANGUAGES[user_lang]['forward']} ➡️", callback_data=f"show_currencies_{page+1}")
+        nav_buttons.append(primary_button(LANGUAGES[user_lang]['forward'], f"show_currencies_{page+1}", emoji=EMOJI['forward']))
+    if nav_buttons:
+        kb.row(*nav_buttons)
     
-    kb.button(text=LANGUAGES[user_lang]['back_to_settings'], callback_data="back_to_settings")
-    kb.adjust(1)
+    kb.row(primary_button(LANGUAGES[user_lang]['back_to_settings'], "back_to_settings", emoji=EMOJI['settings']))
     
     await callback_query.message.edit_text(LANGUAGES[user_lang]['currencies'], reply_markup=kb.as_markup())
 
@@ -96,10 +103,10 @@ async def show_crypto(callback_query: CallbackQuery):
     kb = InlineKeyboardBuilder()
     for crypto in CRYPTO_CURRENCIES:
         status = "✅" if crypto in user_crypto else "❌"
-        kb.button(text=f"{ALL_CURRENCIES[crypto]} {crypto} {status}", callback_data=f"toggle_crypto_{crypto}")
+        kb.row(primary_button(f"{ALL_CURRENCIES[crypto]} {crypto} {status}", f"toggle_crypto_{crypto}"))
     
-    kb.button(text=LANGUAGES[user_lang]['back_to_settings'], callback_data="back_to_settings")
-    kb.adjust(2)
+    kb.row(primary_button(LANGUAGES[user_lang]['back_to_settings'], "back_to_settings", emoji=EMOJI['settings']))
+    kb.adjust(2, 2, 2, 2, 2, 2, 2, 1)
     
     await callback_query.message.edit_text(LANGUAGES[user_lang]['cryptocurrencies'], reply_markup=kb.as_markup())
 
@@ -136,10 +143,11 @@ async def change_language(callback_query: CallbackQuery):
     current_lang = await user_data.get_user_language(user_id)
     
     kb = InlineKeyboardBuilder()
-    kb.button(text="🇷🇺 Русский", callback_data="set_language_ru")
-    kb.button(text="🇬🇧 English", callback_data="set_language_en")
-    kb.button(text=LANGUAGES[current_lang]['back_to_settings'], callback_data="back_to_settings")
-    kb.adjust(2, 1)
+    kb.row(
+        primary_button("Русский", "set_language_ru"),
+        primary_button("English", "set_language_en")
+    )
+    kb.row(primary_button(LANGUAGES[current_lang]['back_to_settings'], "back_to_settings", emoji=EMOJI['back']))
     
     await callback_query.message.edit_text(LANGUAGES[current_lang]['language'], reply_markup=kb.as_markup())
 
@@ -150,7 +158,7 @@ async def set_language(callback_query: CallbackQuery):
     await user_data.update_user_data(user_id)
     
     kb = InlineKeyboardBuilder()
-    kb.button(text=LANGUAGES[new_lang]['back_to_settings'], callback_data="back_to_settings")
+    kb.row(primary_button(LANGUAGES[new_lang]['back_to_settings'], "back_to_settings", emoji=EMOJI['back']))
     
     await callback_query.message.edit_text(LANGUAGES[new_lang]['language_changed'], reply_markup=kb.as_markup())
     await callback_query.answer(LANGUAGES[new_lang]['language_changed'])

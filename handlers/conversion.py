@@ -2,18 +2,73 @@ import re
 import logging
 from typing import List, Tuple, Optional
 
-from aiogram import Router, Bot, types
+from aiogram import Router, types
 from aiogram.types import Message, InlineQuery, InlineQueryResultArticle, InputTextMessageContent, ChatMemberUpdated
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
-from config.config import ALL_CURRENCIES
+from config.config import ALL_CURRENCIES, CURRENCY_SYMBOLS, CURRENCY_ABBREVIATIONS
 from config.languages import LANGUAGES
 from loader import user_data
-from utils.utils import get_exchange_rates, convert_currency, format_large_number, parse_amount_and_currency
+from utils.utils import get_exchange_rates, convert_currency, format_large_number, parse_amount_and_currency, EXTENDED_CURRENCY_ABBREVIATIONS
 from utils.button_styles import danger_button, primary_button, EMOJI
 
 logger = logging.getLogger(__name__)
 router = Router()
+
+
+def _find_target_currency(text: str, from_currency: str) -> Optional[str]:
+    """Check if text contains a second currency code (target), e.g. '100 USD EUR' -> 'EUR'."""
+    all_patterns = {}
+    all_patterns.update(CURRENCY_SYMBOLS)
+    all_patterns.update(EXTENDED_CURRENCY_ABBREVIATIONS)
+    all_patterns.update({k.upper(): k.upper() for k in ALL_CURRENCIES.keys()})
+
+    tokens = re.split(r'[\s,]+', text.strip())
+    found = []
+    for token in tokens:
+        token_lower = token.lower().strip()
+        if not token_lower or re.match(r'^[\d.,+\-*/()^×÷:хk]+$', token_lower):
+            continue
+        for pattern, curr_code in all_patterns.items():
+            if pattern.lower() == token_lower and curr_code != from_currency:
+                if curr_code not in found:
+                    found.append(curr_code)
+                break
+
+    return found[0] if len(found) == 1 else None
+
+
+async def process_targeted_conversion(message: types.Message, amount: float, from_currency: str, to_currency: str):
+    user_id = message.from_user.id
+    user_lang = await user_data.get_user_language(user_id)
+
+    try:
+        if amount <= 0:
+            await message.answer(LANGUAGES[user_lang].get('negative_or_zero_amount'))
+            return
+
+        rates = await get_exchange_rates()
+        if not rates:
+            await message.answer(LANGUAGES[user_lang]['error'])
+            return
+
+        converted = convert_currency(amount, from_currency, to_currency, rates)
+        is_crypto = to_currency in ('BTC', 'ETH', 'SOL', 'TON', 'BNB', 'XRP', 'DOGE', 'ADA', 'TRX', 'USDT', 'USDC', 'LTC')
+
+        response = (
+            f"{format_large_number(amount, is_original_amount=True)} {ALL_CURRENCIES.get(from_currency, '')} {from_currency}\n"
+            f"= {format_large_number(converted, is_crypto)} {ALL_CURRENCIES.get(to_currency, '')} {to_currency}"
+        )
+
+        kb = InlineKeyboardBuilder()
+        kb.row(danger_button(LANGUAGES[user_lang].get('delete_button', 'Delete'), 'delete_conversion', emoji=EMOJI['delete']))
+
+        await message.reply(text=response, reply_markup=kb.as_markup(), parse_mode="HTML")
+    except KeyError:
+        await message.answer(LANGUAGES[user_lang]['error'])
+    except Exception as e:
+        logger.error(f"Error in targeted conversion for user {user_id}: {e}")
+        await message.answer(LANGUAGES[user_lang]['error'])
 
 async def process_multiple_conversions(message: types.Message, requests: List[Tuple[float, str]]):
     user_id = message.from_user.id
@@ -30,9 +85,11 @@ async def process_multiple_conversions(message: types.Message, requests: List[Tu
         if message.chat.type in ['group', 'supergroup']:
             user_currencies = await user_data.get_chat_currencies(chat_id)
             user_crypto = await user_data.get_chat_crypto(chat_id)
+            use_quote = await user_data.get_chat_quote_format(chat_id)
         else:
             user_currencies = await user_data.get_user_currencies(user_id)
             user_crypto = await user_data.get_user_crypto(user_id)
+            use_quote = await user_data.get_user_quote_format(user_id)
         
         final_response = ""
         
@@ -69,7 +126,11 @@ async def process_multiple_conversions(message: types.Message, requests: List[Tu
                 if crypto_parts:
                     conversion_parts.append("\n".join(crypto_parts))
             
-            response += "<blockquote expandable>" + "\n\n".join(conversion_parts) + "</blockquote>\n\n"
+            content = "\n\n".join(conversion_parts)
+            if use_quote:
+                response += "<blockquote expandable>" + content + "</blockquote>\n\n"
+            else:
+                response += content + "\n\n"
             final_response += response
         
         if final_response:
@@ -104,15 +165,17 @@ async def process_conversion(message: types.Message, amount: float, from_currenc
         if message.chat.type in ['group', 'supergroup']:
             user_currencies = await user_data.get_chat_currencies(chat_id)
             user_crypto = await user_data.get_chat_crypto(chat_id)
+            use_quote = await user_data.get_chat_quote_format(chat_id)
         else:
             user_currencies = await user_data.get_user_currencies(user_id)
             user_crypto = await user_data.get_user_crypto(user_id)
+            use_quote = await user_data.get_user_quote_format(user_id)
         
         response_parts = []
         response_parts.append(f"{format_large_number(amount, is_original_amount=True)} {ALL_CURRENCIES.get(from_currency, '')} {from_currency}\n")
 
         if user_currencies:
-            response_parts.append(f"\n{LANGUAGES[user_lang]['fiat_currencies']}")
+            response_parts.append(f"\n{LANGUAGES[user_lang]['fiat_currencies']}\n")
             fiat_conversions = []
             for to_cur in user_currencies:
                 if to_cur != from_currency:
@@ -122,10 +185,13 @@ async def process_conversion(message: types.Message, amount: float, from_currenc
                         fiat_conversions.append(conversion_line)
                     except KeyError:
                         continue
-            response_parts.append("<blockquote expandable>" + "\n".join(fiat_conversions) + "</blockquote>")
+            if use_quote:
+                response_parts.append("<blockquote expandable>" + "\n".join(fiat_conversions) + "</blockquote>")
+            else:
+                response_parts.append("\n".join(fiat_conversions))
         
         if user_crypto:
-            response_parts.append(f"\n\n{LANGUAGES[user_lang]['cryptocurrencies_output']}")
+            response_parts.append(f"\n\n{LANGUAGES[user_lang]['cryptocurrencies_output']}\n")
             crypto_conversions = []
             for to_cur in user_crypto:
                 if to_cur != from_currency:
@@ -135,7 +201,10 @@ async def process_conversion(message: types.Message, amount: float, from_currenc
                         crypto_conversions.append(conversion_line)
                     except KeyError:
                         continue
-            response_parts.append("<blockquote expandable>" + "\n".join(crypto_conversions) + "</blockquote>")
+            if use_quote:
+                response_parts.append("<blockquote expandable>" + "\n".join(crypto_conversions) + "</blockquote>")
+            else:
+                response_parts.append("\n".join(crypto_conversions))
         
         kb = InlineKeyboardBuilder()
         kb.row(danger_button(LANGUAGES[user_lang].get('delete_button', "Delete"), "delete_conversion", emoji=EMOJI['delete']))
@@ -188,14 +257,18 @@ async def handle_message(message: types.Message):
     for request in requests:
         parsed_result = parse_amount_and_currency(request)
         if parsed_result[0] is not None and parsed_result[1] is not None:
-            valid_requests.append(parsed_result)
+            valid_requests.append((parsed_result, request))
     
     if valid_requests:
         if len(valid_requests) > 1:
-            await process_multiple_conversions(message, valid_requests)
+            await process_multiple_conversions(message, [(a, c) for (a, c), _ in valid_requests])
         else:
-            amount, currency = valid_requests[0]
-            await process_conversion(message, amount, currency)
+            (amount, currency), original_text = valid_requests[0]
+            target = _find_target_currency(original_text, currency)
+            if target and target in ALL_CURRENCIES:
+                await process_targeted_conversion(message, amount, currency, target)
+            else:
+                await process_conversion(message, amount, currency)
     else:
         trigger_words = {
             'ru': ['конвертировать', 'перевести', 'convert'],
@@ -280,7 +353,7 @@ async def inline_query_handler(query: InlineQuery):
         result_content = f"{format_large_number(amount, is_original_amount=True)} {ALL_CURRENCIES[from_currency]} {from_currency}\n\n"
         
         if user_currencies:
-            result_content += f"<b>{LANGUAGES[user_lang].get('fiat_currencies', 'Fiat currencies')}</b>\n"
+            result_content += f"<b>{LANGUAGES[user_lang].get('fiat_currencies', 'Fiat currencies')}</b>\n\n"
             if use_quote:
                 result_content += "<blockquote expandable>"
             for to_cur in user_currencies:
@@ -292,7 +365,7 @@ async def inline_query_handler(query: InlineQuery):
             result_content += "\n"
 
         if user_crypto:
-            result_content += f"<b>{LANGUAGES[user_lang].get('cryptocurrencies_output', 'Cryptocurrencies')}</b>\n"
+            result_content += f"<b>{LANGUAGES[user_lang].get('cryptocurrencies_output', 'Cryptocurrencies')}</b>\n\n"
             if use_quote:
                 result_content += "<blockquote expandable>"
             for to_cur in user_crypto:
@@ -353,16 +426,3 @@ async def handle_my_chat_member(event: ChatMemberUpdated, bot: Bot):
         await bot.send_message(event.chat.id, welcome_message)
         logger.info(f"Welcome message sent to chat {event.chat.id}")
 
-@router.message()
-async def handle_all_messages(message: types.Message, bot: Bot):
-    logger.info(f"Received message: {message.text} from user {message.from_user.id} in chat {message.chat.id}")
-    logger.info(f"Message content: {message.model_dump_json()}")
-
-    if message.new_chat_members:
-        for member in message.new_chat_members:
-            if member.id == bot.id:
-                user_lang = await user_data.get_user_language(message.from_user.id)
-                welcome_message = LANGUAGES[user_lang]['welcome_group_message']
-                await message.answer(welcome_message)
-                logger.info(f"Bot added to chat {message.chat.id}. Welcome message sent.")
-                return

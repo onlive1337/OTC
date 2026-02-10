@@ -3,13 +3,10 @@ from typing import Union
 from aiogram import Router, F
 from aiogram.types import Message, CallbackQuery
 from aiogram.filters import Command
-from aiogram.fsm.context import FSMContext
-from aiogram.utils.keyboard import InlineKeyboardBuilder
 
 from config.languages import LANGUAGES
 from loader import user_data
-from states.states import UserStates
-from utils.button_styles import primary_button, success_button, EMOJI
+from utils.keyboards import build_settings_kb, format_settings_text
 
 from data.chat_settings import (
     show_chat_settings, save_chat_settings, show_chat_currencies, 
@@ -24,28 +21,6 @@ from utils.utils import save_settings
 
 router = Router()
 
-def build_settings_kb(user_lang, is_chat=False, chat_id=None):
-    kb = InlineKeyboardBuilder()
-    if is_chat:
-        kb.row(
-            primary_button(LANGUAGES[user_lang]['currencies'], f"show_chat_currencies_{chat_id}_0", emoji=EMOJI['currencies']),
-            primary_button(LANGUAGES[user_lang]['cryptocurrencies'], f"show_chat_crypto_{chat_id}", emoji=EMOJI['crypto'])
-        )
-        kb.row(primary_button(LANGUAGES[user_lang]['quote_format'], f"toggle_chat_quote_format_{chat_id}", emoji=EMOJI['quote_format']))
-        kb.row(success_button(LANGUAGES[user_lang]['save_button'], f"save_chat_settings_{chat_id}", emoji=EMOJI['save']))
-    else:
-        kb.row(
-            primary_button(LANGUAGES[user_lang]['currencies'], "show_currencies_0", emoji=EMOJI['currencies']),
-            primary_button(LANGUAGES[user_lang]['cryptocurrencies'], "show_crypto", emoji=EMOJI['crypto'])
-        )
-        kb.row(
-            primary_button(LANGUAGES[user_lang]['language'], "change_language", emoji=EMOJI['language']),
-            primary_button(LANGUAGES[user_lang]['quote_format'], "toggle_quote_format", emoji=EMOJI['quote_format'])
-        )
-        kb.row(success_button(LANGUAGES[user_lang]['save_button'], "save_settings", emoji=EMOJI['save']))
-        kb.row(primary_button(LANGUAGES[user_lang]['back'], "back_to_main", emoji=EMOJI['back']))
-    return kb
-
 @router.message(Command("settings"))
 async def cmd_settings(message: Message):
     user_id = message.from_user.id
@@ -53,43 +28,28 @@ async def cmd_settings(message: Message):
     user_lang = await user_data.get_user_language(user_id)
 
     if message.chat.type == 'private':
-        kb = build_settings_kb(user_lang)
-        
         use_quote = await user_data.get_user_quote_format(user_id)
-        quote_status = LANGUAGES[user_lang]['on'] if use_quote else LANGUAGES[user_lang]['off']
-        settings_text = f"{LANGUAGES[user_lang]['settings']}\n\n{LANGUAGES[user_lang]['quote_format_status']}: {quote_status}"
-        
-        await message.answer(settings_text, reply_markup=kb.as_markup())
+        kb = build_settings_kb(user_lang)
+        await message.answer(format_settings_text(user_lang, use_quote), reply_markup=kb.as_markup())
     else:
         chat_member = await message.chat.get_member(user_id)
         if chat_member.status in ['creator', 'administrator']:
-            kb = build_settings_kb(user_lang, is_chat=True, chat_id=chat_id)
-            
             use_quote = await user_data.get_chat_quote_format(chat_id)
-            quote_status = LANGUAGES[user_lang]['on'] if use_quote else LANGUAGES[user_lang]['off']
-            settings_text = f"{LANGUAGES[user_lang]['settings']}\n\n{LANGUAGES[user_lang]['quote_format_status']}: {quote_status}"
-            
-            await message.answer(settings_text, reply_markup=kb.as_markup())
+            kb = build_settings_kb(user_lang, is_chat=True, chat_id=chat_id)
+            await message.answer(format_settings_text(user_lang, use_quote, is_chat=True), reply_markup=kb.as_markup())
         else:
             await message.answer(LANGUAGES[user_lang]['admin_only'])
 
 @router.callback_query(F.data == "settings")
-async def process_settings(callback_query_or_message: Union[CallbackQuery, Message], state: FSMContext):
-    if isinstance(callback_query_or_message, Message):
-        await cmd_settings(callback_query_or_message)
-        return
-        
-    callback_query = callback_query_or_message
+async def process_settings(callback_query: CallbackQuery):
     user_id = callback_query.from_user.id
     user_lang = await user_data.get_user_language(user_id)
     use_quote = await user_data.get_user_quote_format(user_id)
     
     kb = build_settings_kb(user_lang)
-    
-    quote_status = LANGUAGES[user_lang]['on'] if use_quote else LANGUAGES[user_lang]['off']
-    settings_text = f"{LANGUAGES[user_lang]['settings']}\n\n{LANGUAGES[user_lang]['quote_format_status']}: {quote_status}"
-    
-    await callback_query.message.edit_text(settings_text, reply_markup=kb.as_markup())
+    await callback_query.message.edit_text(
+        format_settings_text(user_lang, use_quote), reply_markup=kb.as_markup()
+    )
 
 @router.callback_query(F.data == "back_to_settings")
 async def back_to_settings(callback_query: CallbackQuery):
@@ -99,11 +59,9 @@ async def back_to_settings(callback_query: CallbackQuery):
     use_quote = await user_data.get_user_quote_format(user_id)
     
     kb = build_settings_kb(user_lang)
-    
-    quote_status = LANGUAGES[user_lang]['on'] if use_quote else LANGUAGES[user_lang]['off']
-    settings_text = f"{LANGUAGES[user_lang]['settings']}\n\n{LANGUAGES[user_lang]['quote_format_status']}: {quote_status}"
-    
-    await callback_query.message.edit_text(settings_text, reply_markup=kb.as_markup())
+    await callback_query.message.edit_text(
+        format_settings_text(user_lang, use_quote), reply_markup=kb.as_markup()
+    )
 
 router.callback_query.register(show_currencies, F.data.startswith("show_currencies_"))
 router.callback_query.register(show_crypto, F.data == "show_crypto")

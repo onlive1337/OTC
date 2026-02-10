@@ -1,4 +1,3 @@
-from data import user_data
 from config.config import ACTIVE_CURRENCIES, ALL_CURRENCIES, CRYPTO_CURRENCIES
 from config.languages import LANGUAGES
 from aiogram.utils.keyboard import InlineKeyboardBuilder
@@ -7,6 +6,7 @@ from aiogram.exceptions import TelegramBadRequest
 import logging
 from utils.utils import check_admin_rights, show_not_admin_message
 from utils.button_styles import primary_button, success_button, EMOJI
+from utils.keyboards import build_chat_settings_kb, format_settings_text
 
 logger = logging.getLogger(__name__)
 
@@ -150,20 +150,9 @@ async def show_chat_settings(message: Message):
         return
     
     user_lang = await user_data.get_user_language(user_id)
-
-    kb = InlineKeyboardBuilder()
-    kb.row(
-        primary_button(LANGUAGES[user_lang]['currencies'], f"show_chat_currencies_{chat_id}_0", emoji=EMOJI['currencies']),
-        primary_button(LANGUAGES[user_lang]['cryptocurrencies'], f"show_chat_crypto_{chat_id}", emoji=EMOJI['crypto'])
-    )
-    kb.row(primary_button(LANGUAGES[user_lang]['quote_format'], f"toggle_chat_quote_format_{chat_id}", emoji=EMOJI['quote_format']))
-    kb.row(success_button(LANGUAGES[user_lang]['save_button'], f"save_chat_settings_{chat_id}", emoji=EMOJI['save']))
-    
     use_quote = await user_data.get_chat_quote_format(chat_id)
-    quote_status = LANGUAGES[user_lang]['on'] if use_quote else LANGUAGES[user_lang]['off']
-    settings_text = f"{LANGUAGES[user_lang]['chat_settings']}\n\n{LANGUAGES[user_lang]['quote_format_status']}: {quote_status}"
-    
-    await message.answer(settings_text, reply_markup=kb.as_markup())
+    kb = build_chat_settings_kb(user_lang, chat_id)
+    await message.answer(format_settings_text(user_lang, use_quote, is_chat=True), reply_markup=kb.as_markup())
 
 async def save_chat_settings(callback_query: CallbackQuery):
     chat_id = int(callback_query.data.split('_')[3])
@@ -198,21 +187,14 @@ async def back_to_chat_settings(callback_query: CallbackQuery):
         return
     
     user_lang = await user_data.get_user_language(user_id)
-
-    kb = InlineKeyboardBuilder()
-    kb.row(
-        primary_button(LANGUAGES[user_lang]['currencies'], f"show_chat_currencies_{chat_id}_0", emoji=EMOJI['currencies']),
-        primary_button(LANGUAGES[user_lang]['cryptocurrencies'], f"show_chat_crypto_{chat_id}", emoji=EMOJI['crypto'])
-    )
-    kb.row(primary_button(LANGUAGES[user_lang]['quote_format'], f"toggle_chat_quote_format_{chat_id}", emoji=EMOJI['quote_format']))
-    kb.row(success_button(LANGUAGES[user_lang]['save_button'], f"save_chat_settings_{chat_id}", emoji=EMOJI['save']))
-    
     use_quote = await user_data.get_chat_quote_format(chat_id)
-    quote_status = LANGUAGES[user_lang]['on'] if use_quote else LANGUAGES[user_lang]['off']
-    settings_text = f"{LANGUAGES[user_lang]['chat_settings']}\n\n{LANGUAGES[user_lang]['quote_format_status']}: {quote_status}"
+    kb = build_chat_settings_kb(user_lang, chat_id)
     
     try:
-        await callback_query.message.edit_text(settings_text, reply_markup=kb.as_markup())
+        await callback_query.message.edit_text(
+            format_settings_text(user_lang, use_quote, is_chat=True),
+            reply_markup=kb.as_markup()
+        )
     except TelegramBadRequest as e:
         if "message is not modified" not in str(e):
             raise

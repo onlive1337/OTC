@@ -9,24 +9,18 @@ LANGUAGES = {
 Помощь: /help
 Канал: @OTC_InfoHub""",
 
-        'help': """Руководство OTC
+        'help': """📖 Как пользоваться
 
-Использование:
-- Введите сумму и код валюты: 100 USD, 50 EUR
-- Бот ответит конвертацией в выбранные валюты
+💱 Конвертация:
+• 100 USD — во все ваши валюты
+• 100 USD EUR — только в евро
+• 5к рублей, 1.5м долларов
+• 100+50 USD, 1000*2 EUR
 
-Инлайн-режим: @onlive_twilight_bot 100 USD в любом чате
+📎 Инлайн: @onlive_twilight_bot 100 USD
 
-Команды:
-/start — запуск бота
-/settings — настройки валют
-/help — справка
-
-Сокращения:
-- к — тысячи: 5к USD = 5000 USD
-- м — миллионы: 1м EUR = 1000000 EUR
-
-Связь: @onswix""",
+⚙️ /settings — выбор валют
+📞 @onswix — связь""",
 
         'feedback': "Обратная связь:\n\nПредложения и замечания — @onswix",
         'settings': "Выберите раздел настроек:",
@@ -97,24 +91,18 @@ Settings: /settings
 Help: /help
 Channel: @OTC_InfoHub""",
 
-        'help': """OTC Help Guide
+        'help': """📖 How to use
 
-Usage:
-- Type amount and currency code: 100 USD, 50 EUR
-- Bot will reply with conversions to your selected currencies
+💱 Conversion:
+• 100 USD — to all your currencies
+• 100 USD EUR — to EUR only
+• 5k USD, 1.5m EUR
+• 100+50 USD, 1000*2 EUR
 
-Inline mode: @onlive_twilight_bot 100 USD in any chat
+📎 Inline: @onlive_twilight_bot 100 USD
 
-Commands:
-/start — restart bot
-/settings — currency preferences
-/help — this guide
-
-Shortcuts:
-- k — thousands: 5k USD = 5000 USD
-- m — millions: 1m EUR = 1000000 EUR
-
-Contact: @onswix""",
+⚙️ /settings — currency preferences
+📞 @onswix — contact""",
 
         'feedback': "Feedback:\n\nSuggestions and comments — @onswix",
         'settings': "Choose a settings section:",

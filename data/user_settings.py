@@ -1,16 +1,12 @@
 from aiogram.types import CallbackQuery
 from aiogram.exceptions import TelegramBadRequest
-from data import user_data
 from config.config import ACTIVE_CURRENCIES, ALL_CURRENCIES, CRYPTO_CURRENCIES
 from config.languages import LANGUAGES
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
 from loader import user_data
 from utils.button_styles import primary_button, success_button, EMOJI
-
-def get_process_settings():
-    from main import process_settings
-    return process_settings
+from utils.keyboards import build_user_settings_kb, build_chat_settings_kb, format_settings_text
 
 async def toggle_quote_format(callback_query: CallbackQuery):
     parts = callback_query.data.split('_')
@@ -22,19 +18,13 @@ async def toggle_quote_format(callback_query: CallbackQuery):
         current_setting = await user_data.get_chat_quote_format(chat_id)
         new_setting = not current_setting
         await user_data.set_chat_quote_format(chat_id, new_setting)
-        quote_status = LANGUAGES[user_lang]['on'] if new_setting else LANGUAGES[user_lang]['off']
-        settings_text = f"{LANGUAGES[user_lang]['chat_settings']}\n\n{LANGUAGES[user_lang]['quote_format_status']}: {quote_status}"
         
-        kb = InlineKeyboardBuilder()
-        kb.row(
-            primary_button(LANGUAGES[user_lang]['currencies'], f"show_chat_currencies_{chat_id}_0", emoji=EMOJI['currencies']),
-            primary_button(LANGUAGES[user_lang]['cryptocurrencies'], f"show_chat_crypto_{chat_id}", emoji=EMOJI['crypto'])
-        )
-        kb.row(primary_button(LANGUAGES[user_lang]['quote_format'], f"toggle_chat_quote_format_{chat_id}", emoji=EMOJI['quote_format']))
-        kb.row(success_button(LANGUAGES[user_lang]['save_button'], f"save_chat_settings_{chat_id}", emoji=EMOJI['save']))
-        
+        kb = build_chat_settings_kb(user_lang, chat_id)
         try:
-            await callback_query.message.edit_text(settings_text, reply_markup=kb.as_markup())
+            await callback_query.message.edit_text(
+                format_settings_text(user_lang, new_setting, is_chat=True),
+                reply_markup=kb.as_markup()
+            )
         except TelegramBadRequest as e:
             if "message is not modified" not in str(e):
                 raise
@@ -43,23 +33,13 @@ async def toggle_quote_format(callback_query: CallbackQuery):
         current_setting = await user_data.get_user_quote_format(user_id)
         new_setting = not current_setting
         await user_data.set_user_quote_format(user_id, new_setting)
-        quote_status = LANGUAGES[user_lang]['on'] if new_setting else LANGUAGES[user_lang]['off']
-        settings_text = f"{LANGUAGES[user_lang]['settings']}\n\n{LANGUAGES[user_lang]['quote_format_status']}: {quote_status}"
         
-        kb = InlineKeyboardBuilder()
-        kb.row(
-            primary_button(LANGUAGES[user_lang]['currencies'], "show_currencies_0", emoji=EMOJI['currencies']),
-            primary_button(LANGUAGES[user_lang]['cryptocurrencies'], "show_crypto", emoji=EMOJI['crypto'])
-        )
-        kb.row(
-            primary_button(LANGUAGES[user_lang]['language'], "change_language", emoji=EMOJI['language']),
-            primary_button(LANGUAGES[user_lang]['quote_format'], "toggle_quote_format", emoji=EMOJI['quote_format'])
-        )
-        kb.row(success_button(LANGUAGES[user_lang]['save_button'], "save_settings", emoji=EMOJI['save']))
-        kb.row(primary_button(LANGUAGES[user_lang]['back'], "back_to_main", emoji=EMOJI['back']))
-        
+        kb = build_user_settings_kb(user_lang)
         try:
-            await callback_query.message.edit_text(settings_text, reply_markup=kb.as_markup())
+            await callback_query.message.edit_text(
+                format_settings_text(user_lang, new_setting),
+                reply_markup=kb.as_markup()
+            )
         except TelegramBadRequest as e:
             if "message is not modified" not in str(e):
                 raise

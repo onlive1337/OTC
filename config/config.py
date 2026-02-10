@@ -12,6 +12,9 @@ LOG_CHAT_ID = "-4558354811"
 ADMIN_IDS = [810587766]
 LOG_LEVEL = os.getenv('LOG_LEVEL', 'INFO')
 COINCAP_API_KEY = os.getenv('COINCAP_API_KEY')
+if not COINCAP_API_KEY:
+    import logging as _log
+    _log.getLogger(__name__).warning("COINCAP_API_KEY is not set. Fallback crypto sources will be used.")
 
 # Storage
 DB_PATH = os.getenv('DB_PATH', 'otc.db')

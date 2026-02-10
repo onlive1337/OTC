@@ -11,7 +11,6 @@ from config.config import CACHE_EXPIRATION_TIME, ACTIVE_CURRENCIES, CRYPTO_CURRE
     ALL_CURRENCIES, CURRENCY_SYMBOLS, HTTP_TOTAL_TIMEOUT, HTTP_CONNECT_TIMEOUT, HTTP_RETRIES, SEMAPHORE_LIMITS, \
     STALE_WHILE_REVALIDATE
 from config.languages import LANGUAGES
-from data import user_data
 
 from loader import user_data
 
@@ -419,20 +418,40 @@ def smart_number_parse(text: str) -> str:
     return number_str
 
 def parse_mathematical_expression(expr: str) -> Optional[float]:
+    import ast
+    import operator
+    
+    ops = {
+        ast.Add: operator.add, ast.Sub: operator.sub,
+        ast.Mult: operator.mul, ast.Div: operator.truediv,
+    }
+    
+    def _safe_eval(node):
+        if isinstance(node, ast.Constant) and isinstance(node.value, (int, float)):
+            return float(node.value)
+        elif isinstance(node, ast.BinOp) and type(node.op) in ops:
+            left = _safe_eval(node.left)
+            right = _safe_eval(node.right)
+            if isinstance(node.op, ast.Div) and right == 0:
+                raise ValueError("Division by zero")
+            return ops[type(node.op)](left, right)
+        elif isinstance(node, ast.UnaryOp) and isinstance(node.op, ast.USub):
+            return -_safe_eval(node.operand)
+        raise ValueError("Unsafe expression")
+
     try:
         expr = expr.replace('^', '**')
         expr = expr.replace('х', '*').replace('×', '*')
         expr = expr.replace('÷', '/').replace(':', '/')
-        
         expr = expr.replace(' ', '')
         
         allowed_chars = '0123456789+-*/().'
         if not all(c in allowed_chars for c in expr):
             return None
         
-        result = eval(expr, {"__builtins__": {}}, {})
-        return float(result)
-    except:
+        tree = ast.parse(expr, mode='eval')
+        return _safe_eval(tree.body)
+    except Exception:
         return None
 
 def parse_amount_and_currency(text: str) -> Tuple[Optional[float], Optional[str]]:
@@ -507,7 +526,7 @@ def parse_amount_and_currency(text: str) -> Tuple[Optional[float], Optional[str]
         cleaned_number = smart_number_parse(number_str)
         try:
             amount = float(cleaned_number)
-            if amount > 0:
+            if amount >= 0:
                 return amount, currency
         except:
             continue
@@ -516,7 +535,7 @@ def parse_amount_and_currency(text: str) -> Tuple[Optional[float], Optional[str]
         simple_number = re.sub(r'[^\d.]', '', amount_text)
         if simple_number:
             amount = float(simple_number)
-            if amount > 0:
+            if amount >= 0:
                 return amount, currency
     except:
         pass

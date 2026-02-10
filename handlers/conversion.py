@@ -2,7 +2,7 @@ import re
 import logging
 from typing import List, Tuple, Optional
 
-from aiogram import Router, types
+from aiogram import Router, types, Bot
 from aiogram.types import Message, InlineQuery, InlineQueryResultArticle, InputTextMessageContent, ChatMemberUpdated
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 

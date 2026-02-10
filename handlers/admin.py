@@ -119,7 +119,7 @@ async def broadcast_confirm(callback_query: CallbackQuery, state: FSMContext):
             sent += 1
         except Exception as e:
             err_msg = str(e).lower()
-            if "blocked" in err_msg or "deactivated" in err_msg or "not found" in err_msg:
+            if any(x in err_msg for x in ["blocked", "deactivated", "not found", "forbidden", "cannot initiate", "entity"]):
                 blocked += 1
             else:
                 failed += 1

@@ -33,6 +33,19 @@ class RateLimitMiddleware(BaseMiddleware):
         self.limit = limit
         self.window = window
         self._user_timestamps: Dict[int, list] = defaultdict(list)
+        self._cleanup_counter = 0
+        self._cleanup_interval = 1000
+
+    def _cleanup(self):
+        now = time.monotonic()
+        to_remove = []
+        for uid, timestamps in self._user_timestamps.items():
+            timestamps[:] = [t for t in timestamps if now - t < self.window]
+            if not timestamps:
+                to_remove.append(uid)
+        
+        for uid in to_remove:
+            del self._user_timestamps[uid]
 
     async def __call__(
         self,
@@ -41,6 +54,12 @@ class RateLimitMiddleware(BaseMiddleware):
         data: Dict[str, Any],
     ) -> Any:
         user = data.get("event_from_user")
+        
+        self._cleanup_counter += 1
+        if self._cleanup_counter >= self._cleanup_interval:
+            self._cleanup()
+            self._cleanup_counter = 0
+            
         if user is None:
             return await handler(event, data)
 
@@ -50,8 +69,12 @@ class RateLimitMiddleware(BaseMiddleware):
 
         timestamps[:] = [t for t in timestamps if now - t < self.window]
 
+        if not timestamps:
+            del self._user_timestamps[uid]
+            timestamps = self._user_timestamps[uid]
+
         if len(timestamps) >= self.limit:
-            logger.warning(f"Rate limit hit for user {uid}")
+            logger.warning("Rate limit hit for user %s", uid)
             return None
 
         timestamps.append(now)
@@ -68,11 +91,11 @@ class RetryMiddleware(BaseMiddleware):
         try:
             return await handler(event, data)
         except TelegramRetryAfter as e:
-            logger.warning(f"Telegram flood control, retrying after {e.retry_after}s")
+            logger.warning("Telegram flood control, retrying after %ss", e.retry_after)
             await asyncio.sleep(e.retry_after)
             return await handler(event, data)
         except TelegramAPIError as e:
-            logger.error(f"Telegram API error: {e}")
+            logger.error("Telegram API error: %s", e)
             return None
 
 
@@ -90,7 +113,7 @@ class ErrorBoundaryMiddleware(BaseMiddleware):
             raise
         except Exception as e:
             _metrics["total_errors"] += 1
-            logger.exception(f"Unhandled error in handler: {e}")
+            logger.exception("Unhandled error in handler: %s", e)
 
             try:
                 if isinstance(event, Message) and event.chat:

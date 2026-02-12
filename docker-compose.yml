@@ -5,6 +5,9 @@ services:
     restart: unless-stopped
     environment:
       - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
+      - ADMIN_IDS=${ADMIN_IDS}
+      - LOG_CHAT_ID=${LOG_CHAT_ID}
+      - COINCAP_API_KEY=${COINCAP_API_KEY:-}
       - TZ=Europe/Moscow
       - DB_PATH=/app/data/otc.db
     volumes:

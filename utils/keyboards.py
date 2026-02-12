@@ -26,6 +26,7 @@ def build_chat_settings_kb(user_lang: str, chat_id: int) -> InlineKeyboardBuilde
         primary_button(LANGUAGES[user_lang]['cryptocurrencies'], f"show_chat_crypto_{chat_id}", emoji=EMOJI['crypto'])
     )
     kb.row(primary_button(LANGUAGES[user_lang]['quote_format'], f"toggle_chat_quote_format_{chat_id}", emoji=EMOJI['quote_format']))
+    kb.row(primary_button(LANGUAGES[user_lang]['language'], f"change_chat_language_{chat_id}", emoji=EMOJI['language']))
     kb.row(success_button(LANGUAGES[user_lang]['save_button'], f"save_chat_settings_{chat_id}", emoji=EMOJI['save']))
     return kb
 

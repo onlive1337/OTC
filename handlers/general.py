@@ -27,16 +27,17 @@ def build_main_menu_kb(user_lang):
 
 @router.message(CommandStart())
 async def cmd_start(message: Message):
-    await user_data.update_user_data(message.from_user.id)
+    await user_data.update_user_data(message.from_user.id, language_code=message.from_user.language_code)
     user_lang = await user_data.get_user_language(message.from_user.id)
     
     if message.chat.type in ['group', 'supergroup']:
+        chat_lang = await user_data.get_chat_language(message.chat.id)
         chat_member = await message.chat.get_member(message.from_user.id)
         if chat_member.status in ['creator', 'administrator']:
             from data.chat_settings import show_chat_settings
             await show_chat_settings(message)
         else:
-            await message.answer(LANGUAGES[user_lang]['admin_only'])
+            await message.answer(LANGUAGES[chat_lang]['admin_only'])
     else:
         kb = build_main_menu_kb(user_lang)
         await message.answer(LANGUAGES[user_lang]['welcome'], reply_markup=kb.as_markup())

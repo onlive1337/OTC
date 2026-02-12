@@ -18,11 +18,55 @@ cache: Dict[str, Any] = {}
 
 logger = logging.getLogger(__name__)
 
-import asyncio, random, urllib.parse
+import asyncio
+import random
+import urllib.parse
+import ujson
+import ast
+import operator
 
 _http_session: Optional[aiohttp.ClientSession] = None
 _domain_semaphores: Dict[str, asyncio.Semaphore] = {}
-_rates_refreshing = False
+_rates_lock = asyncio.Lock()
+
+_ALL_CURRENCY_PATTERNS = {}
+_ALL_CURRENCY_PATTERNS.update(CURRENCY_SYMBOLS)
+_ALL_CURRENCY_PATTERNS.update(CURRENCY_ABBREVIATIONS)
+_ALL_CURRENCY_PATTERNS.update({k.upper(): k.upper() for k in ALL_CURRENCIES.keys()})
+
+_SORTED_CURRENCY_PATTERNS = sorted(_ALL_CURRENCY_PATTERNS.items(), key=lambda x: len(x[0]), reverse=True)
+
+_REGEX_PARTS = []
+for pattern, _ in _SORTED_CURRENCY_PATTERNS:
+    is_symbol = pattern in CURRENCY_SYMBOLS or re.match(r'^\W+$', pattern, re.UNICODE) is not None
+    if is_symbol:
+        _REGEX_PARTS.append(re.escape(pattern.lower()))
+    else:
+        _REGEX_PARTS.append(rf'(?<!\w){re.escape(pattern.lower())}(?!\w)')
+
+_CURRENCY_REGEX = re.compile('|'.join(_REGEX_PARTS), re.IGNORECASE)
+
+_PATTERN_TO_CODE = {p.lower(): c for p, c in _ALL_CURRENCY_PATTERNS.items()}
+
+_SPACE_DIGIT_REGEX = re.compile(r'(\d)\s+(\d)')
+_STARTING_NUMBER_REGEX = re.compile(r'^([\d\s,.]+)')
+
+_MULTIPLIERS = {
+    'тыс': 1000, 'тысяч': 1000, 'тысячи': 1000, 'тысяча': 1000,
+    'млн': 1000000, 'миллион': 1000000, 'миллионов': 1000000, 'миллиона': 1000000,
+    'млрд': 1000000000, 'миллиард': 1000000000, 'миллиардов': 1000000000,
+    'кк': 1000000, 'лям': 1000000, 'ляма': 1000000, 'лямов': 1000000,
+    'к': 1000, 'k': 1000, 'm': 1000000, 'b': 1000000000,
+    'thousand': 1000, 'million': 1000000, 'billion': 1000000000
+}
+
+_MULTIPLIER_REGEXES = {
+    re.compile(rf'(\d+(?:[.,]\d+)?)\s*{txt}\b', re.IGNORECASE): val 
+    for txt, val in _MULTIPLIERS.items()
+}
+
+_FIND_NUMBERS_REGEX = re.compile(r'[\d\s,\.]+')
+_SIMPLE_NUMBER_REGEX = re.compile(r'[^\d.]')
 
 def set_http_session(session: aiohttp.ClientSession):
     global _http_session
@@ -60,58 +104,6 @@ async def _with_retries(coro_factory, host: str, retries: int = HTTP_RETRIES):
         raise last_exc
     raise RuntimeError("_with_retries failed without exception")
 
-EXTENDED_CURRENCY_ABBREVIATIONS = {
-    'сум': 'UZS', 'сумов': 'UZS', 'сума': 'UZS', 'сумы': 'UZS',
-    'лир': 'TRY', 'лиры': 'TRY', 'лира': 'TRY', 'лирах': 'TRY',
-    'гривны': 'UAH', 'грн': 'UAH', 'гривен': 'UAH', 'гривна': 'UAH', 'гривень': 'UAH',
-    'тон': 'TON', 'тонов': 'TON', 'тона': 'TON',
-    'доллар': 'USD', 'долларов': 'USD', 'доллары': 'USD', 'доллара': 'USD', 'долл': 'USD', 'дол': 'USD',
-    'юань': 'CNY', 'юаней': 'CNY', 'юаня': 'CNY',
-    'рублей': 'RUB', 'рубль': 'RUB', 'рубля': 'RUB', 'руб': 'RUB', 'рублях': 'RUB',
-    'белрублей': 'BYN', 'белрубль': 'BYN', 'белрубля': 'BYN', 'белруб': 'BYN',
-    'бел.руб': 'BYN', 'бел.рублей': 'BYN', 'бел.рубля': 'BYN', 'бел.рубль': 'BYN',
-    'бел руб': 'BYN', 'бел рублей': 'BYN', 'бел рубля': 'BYN', 'бел рубль': 'BYN',
-    'беларусских рублей': 'BYN', 'белорусских рублей': 'BYN', 'белорусский рубль': 'BYN',
-    'беларуский рубль': 'BYN',
-    'byn': 'BYN', 'belarusian ruble': 'BYN', 'belarusian rubles': 'BYN',
-    'тенге': 'KZT', 'евро': 'EUR', 'евр': 'EUR',
-    'фунт': 'GBP', 'фунтов': 'GBP', 'фунта': 'GBP',
-    'йен': 'JPY', 'йены': 'JPY', 'иен': 'JPY', 'иены': 'JPY',
-    'вон': 'KRW', 'воны': 'KRW', 'вона': 'KRW',
-    'песо': 'MXN', 'песос': 'MXN',
-    'реал': 'BRL', 'реалов': 'BRL', 'реала': 'BRL',
-    'рэнд': 'ZAR', 'рэндов': 'ZAR', 'ранд': 'ZAR', 'рандов': 'ZAR',
-    
-    'dollar': 'USD', 'dollars': 'USD', 'usd': 'USD', 'бакс': 'USD', 'баксов': 'USD',
-    'euro': 'EUR', 'euros': 'EUR', 'eur': 'EUR',
-    'pound': 'GBP', 'pounds': 'GBP', 'gbp': 'GBP',
-    'yen': 'JPY', 'yens': 'JPY', 'jpy': 'JPY',
-    'yuan': 'CNY', 'cny': 'CNY',
-    'ruble': 'RUB', 'rubles': 'RUB', 'rub': 'RUB',
-    'hryvnia': 'UAH', 'hryvnias': 'UAH', 'uah': 'UAH',
-    'sum': 'UZS', 'sums': 'UZS', 'uzs': 'UZS',
-    'tenge': 'KZT', 'kzt': 'KZT',
-    'lira': 'TRY', 'liras': 'TRY', 'try': 'TRY',
-    
-    'биткоин': 'BTC', 'биткоинов': 'BTC', 'биток': 'BTC', 'битков': 'BTC', 'битка': 'BTC',
-    'эфир': 'ETH', 'эфира': 'ETH', 'эфиров': 'ETH', 'эфириум': 'ETH',
-    'тезер': 'USDT', 'тезера': 'USDT', 'юсдт': 'USDT',
-    'солана': 'SOL', 'соланы': 'SOL',
-    'догикоин': 'DOGE', 'доги': 'DOGE', 'додж': 'DOGE',
-    'нот': 'NOT', 'ноткоин': 'NOT', 'ноткоинов': 'NOT',
-    'хамстер': 'HMSTR', 'хамстеров': 'HMSTR',
-    
-    'bitcoin': 'BTC', 'bitcoins': 'BTC', 'btc': 'BTC',
-    'ethereum': 'ETH', 'eth': 'ETH', 'ether': 'ETH',
-    'tether': 'USDT', 'usdt': 'USDT',
-    'binance': 'BNB', 'bnb': 'BNB',
-    'solana': 'SOL', 'sol': 'SOL',
-    'dogecoin': 'DOGE', 'doge': 'DOGE',
-    'notcoin': 'NOT', 'not': 'NOT',
-    'hamster': 'HMSTR', 'hmstr': 'HMSTR',
-}
-
-EXTENDED_CURRENCY_ABBREVIATIONS.update(CURRENCY_ABBREVIATIONS)
 
 async def get_cached_data(key: str) -> Optional[Any]:
     if key in cache:
@@ -123,11 +115,22 @@ async def get_cached_data(key: str) -> Optional[Any]:
 async def set_cached_data(key: str, data: Dict[str, float]):
     cache[key] = (data, time.time())
 
+def _safe_bg_task(coro, name: str = "background"):
+    task = asyncio.create_task(coro, name=name)
+    def _on_done(t: asyncio.Task):
+        if t.cancelled():
+            return
+        exc = t.exception()
+        if exc:
+            logger.error(f"Background task '{name}' failed: {exc}", exc_info=exc)
+    task.add_done_callback(_on_done)
+    return task
+
 async def get_exchange_rates() -> Dict[str, float]:
     try:
         cached_rates = await get_cached_data('exchange_rates')
         if cached_rates:
-            logger.info("Using cached exchange rates")
+            logger.debug("Using cached exchange rates")
             return cached_rates
 
         stale_item = cache.get('exchange_rates')
@@ -135,25 +138,36 @@ async def get_exchange_rates() -> Dict[str, float]:
         if stale_item:
             data, ts = stale_item
             if now - ts < (CACHE_EXPIRATION_TIME + STALE_WHILE_REVALIDATE):
-                if not _rates_refreshing:
-                    asyncio.create_task(_refresh_rates())
+                if not _rates_lock.locked():
+                    _safe_bg_task(refresh_rates(force=True), name="stale_refresh_rates")
                 logger.info("Returning stale exchange rates while refreshing in background")
                 return data
 
-        return await _refresh_rates()
+        return await refresh_rates()
     except Exception as e:
         logger.error(f"Error fetching exchange rates: {e}")
         return {}
 
-async def _refresh_rates() -> Dict[str, float]:
-    global _rates_refreshing
-    if _rates_refreshing:
-        for _ in range(10):
-            await asyncio.sleep(0.2)
+async def refresh_rates(force: bool = False) -> Dict[str, float]:
+    if not force:
+        if _rates_lock.locked():
+            for _ in range(10):
+                await asyncio.sleep(0.2)
+                fresh = await get_cached_data('exchange_rates')
+                if fresh:
+                    return fresh
+
+        async with _rates_lock:
             fresh = await get_cached_data('exchange_rates')
             if fresh:
                 return fresh
-    _rates_refreshing = True
+
+            return await _fetch_rates_unlocked()
+    
+    async with _rates_lock:
+        return await _fetch_rates_unlocked()
+
+async def _fetch_rates_unlocked() -> Dict[str, float]:
     session_to_close = None
 
     try:
@@ -161,7 +175,7 @@ async def _refresh_rates() -> Dict[str, float]:
 
         session = _http_session
         if session is None:
-            session_to_close = aiohttp.ClientSession()
+            session_to_close = aiohttp.ClientSession(json_serialize=ujson.dumps)
             session = session_to_close
 
         rates: Dict[str, float] = {}
@@ -181,7 +195,7 @@ async def _refresh_rates() -> Dict[str, float]:
                 async def _fiat(url=fiat_url):
                     resp = await session.get(url, timeout=timeout)
                     async with resp:
-                        return await resp.json()
+                        return await resp.json(loads=ujson.loads)
 
                 fiat_data = await _with_retries(_fiat, host)
 
@@ -222,7 +236,7 @@ async def _refresh_rates() -> Dict[str, float]:
             async def _cg():
                 resp = await session.get(url_cg, timeout=timeout)
                 async with resp:
-                    return await resp.json()
+                    return await resp.json(loads=ujson.loads)
 
             crypto_data = await _with_retries(_cg, host)
 
@@ -254,7 +268,7 @@ async def _refresh_rates() -> Dict[str, float]:
             async def _cc():
                 resp = await session.get(url_cc, timeout=timeout)
                 async with resp:
-                    return await resp.json()
+                    return await resp.json(loads=ujson.loads)
 
             additional_crypto_data = await _with_retries(_cc, host)
 
@@ -297,7 +311,7 @@ async def _refresh_rates() -> Dict[str, float]:
                     async def _cap(u=url_cap):
                         resp = await session.get(u, timeout=timeout)
                         async with resp:
-                            return await resp.json()
+                            return await resp.json(loads=ujson.loads)
 
                     try:
                         alt_crypto_data = await _with_retries(_cap, host)
@@ -328,7 +342,7 @@ async def _refresh_rates() -> Dict[str, float]:
                         async def _gecko(u=url_gecko):
                             resp = await session.get(u, timeout=timeout)
                             async with resp:
-                                return await resp.json()
+                                return await resp.json(loads=ujson.loads)
 
                         try:
                             gecko_data = await _with_retries(_gecko, host)
@@ -352,11 +366,14 @@ async def _refresh_rates() -> Dict[str, float]:
         logger.error(f"Critical error in _refresh_rates: {e}")
         return {}
     finally:
-        _rates_refreshing = False
         if session_to_close is not None:
             await session_to_close.close()
 
 def convert_currency(amount: float, from_currency: str, to_currency: str, rates: Dict[str, float]) -> float:
+    if from_currency != 'USD' and from_currency not in rates:
+        raise KeyError(f"Rate not available for {from_currency}")
+    if to_currency != 'USD' and to_currency not in rates:
+        raise KeyError(f"Rate not available for {to_currency}")
     if from_currency == 'USD':
         return amount * rates[to_currency]
     elif to_currency == 'USD':
@@ -364,21 +381,42 @@ def convert_currency(amount: float, from_currency: str, to_currency: str, rates:
     else:
         return amount / rates[from_currency] * rates[to_currency]
 
+        return amount / rates[from_currency] * rates[to_currency]
+
+_CHANGELOG_CACHE = None
+
 def read_changelog():
+    global _CHANGELOG_CACHE
+    if _CHANGELOG_CACHE is not None:
+        return _CHANGELOG_CACHE
+
     current_file = os.path.abspath(__file__)
     parent_dir = os.path.dirname(os.path.dirname(current_file))
     changelog_path = os.path.join(parent_dir, 'CHANGELOG.md')
     
     try:
         with open(changelog_path, 'r', encoding='utf-8') as file:
-            return file.read()
+            content = file.read()
+        
+        versions = re.split(r'(?=^## \[)', content, flags=re.MULTILINE)
+        header = versions[0] if versions else ''
+        version_blocks = [v for v in versions[1:] if v.strip()]
+        
+        if len(version_blocks) > 2:
+            result = header + ''.join(version_blocks[:2]).rstrip()
+            result += '\n\n---\n_...и ещё старые версии_'
+            _CHANGELOG_CACHE = result
+            return result
+            
+        _CHANGELOG_CACHE = content
+        return content
     except FileNotFoundError:
         return "Чейнджлог не найден."
 
 def smart_number_parse(text: str) -> str:
-    text = re.sub(r'(\d)\s+(\d)', r'\1\2', text)
+    text = _SPACE_DIGIT_REGEX.sub(r'\1\2', text)
     
-    number_match = re.match(r'^([\d\s,.]+)', text)
+    number_match = _STARTING_NUMBER_REGEX.match(text)
     if not number_match:
         return text
     
@@ -418,9 +456,6 @@ def smart_number_parse(text: str) -> str:
     return number_str
 
 def parse_mathematical_expression(expr: str) -> Optional[float]:
-    import ast
-    import operator
-    
     ops = {
         ast.Add: operator.add, ast.Sub: operator.sub,
         ast.Mult: operator.mul, ast.Div: operator.truediv,
@@ -440,7 +475,6 @@ def parse_mathematical_expression(expr: str) -> Optional[float]:
         raise ValueError("Unsafe expression")
 
     try:
-        expr = expr.replace('^', '**')
         expr = expr.replace('х', '*').replace('×', '*')
         expr = expr.replace('÷', '/').replace(':', '/')
         expr = expr.replace(' ', '')
@@ -461,39 +495,17 @@ def parse_amount_and_currency(text: str) -> Tuple[Optional[float], Optional[str]
     original_text = text
     text = text.strip()
     
-    multipliers = {
-        'тыс': 1000, 'тысяч': 1000, 'тысячи': 1000, 'тысяча': 1000,
-        'млн': 1000000, 'миллион': 1000000, 'миллионов': 1000000, 'миллиона': 1000000,
-        'млрд': 1000000000, 'миллиард': 1000000000, 'миллиардов': 1000000000,
-        'кк': 1000000, 'лям': 1000000, 'ляма': 1000000, 'лямов': 1000000,
-        'к': 1000, 'k': 1000, 'm': 1000000, 'b': 1000000000,
-        'thousand': 1000, 'million': 1000000, 'billion': 1000000000
-    }
-    
     text_lower = text.lower()
     
     currency = None
     currency_match = None
     
-    all_currency_patterns = {}
-    all_currency_patterns.update(CURRENCY_SYMBOLS)
-    all_currency_patterns.update(EXTENDED_CURRENCY_ABBREVIATIONS)
-    all_currency_patterns.update({k.upper(): k.upper() for k in ALL_CURRENCIES.keys()})
-    
-    sorted_patterns = sorted(all_currency_patterns.items(), key=lambda x: len(x[0]), reverse=True)
-    
-    for pattern, curr_code in sorted_patterns:
-        is_symbol = pattern in CURRENCY_SYMBOLS or re.match(r'^\W+$', pattern, re.UNICODE) is not None
-        if is_symbol:
-            regex = re.escape(pattern.lower())
-        else:
-            regex = rf'(?<!\w){re.escape(pattern.lower())}(?!\w)'
-        match = re.search(regex, text_lower)
-        if match:
-            currency = curr_code
-            currency_match = match
-            break
-    
+    match = _CURRENCY_REGEX.search(text_lower)
+    if match:
+        matched_text = match.group(0)
+        currency = _PATTERN_TO_CODE.get(matched_text.lower())
+        currency_match = match
+        
     if not currency:
         return None, None
     
@@ -508,19 +520,18 @@ def parse_amount_and_currency(text: str) -> Tuple[Optional[float], Optional[str]
         if result is not None:
             return result, currency
     
-    for mult_text, mult_value in multipliers.items():
-        pattern = rf'(\d+(?:[.,]\d+)?)\s*{mult_text}\b'
-        match = re.search(pattern, amount_text, re.IGNORECASE)
+    for pattern, mult_value in _MULTIPLIER_REGEXES.items():
+        match = pattern.search(amount_text)
         if match:
             base_number = smart_number_parse(match.group(1))
             try:
                 amount = float(base_number) * mult_value
                 return amount, currency
-            except:
+            except (ValueError, TypeError) as e:
+                logger.debug(f"Failed to parse multiplier number '{match.group(1)}': {e}")
                 pass
     
-    number_pattern = r'[\d\s,\.]+'
-    number_matches = re.findall(number_pattern, amount_text)
+    number_matches = _FIND_NUMBERS_REGEX.findall(amount_text)
     
     for number_str in number_matches:
         cleaned_number = smart_number_parse(number_str)
@@ -528,16 +539,16 @@ def parse_amount_and_currency(text: str) -> Tuple[Optional[float], Optional[str]
             amount = float(cleaned_number)
             if amount >= 0:
                 return amount, currency
-        except:
+        except (ValueError, TypeError):
             continue
     
     try:
-        simple_number = re.sub(r'[^\d.]', '', amount_text)
+        simple_number = _SIMPLE_NUMBER_REGEX.sub('', amount_text)
         if simple_number:
             amount = float(simple_number)
             if amount >= 0:
                 return amount, currency
-    except:
+    except (ValueError, TypeError):
         pass
     
     return None, None
@@ -587,11 +598,6 @@ def format_large_number(number, is_crypto=False, is_original_amount=False):
             return f"{sign}{number:.4f}".rstrip('0').rstrip('.')
         return f"{sign}{number:,.2f}"
 
-def format_response(response: str, use_quote: bool) -> str:
-    response = response.strip()
-    if use_quote:
-        return f"<blockquote expandable>{response}</blockquote>"
-    return response
 
 async def delete_conversion_message(callback_query: CallbackQuery):
     await callback_query.message.delete()
@@ -611,8 +617,22 @@ async def check_admin_rights(message_or_callback: Union[Message, CallbackQuery],
         return False
 
 async def show_not_admin_message(message_or_callback: Union[Message, CallbackQuery], user_id: int):
-    user_lang = await user_data.get_user_language(user_id)
-    error_text = LANGUAGES[user_lang].get('not_admin_message', 'You need to be an admin to change these settings.')
+    chat_id = None
+    chat_type = None
+    
+    if isinstance(message_or_callback, Message):
+        chat_id = message_or_callback.chat.id
+        chat_type = message_or_callback.chat.type
+    elif isinstance(message_or_callback, CallbackQuery) and message_or_callback.message:
+        chat_id = message_or_callback.message.chat.id
+        chat_type = message_or_callback.message.chat.type
+
+    if chat_type in ('group', 'supergroup') and chat_id:
+        lang_code = await user_data.get_chat_language(chat_id)
+    else:
+        lang_code = await user_data.get_user_language(user_id)
+
+    error_text = LANGUAGES[lang_code].get('not_admin_message', 'You need to be an admin to change these settings.')
     
     if isinstance(message_or_callback, CallbackQuery):
         await message_or_callback.answer(error_text, show_alert=True)

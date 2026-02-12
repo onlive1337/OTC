@@ -6,30 +6,39 @@ from aiogram import Router, types, Bot
 from aiogram.types import Message, InlineQuery, InlineQueryResultArticle, InputTextMessageContent, ChatMemberUpdated
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
-from config.config import ALL_CURRENCIES, CURRENCY_SYMBOLS, CURRENCY_ABBREVIATIONS
+from config.config import ALL_CURRENCIES, CURRENCY_SYMBOLS, CURRENCY_ABBREVIATIONS, CRYPTO_CURRENCIES
 from config.languages import LANGUAGES
 from loader import user_data
-from utils.utils import get_exchange_rates, convert_currency, format_large_number, parse_amount_and_currency, EXTENDED_CURRENCY_ABBREVIATIONS
+from utils.utils import get_exchange_rates, convert_currency, format_large_number, parse_amount_and_currency
 from utils.button_styles import danger_button, primary_button, EMOJI
 
 logger = logging.getLogger(__name__)
 router = Router()
 
 
-def _find_target_currency(text: str, from_currency: str) -> Optional[str]:
-    """Check if text contains a second currency code (target), e.g. '100 USD EUR' -> 'EUR'."""
-    all_patterns = {}
-    all_patterns.update(CURRENCY_SYMBOLS)
-    all_patterns.update(EXTENDED_CURRENCY_ABBREVIATIONS)
-    all_patterns.update({k.upper(): k.upper() for k in ALL_CURRENCIES.keys()})
+_TARGET_CURRENCY_PATTERNS = {}
+_TARGET_CURRENCY_PATTERNS.update(CURRENCY_SYMBOLS)
+_TARGET_CURRENCY_PATTERNS.update(CURRENCY_ABBREVIATIONS)
+_TARGET_CURRENCY_PATTERNS.update({k.upper(): k.upper() for k in ALL_CURRENCIES.keys()})
 
-    tokens = re.split(r'[\s,]+', text.strip())
+_SPLIT_TOKENS_REGEX = re.compile(r'[\s,]+')
+_SKIP_TOKENS_REGEX = re.compile(r'^[\d.,+\-*/()^×÷:хk]+$')
+
+_SEPARATORS = [
+    r'\s+и\s+', r'\s+and\s+', r'\s+а\s+также\s+', 
+    r';', r'\n', r',\s+(?=\d)', r'\s+\+\s+'
+]
+_SEPARATORS_REGEX = re.compile(f"({'|'.join(_SEPARATORS)})", re.IGNORECASE)
+
+
+def _find_target_currency(text: str, from_currency: str) -> Optional[str]:
+    tokens = _SPLIT_TOKENS_REGEX.split(text.strip())
     found = []
     for token in tokens:
         token_lower = token.lower().strip()
-        if not token_lower or re.match(r'^[\d.,+\-*/()^×÷:хk]+$', token_lower):
+        if not token_lower or _SKIP_TOKENS_REGEX.match(token_lower):
             continue
-        for pattern, curr_code in all_patterns.items():
+        for pattern, curr_code in _TARGET_CURRENCY_PATTERNS.items():
             if pattern.lower() == token_lower and curr_code != from_currency:
                 if curr_code not in found:
                     found.append(curr_code)
@@ -40,7 +49,10 @@ def _find_target_currency(text: str, from_currency: str) -> Optional[str]:
 
 async def process_targeted_conversion(message: types.Message, amount: float, from_currency: str, to_currency: str):
     user_id = message.from_user.id
-    user_lang = await user_data.get_user_language(user_id)
+    if message.chat.type in ('group', 'supergroup'):
+        user_lang = await user_data.get_chat_language(message.chat.id)
+    else:
+        user_lang = await user_data.get_user_language(user_id)
 
     try:
         if amount <= 0:
@@ -53,7 +65,7 @@ async def process_targeted_conversion(message: types.Message, amount: float, fro
             return
 
         converted = convert_currency(amount, from_currency, to_currency, rates)
-        is_crypto = to_currency in ('BTC', 'ETH', 'SOL', 'TON', 'BNB', 'XRP', 'DOGE', 'ADA', 'TRX', 'USDT', 'USDC', 'LTC')
+        is_crypto = to_currency in CRYPTO_CURRENCIES
 
         response = (
             f"{format_large_number(amount, is_original_amount=True)} {ALL_CURRENCIES.get(from_currency, '')} {from_currency}\n"
@@ -74,7 +86,10 @@ async def process_multiple_conversions(message: types.Message, requests: List[Tu
     user_id = message.from_user.id
     chat_id = message.chat.id
     await user_data.update_user_data(user_id)
-    user_lang = await user_data.get_user_language(user_id)
+    if message.chat.type in ('group', 'supergroup'):
+        user_lang = await user_data.get_chat_language(chat_id)
+    else:
+        user_lang = await user_data.get_user_language(user_id)
     
     try:
         rates = await get_exchange_rates()
@@ -150,7 +165,10 @@ async def process_multiple_conversions(message: types.Message, requests: List[Tu
 async def process_conversion(message: types.Message, amount: float, from_currency: str):
     user_id = message.from_user.id
     chat_id = message.chat.id
-    user_lang = await user_data.get_user_language(user_id)
+    if message.chat.type in ('group', 'supergroup'):
+        user_lang = await user_data.get_chat_language(chat_id)
+    else:
+        user_lang = await user_data.get_user_language(user_id)
     
     try:
         if amount <= 0:
@@ -222,27 +240,24 @@ async def process_conversion(message: types.Message, amount: float, from_currenc
 
 @router.message()
 async def handle_message(message: types.Message):
-    logger.info(f"Received message: {message.text} from user {message.from_user.id} in chat {message.chat.id}")
+    logger.debug("Received message: %s from user %s in chat %s", message.text, message.from_user.id, message.chat.id)
     
     if message.text is None:
-        logger.info(f"Received message without text from user {message.from_user.id} in chat {message.chat.id}")
+        logger.debug("Received message without text from user %s in chat %s", message.from_user.id, message.chat.id)
         return
 
     user_id = message.from_user.id
-    await user_data.update_user_data(user_id)
-    user_lang = await user_data.get_user_language(user_id)
+    await user_data.update_user_data(user_id, language_code=message.from_user.language_code)
+    
+    if message.chat.type in ('group', 'supergroup'):
+        user_lang = await user_data.get_chat_language(message.chat.id)
+    else:
+        user_lang = await user_data.get_user_language(user_id)
 
     if message.text.startswith('/'):
         return 
 
-    separators = [
-        r'\s+и\s+', r'\s+and\s+', r'\s+а\s+также\s+', 
-        r';', r'\n', r',\s+(?=\d)', r'\s+\+\s+'
-    ]
-    
-    separator_pattern = '|'.join(separators)
-    
-    parts = re.split(f'({separator_pattern})', message.text, flags=re.IGNORECASE)
+    parts = _SEPARATORS_REGEX.split(message.text)
     
     requests = []
     for i, part in enumerate(parts):
@@ -290,11 +305,11 @@ async def handle_message(message: types.Message):
                 reply_markup=kb.as_markup()
             )
         
-        logger.info(f"No valid conversion requests found in message: {message.text} from user {user_id}")
+        logger.debug("No valid conversion requests found in message: %s from user %s", message.text, user_id)
 
 @router.inline_query()
 async def inline_query_handler(query: InlineQuery):
-    await user_data.update_user_data(query.from_user.id)
+    await user_data.update_user_data(query.from_user.id, language_code=query.from_user.language_code)
     user_lang = await user_data.get_user_language(query.from_user.id)
     use_quote = await user_data.get_user_quote_format(query.from_user.id)
     
@@ -308,7 +323,7 @@ async def inline_query_handler(query: InlineQuery):
                 "Please enter an amount and currency code to convert, e.g., '100 USD' or '10,982 KZT'.")
             )
         )
-        await query.answer(results=[empty_input_result], cache_time=1)
+        await query.answer(results=[empty_input_result], cache_time=60)
         return
 
     amount, from_currency = parse_amount_and_currency(query.query)
@@ -323,7 +338,7 @@ async def inline_query_handler(query: InlineQuery):
                 "Invalid input. Please enter amount and currency code, e.g., '100 USD' or '10,982 KZT'.")
             )
         )
-        await query.answer(results=[error_result], cache_time=1)
+        await query.answer(results=[error_result], cache_time=60)
         return
 
     try:
@@ -347,7 +362,7 @@ async def inline_query_handler(query: InlineQuery):
                     "You haven't selected any currencies. Please go to bot settings to select currencies for conversion.")
                 )
             )
-            await query.answer(results=[no_currency_result], cache_time=1)
+            await query.answer(results=[no_currency_result], cache_time=60)
             return
 
         result_content = f"{format_large_number(amount, is_original_amount=True)} {ALL_CURRENCIES[from_currency]} {from_currency}\n\n"
@@ -358,8 +373,11 @@ async def inline_query_handler(query: InlineQuery):
                 result_content += "<blockquote expandable>"
             for to_cur in user_currencies:
                 if to_cur != from_currency:
-                    converted = convert_currency(amount, from_currency, to_cur, rates)
-                    result_content += f"{format_large_number(converted)} {ALL_CURRENCIES[to_cur]} {to_cur}\n"
+                    try:
+                        converted = convert_currency(amount, from_currency, to_cur, rates)
+                        result_content += f"{format_large_number(converted)} {ALL_CURRENCIES[to_cur]} {to_cur}\n"
+                    except (KeyError, OverflowError):
+                        continue
             if use_quote:
                 result_content += "</blockquote>"
             result_content += "\n"
@@ -370,8 +388,11 @@ async def inline_query_handler(query: InlineQuery):
                 result_content += "<blockquote expandable>"
             for to_cur in user_crypto:
                 if to_cur != from_currency:
-                    converted = convert_currency(amount, from_currency, to_cur, rates)
-                    result_content += f"{format_large_number(converted, True)} {ALL_CURRENCIES[to_cur]}\n"
+                    try:
+                        converted = convert_currency(amount, from_currency, to_cur, rates)
+                        result_content += f"{format_large_number(converted, True)} {ALL_CURRENCIES[to_cur]}\n"
+                    except (KeyError, OverflowError):
+                        continue
             if use_quote:
                 result_content += "</blockquote>"
 
@@ -386,7 +407,7 @@ async def inline_query_handler(query: InlineQuery):
         )
 
         logger.info(f"Successful inline conversion for user {query.from_user.id}: {amount} {from_currency}")
-        await query.answer(results=[result], cache_time=1)
+        await query.answer(results=[result], cache_time=60)
     except ValueError as ve:
         error_result = InlineQueryResultArticle(
             id="error",
@@ -397,7 +418,7 @@ async def inline_query_handler(query: InlineQuery):
                 "Invalid input. Please enter amount and currency code, e.g., '100 USD'.")
             )
         )
-        await query.answer(results=[error_result], cache_time=1)
+        await query.answer(results=[error_result], cache_time=60)
     except Exception as e:
         logger.error(f"Error during inline conversion for user {query.from_user.id}: {str(e)}")
         error_result = InlineQueryResultArticle(
@@ -409,7 +430,7 @@ async def inline_query_handler(query: InlineQuery):
                 "An error occurred. Please try again.")
             )
         )
-        await query.answer(results=[error_result], cache_time=1)
+        await query.answer(results=[error_result], cache_time=60)
 
 @router.my_chat_member()
 async def handle_my_chat_member(event: ChatMemberUpdated, bot: Bot):
@@ -425,4 +446,3 @@ async def handle_my_chat_member(event: ChatMemberUpdated, bot: Bot):
         
         await bot.send_message(event.chat.id, welcome_message)
         logger.info(f"Welcome message sent to chat {event.chat.id}")
-

@@ -8,8 +8,10 @@ if not BOT_TOKEN:
     raise RuntimeError("TELEGRAM_BOT_TOKEN is not set. Put it into environment or .env")
 
 # Logging and admin
-LOG_CHAT_ID = "-4558354811"
-ADMIN_IDS = [810587766]
+_log_chat_id_raw = os.getenv('LOG_CHAT_ID', '')
+LOG_CHAT_ID = int(_log_chat_id_raw) if _log_chat_id_raw.strip() else None
+_admin_ids_raw = os.getenv('ADMIN_IDS', '')
+ADMIN_IDS = [int(x) for x in _admin_ids_raw.split(',') if x.strip()] if _admin_ids_raw.strip() else []
 LOG_LEVEL = os.getenv('LOG_LEVEL', 'INFO')
 COINCAP_API_KEY = os.getenv('COINCAP_API_KEY')
 if not COINCAP_API_KEY:
@@ -19,7 +21,7 @@ if not COINCAP_API_KEY:
 # Storage
 DB_PATH = os.getenv('DB_PATH', 'otc.db')
 
-CURRENT_VERSION = "1.4.0"
+CURRENT_VERSION = "1.5.0"
 
 # Cache
 CACHE_EXPIRATION_TIME = 600  # seconds
@@ -34,7 +36,7 @@ SEMAPHORE_LIMITS = {
     'api.coingecko.com': 3,
     'min-api.cryptocompare.com': 3,
     'api.exchangerate-api.com': 3,
-    'api.coincap.io': 3,
+    'rest.coincap.io': 3,
 }
 
 ALL_CURRENCIES = {
@@ -58,20 +60,44 @@ CURRENCY_SYMBOLS = {
 }
 
 CURRENCY_ABBREVIATIONS = {
-    'сум': 'UZS',
-    'лир': 'TRY',
-    'лиры': 'TRY',
-    'лира': 'TRY',
-    'гривны': 'UAH',
-    'грн': 'UAH',
-    'тон': 'TON',
-    'доллар': 'USD',
-    'долларов': 'USD',
-    'доллары': 'USD',
-    'гривен': 'UAH',
-    'юань': 'CNY',
-    'юаней': 'CNY',
-    'рублей': 'RUB',
+    # RU — фиат
+    'доллар': 'USD', 'долларов': 'USD', 'доллары': 'USD', 'доллара': 'USD', 'долл': 'USD', 'бакс': 'USD', 'баксов': 'USD',
+    'евро': 'EUR', 'евр': 'EUR',
+    'рублей': 'RUB', 'рубль': 'RUB', 'рубля': 'RUB', 'руб': 'RUB',
+    'гривны': 'UAH', 'грн': 'UAH', 'гривен': 'UAH', 'гривна': 'UAH',
+    'сум': 'UZS', 'сумов': 'UZS',
     'тенге': 'KZT',
-    'евро': 'EUR'
+    'лир': 'TRY', 'лиры': 'TRY', 'лира': 'TRY',
+    'юань': 'CNY', 'юаней': 'CNY',
+    'фунт': 'GBP', 'фунтов': 'GBP',
+    'белруб': 'BYN', 'белрублей': 'BYN',
+
+    # EN — фиат
+    'dollar': 'USD', 'dollars': 'USD',
+    'euro': 'EUR', 'euros': 'EUR',
+    'pound': 'GBP', 'pounds': 'GBP',
+    'ruble': 'RUB', 'rubles': 'RUB',
+    'hryvnia': 'UAH',
+    'lira': 'TRY',
+    'yuan': 'CNY',
+    'tenge': 'KZT',
+
+    # RU — крипта
+    'тон': 'TON',
+    'биткоин': 'BTC', 'биткоинов': 'BTC', 'биток': 'BTC',
+    'эфир': 'ETH', 'эфира': 'ETH', 'эфириум': 'ETH',
+    'тезер': 'USDT', 'юсдт': 'USDT',
+    'солана': 'SOL',
+    'додж': 'DOGE', 'доги': 'DOGE',
+    'нот': 'NOT', 'ноткоин': 'NOT',
+    'хамстер': 'HMSTR',
+
+    # EN — крипта
+    'bitcoin': 'BTC', 'btc': 'BTC',
+    'ethereum': 'ETH', 'eth': 'ETH',
+    'tether': 'USDT', 'usdt': 'USDT',
+    'solana': 'SOL', 'sol': 'SOL',
+    'dogecoin': 'DOGE', 'doge': 'DOGE',
+    'notcoin': 'NOT',
+    'hamster': 'HMSTR',
 }

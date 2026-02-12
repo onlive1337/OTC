@@ -7,6 +7,7 @@ from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
+from aiogram.exceptions import TelegramRetryAfter, TelegramAPIError
 from config.config import ADMIN_IDS
 from config.languages import LANGUAGES
 from loader import bot, user_data
@@ -104,29 +105,42 @@ async def broadcast_confirm(callback_query: CallbackQuery, state: FSMContext):
     user_ids = await user_data.get_all_user_ids()
     sent, failed, blocked = 0, 0, 0
 
-    for uid in user_ids:
-        try:
-            if msg_data["type"] == "text":
-                await bot.send_message(uid, msg_data["text"], parse_mode="HTML")
-            elif msg_data["type"] == "photo":
-                await bot.send_photo(uid, msg_data["file_id"], caption=msg_data.get("caption"), parse_mode="HTML")
-            elif msg_data["type"] == "video":
-                await bot.send_video(uid, msg_data["file_id"], caption=msg_data.get("caption"), parse_mode="HTML")
-            elif msg_data["type"] == "document":
-                await bot.send_document(uid, msg_data["file_id"], caption=msg_data.get("caption"), parse_mode="HTML")
-            elif msg_data["type"] == "sticker":
-                await bot.send_sticker(uid, msg_data["file_id"])
-            sent += 1
-        except Exception as e:
-            err_msg = str(e).lower()
-            if any(x in err_msg for x in ["blocked", "deactivated", "not found", "forbidden", "cannot initiate", "entity"]):
-                blocked += 1
-            else:
-                failed += 1
-                logger.warning(f"Broadcast to {uid} failed: {e}")
+    sem = asyncio.Semaphore(15)
+    
+    async def send_wrapper(uid):
+        nonlocal sent, failed, blocked
+        async with sem:
+            while True:
+                try:
+                    if msg_data["type"] == "text":
+                        await bot.send_message(uid, msg_data["text"], parse_mode="HTML")
+                    elif msg_data["type"] == "photo":
+                        await bot.send_photo(uid, msg_data["file_id"], caption=msg_data.get("caption"), parse_mode="HTML")
+                    elif msg_data["type"] == "video":
+                        await bot.send_video(uid, msg_data["file_id"], caption=msg_data.get("caption"), parse_mode="HTML")
+                    elif msg_data["type"] == "document":
+                        await bot.send_document(uid, msg_data["file_id"], caption=msg_data.get("caption"), parse_mode="HTML")
+                    elif msg_data["type"] == "sticker":
+                        await bot.send_sticker(uid, msg_data["file_id"])
+                    sent += 1
+                    break
+                except TelegramRetryAfter as e:
+                    logger.warning("Flood limit for %s, sleeping %ss", uid, e.retry_after)
+                    await asyncio.sleep(e.retry_after)
+                    continue
+                except Exception as e:
+                    err_msg = str(e).lower()
+                    if any(x in err_msg for x in ["blocked", "deactivated", "not found", "forbidden", "cannot initiate", "entity"]):
+                        blocked += 1
+                    else:
+                        failed += 1
+                        logger.warning("Broadcast to %s failed: %s", uid, e)
+                    break
+            
+            await asyncio.sleep(0.05) 
 
-        if sent % 25 == 0:
-            await asyncio.sleep(1)
+    tasks = [send_wrapper(uid) for uid in user_ids]
+    await asyncio.gather(*tasks)
 
     report = (
         f"📢 <b>Рассылка завершена</b>\n\n"

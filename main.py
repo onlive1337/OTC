@@ -1,10 +1,11 @@
 import asyncio
 import logging
+import ujson
 from aiohttp import ClientSession, ClientTimeout
 
-from config.config import LOG_LEVEL, HTTP_TOTAL_TIMEOUT, HTTP_CONNECT_TIMEOUT
+from config.config import LOG_LEVEL, HTTP_TOTAL_TIMEOUT, HTTP_CONNECT_TIMEOUT, CACHE_EXPIRATION_TIME
 from loader import bot, dp, user_data
-from utils.utils import get_exchange_rates, set_http_session, close_http_session
+from utils.utils import get_exchange_rates, set_http_session, close_http_session, _safe_bg_task, refresh_rates
 from utils.log_handler import setup_telegram_logging
 
 from utils.middleware import RateLimitMiddleware, RetryMiddleware, ErrorBoundaryMiddleware
@@ -17,16 +18,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-def _safe_task(coro, name: str = "background"):
-    task = asyncio.create_task(coro, name=name)
-    def _on_done(t: asyncio.Task):
-        if t.cancelled():
-            return
-        exc = t.exception()
-        if exc:
-            logger.error(f"Background task '{name}' failed: {exc}", exc_info=exc)
-    task.add_done_callback(_on_done)
-    return task
+_bg_tasks = []
 
 async def _warmup_rates():
     try:
@@ -35,16 +27,38 @@ async def _warmup_rates():
     except Exception:
         logger.exception("Warmup failed")
 
+async def _periodic_refresh():
+    interval = max(CACHE_EXPIRATION_TIME - 60, 60)
+    while True:
+        await asyncio.sleep(interval)
+        try:
+            await refresh_rates(force=True)
+            logger.info("Periodic rate refresh completed")
+        except Exception:
+            logger.exception("Periodic rate refresh failed")
+
 async def on_startup():
     await setup_telegram_logging(bot)
-    session = ClientSession(timeout=ClientTimeout(total=HTTP_TOTAL_TIMEOUT, connect=HTTP_CONNECT_TIMEOUT))
+    session = ClientSession(
+        timeout=ClientTimeout(total=HTTP_TOTAL_TIMEOUT, connect=HTTP_CONNECT_TIMEOUT),
+        json_serialize=ujson.dumps
+    )
     set_http_session(session)
     
     await user_data.init_db()
     
-    _safe_task(_warmup_rates(), name="warmup_rates")
+    _bg_tasks.append(_safe_bg_task(_warmup_rates(), name="warmup_rates"))
+    _bg_tasks.append(_safe_bg_task(_periodic_refresh(), name="periodic_refresh"))
 
 async def on_shutdown():
+    for task in _bg_tasks:
+        task.cancel()
+    for task in _bg_tasks:
+        try:
+            await task
+        except asyncio.CancelledError:
+            pass
+    _bg_tasks.clear()
     try:
         await close_http_session()
     except Exception:

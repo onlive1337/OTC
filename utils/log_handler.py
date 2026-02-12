@@ -1,4 +1,6 @@
 import logging
+import traceback
+import html
 from aiogram import Bot
 from config.config import LOG_CHAT_ID
 import asyncio
@@ -15,28 +17,37 @@ class TelegramLogHandler(logging.Handler):
 
     def emit(self, record):
         global _last_sent
+        if not LOG_CHAT_ID:
+            return
         now = time.time()
         if now - _last_sent < MIN_INTERVAL_SEC:
             return
         _last_sent = now
         log_entry = self.format_error(record)
-        asyncio.create_task(self.send_log_to_telegram(log_entry))
+        task = asyncio.create_task(self.send_log_to_telegram(log_entry))
+        task.add_done_callback(lambda t: t.exception() if not t.cancelled() else None)
 
     def format_error(self, record):
         base = f"{record.levelname} [{record.name}]: {record.getMessage()}"
         if record.exc_info:
-            base += f"\n\nError: {str(record.exc_info[1])}"
+            tb_list = traceback.format_exception(*record.exc_info)
+            tb_str = "".join(tb_list)
+            base += f"\n\nTraceback:\n{tb_str}"
         if len(base) > MAX_TELEGRAM_LOG_LEN:
             base = base[:MAX_TELEGRAM_LOG_LEN] + '...'
         return base
 
     async def send_log_to_telegram(self, log_entry):
         try:
-            await self.bot.send_message(LOG_CHAT_ID, log_entry)
+            safe_entry = html.escape(log_entry)
+            await self.bot.send_message(LOG_CHAT_ID, safe_entry)
         except Exception as e:
             print(f"Failed to send log to Telegram: {e}")
 
 async def setup_telegram_logging(bot: Bot):
+    if not LOG_CHAT_ID:
+        logging.getLogger(__name__).info("LOG_CHAT_ID not set, Telegram logging disabled")
+        return
     telegram_handler = TelegramLogHandler(bot)
     telegram_handler.setLevel(logging.ERROR)
     

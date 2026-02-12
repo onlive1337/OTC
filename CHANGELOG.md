@@ -4,6 +4,18 @@ All notable changes to this project will be documented in this file.
 
 ## Changelog
 
+## [1.5.0] - 2026-02-13
+
+### 🐳 Infrastructure & Docker
+- **Docker Support**: Full Dockerization with `Dockerfile` and `docker-compose.yml`.
+- **Production Ready**: Database persistence via bind-mounts (`./data`).
+- **Optimization**: Added `uvloop` for faster event loop and `ujson` for rapid JSON processing.
+
+### 🌐 Logic & Internal
+- **Chat Language Enforcement**: Group interactions (conversions, errors, help) now strictly follow the **Group's Language**, ignoring the user's personal language settings.
+- **Admin Rights**: Fixed "Admin Only" error message language to match the group's context.
+- **Async I/O**: Cached `CHANGELOG.md` reading (memory insted of disk) and optimized admin logging.
+
 ## [1.4.0] - 2026-02-10
 
 ### ✨ New Features

@@ -23,7 +23,7 @@ async def show_chat_currencies(callback_query: CallbackQuery):
     
     page = int(parts[4]) if len(parts) > 4 and parts[4].isdigit() else 0
     chat_currencies = await user_data.get_chat_currencies(chat_id)
-    user_lang = await user_data.get_user_language(user_id)
+    user_lang = await user_data.get_chat_language(chat_id)
     
     currencies_per_page = 5
     start = page * currencies_per_page
@@ -67,7 +67,7 @@ async def show_chat_crypto(callback_query: CallbackQuery):
         return
     
     chat_crypto = await user_data.get_chat_crypto(chat_id)
-    user_lang = await user_data.get_user_language(user_id)
+    user_lang = await user_data.get_chat_language(chat_id)
     
     kb = InlineKeyboardBuilder()
     for crypto in CRYPTO_CURRENCIES:
@@ -149,7 +149,7 @@ async def show_chat_settings(message: Message):
         await show_not_admin_message(message, user_id)
         return
     
-    user_lang = await user_data.get_user_language(user_id)
+    user_lang = await user_data.get_chat_language(chat_id)
     use_quote = await user_data.get_chat_quote_format(chat_id)
     kb = build_chat_settings_kb(user_lang, chat_id)
     await message.answer(format_settings_text(user_lang, use_quote, is_chat=True), reply_markup=kb.as_markup())
@@ -162,7 +162,7 @@ async def save_chat_settings(callback_query: CallbackQuery):
         await show_not_admin_message(callback_query, user_id)
         return
     
-    user_lang = await user_data.get_user_language(user_id)
+    user_lang = await user_data.get_chat_language(chat_id)
     try:
         await callback_query.message.edit_text(LANGUAGES[user_lang]['save_settings'])
     except TelegramBadRequest as e:
@@ -175,7 +175,7 @@ async def back_to_chat_settings(callback_query: CallbackQuery):
     chat_id = next((part for part in parts if part.lstrip('-').isdigit()), None)
     
     if chat_id is None:
-        logger.error(f"Invalid callback data for back_to_chat_settings: {callback_query.data}")
+        logger.error("Invalid callback data for back_to_chat_settings: %s", callback_query.data)
         await callback_query.answer("Error. Please try again.")
         return
 
@@ -186,7 +186,7 @@ async def back_to_chat_settings(callback_query: CallbackQuery):
         await show_not_admin_message(callback_query, user_id)
         return
     
-    user_lang = await user_data.get_user_language(user_id)
+    user_lang = await user_data.get_chat_language(chat_id)
     use_quote = await user_data.get_chat_quote_format(chat_id)
     kb = build_chat_settings_kb(user_lang, chat_id)
     
@@ -198,3 +198,52 @@ async def back_to_chat_settings(callback_query: CallbackQuery):
     except TelegramBadRequest as e:
         if "message is not modified" not in str(e):
             raise
+
+async def change_chat_language(callback_query: CallbackQuery):
+    parts = callback_query.data.split('_')
+    chat_id = int(parts[3])
+    user_id = callback_query.from_user.id
+    
+    if not await check_admin_rights(callback_query, user_id, chat_id):
+        await show_not_admin_message(callback_query, user_id)
+        return
+    
+    user_lang = await user_data.get_chat_language(chat_id)
+    
+    kb = InlineKeyboardBuilder()
+    kb.row(
+        primary_button("Русский", f"set_chat_language_{chat_id}_ru"),
+        primary_button("English", f"set_chat_language_{chat_id}_en")
+    )
+    kb.row(primary_button(LANGUAGES[user_lang]['back_to_settings'], f"back_to_chat_settings_{chat_id}", emoji=EMOJI['back']))
+    
+    try:
+        await callback_query.message.edit_text(LANGUAGES[user_lang]['language'], reply_markup=kb.as_markup())
+    except TelegramBadRequest as e:
+        if "message is not modified" not in str(e):
+            raise
+
+async def set_chat_language(callback_query: CallbackQuery):
+    parts = callback_query.data.split('_')
+    chat_id = int(parts[3])
+    new_lang = parts[4]
+    user_id = callback_query.from_user.id
+    
+    if not await check_admin_rights(callback_query, user_id, chat_id):
+        await show_not_admin_message(callback_query, user_id)
+        return
+
+    await user_data.set_chat_language(chat_id, new_lang)
+    user_data.update_chat_cache(chat_id)
+    
+    user_lang = await user_data.get_chat_language(chat_id)
+    
+    kb = InlineKeyboardBuilder()
+    kb.row(primary_button(LANGUAGES[user_lang]['back_to_settings'], f"back_to_chat_settings_{chat_id}", emoji=EMOJI['back']))
+    
+    try:
+        await callback_query.message.edit_text(LANGUAGES[user_lang]['language_changed'], reply_markup=kb.as_markup())
+    except TelegramBadRequest as e:
+        if "message is not modified" not in str(e):
+            raise
+    await callback_query.answer(LANGUAGES[user_lang]['language_changed'])

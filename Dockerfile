@@ -1,4 +1,7 @@
-FROM python:3.11-slim
+# Builder stage
+FROM python:3.11-slim as builder
+
+WORKDIR /app
 
 RUN apt-get update && apt-get install -y \
   gcc \
@@ -9,17 +12,25 @@ RUN apt-get update && apt-get install -y \
   zlib1g-dev \
   && rm -rf /var/lib/apt/lists/*
 
-WORKDIR /app
-
 COPY requirements.txt .
 
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --prefix=/install --no-cache-dir -r requirements.txt
+
+# Final stage
+FROM python:3.11-slim
+
+WORKDIR /app
+
+# Copy installed packages from builder
+COPY --from=builder /install /usr/local
 
 COPY . .
 
-RUN mkdir -p /app/logs
+# Create logs directory and user
+RUN mkdir -p /app/logs && \
+  useradd -m -u 1000 botuser && \
+  chown -R botuser:botuser /app
 
-RUN useradd -m -u 1000 botuser && chown -R botuser:botuser /app
 USER botuser
 
 HEALTHCHECK --interval=30s --timeout=5s --retries=3 \

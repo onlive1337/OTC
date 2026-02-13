@@ -15,7 +15,10 @@ import ujson
 from config.config import BOT_TOKEN
 from data import user_data
 
-session = AiohttpSession(json_loads=ujson.loads, json_dumps=ujson.dumps)
+session = AiohttpSession(
+    json_loads=ujson.loads,
+    json_dumps=ujson.dumps,
+)
 bot = Bot(token=BOT_TOKEN, session=session)
 dp = Dispatcher()
 user_data = user_data.UserData()

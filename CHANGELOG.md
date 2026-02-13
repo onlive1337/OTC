@@ -4,6 +4,28 @@ All notable changes to this project will be documented in this file.
 
 ## Changelog
 
+## [1.6.0] - 2026-02-13
+
+### 🛡️ Stability Improvements
+- **Zero Division Protection**: Added validation for zero rates in currency conversion.
+- **Memory Leak Fixes**: Fixed memory leaks in RateLimitMiddleware, user cache, and chat cache with automatic cleanup.
+- **Retry Limits**: Added max retry limit (3) to RetryMiddleware to prevent infinite loops.
+- **Fallback Cache**: Exchange rates now use stale cache as fallback when all APIs fail.
+- **Graceful Shutdown**: Added proper SIGTERM/SIGINT handling for Docker deployments.
+- **Timeout Protection**: Added 30s timeout for periodic rate refresh to prevent hangs.
+- **DoS Protection**: Added message length limit (500 chars) and conversion limit (10 per message).
+- **Inline Query Protection**: Added length limit (100 chars) for inline queries.
+
+### ⚡ Performance Optimizations
+- **SQLite Tuning**: Added `cache_size=64MB`, `mmap_size=256MB`, `temp_store=MEMORY`, `PRAGMA optimize`.
+- **Database Indexes**: Added indexes for `user_currencies`, `user_crypto`, `chat_currencies`, `chat_crypto` tables.
+- **Query Optimization**: Combined 3 separate queries into 1 for `get_user_data` and `get_chat_data`.
+- **Log Batching**: Telegram log handler now buffers and batches multiple errors.
+
+### 🧪 Testing
+- Added tests for zero rate protection, missing currencies, and edge cases.
+- Total: 50 tests passing.
+
 ## [1.5.0] - 2026-02-13
 
 ### 🐳 Infrastructure & Docker

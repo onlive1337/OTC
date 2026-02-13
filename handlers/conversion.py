@@ -246,6 +246,10 @@ async def handle_message(message: types.Message):
         logger.debug("Received message without text from user %s in chat %s", message.from_user.id, message.chat.id)
         return
 
+    if len(message.text) > 500:
+        logger.debug("Message too long from user %s, ignoring", message.from_user.id)
+        return
+
     user_id = message.from_user.id
     await user_data.update_user_data(user_id, language_code=message.from_user.language_code)
     
@@ -275,6 +279,10 @@ async def handle_message(message: types.Message):
             valid_requests.append((parsed_result, request))
     
     if valid_requests:
+        if len(valid_requests) > 10:
+            valid_requests = valid_requests[:10]
+            logger.warning(f"User {user_id} sent too many conversion requests, truncated to 10")
+
         if len(valid_requests) > 1:
             await process_multiple_conversions(message, [(a, c) for (a, c), _ in valid_requests])
         else:
@@ -312,7 +320,10 @@ async def inline_query_handler(query: InlineQuery):
     await user_data.update_user_data(query.from_user.id, language_code=query.from_user.language_code)
     user_lang = await user_data.get_user_language(query.from_user.id)
     use_quote = await user_data.get_user_quote_format(query.from_user.id)
-    
+
+    if len(query.query) > 100:
+        return
+
     if not query.query.strip():
         empty_input_result = InlineQueryResultArticle(
             id="empty_input",

@@ -157,6 +157,24 @@ class TestConvertCurrency:
         result = convert_currency(100, "USD", "USD", self.RATES)
         assert result == pytest.approx(100.0)
 
+    def test_missing_from_currency(self):
+        with pytest.raises(KeyError):
+            convert_currency(100, "GBP", "USD", self.RATES)
+
+    def test_missing_to_currency(self):
+        with pytest.raises(KeyError):
+            convert_currency(100, "USD", "GBP", self.RATES)
+
+    def test_zero_rate_protection(self):
+        rates_with_zero = {"USD": 1.0, "BAD": 0}
+        with pytest.raises(ValueError):
+            convert_currency(100, "BAD", "USD", rates_with_zero)
+
+    def test_zero_to_rate_protection(self):
+        rates_with_zero = {"USD": 1.0, "BAD": 0}
+        with pytest.raises(ValueError):
+            convert_currency(100, "USD", "BAD", rates_with_zero)
+
 
 class TestFormatLargeNumber:
     def test_zero(self):
@@ -193,3 +211,16 @@ class TestFormatLargeNumber:
         result = format_large_number(1000.5, is_original_amount=True)
         assert "1 000" in result
         assert ".5" in result
+
+    def test_crypto_zero(self):
+        result = format_large_number(0, is_crypto=True)
+        assert result == "0"
+
+    def test_crypto_tiny(self):
+        result = format_large_number(0.000000001, is_crypto=True)
+        assert "e" in result.lower()  # научная нотация
+
+    def test_billion(self):
+        result = format_large_number(1500000000, is_crypto=True)
+        assert "B" in result
+

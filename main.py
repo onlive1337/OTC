@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import signal
 import ujson
 from aiohttp import ClientSession, ClientTimeout
 
@@ -19,6 +20,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 _bg_tasks = []
+_shutdown_event = asyncio.Event()
 
 async def _warmup_rates():
     try:
@@ -32,8 +34,10 @@ async def _periodic_refresh():
     while True:
         await asyncio.sleep(interval)
         try:
-            await refresh_rates(force=True)
+            await asyncio.wait_for(refresh_rates(force=True), timeout=30.0)
             logger.info("Periodic rate refresh completed")
+        except asyncio.TimeoutError:
+            logger.warning("Periodic rate refresh timed out")
         except Exception:
             logger.exception("Periodic rate refresh failed")
 
@@ -69,6 +73,19 @@ async def on_shutdown():
         logger.exception("Error closing database connection")
 
 async def main():
+    loop = asyncio.get_event_loop()
+
+    def handle_shutdown_signal():
+        logger.info("Received shutdown signal, initiating graceful shutdown...")
+        _shutdown_event.set()
+        asyncio.create_task(dp.stop_polling())
+
+    for sig in (signal.SIGTERM, signal.SIGINT):
+        try:
+            loop.add_signal_handler(sig, handle_shutdown_signal)
+        except NotImplementedError:
+            pass
+
     dp.message.middleware(ErrorBoundaryMiddleware())
     dp.message.middleware(RetryMiddleware())
     dp.message.middleware(RateLimitMiddleware(limit=5, window=3.0))

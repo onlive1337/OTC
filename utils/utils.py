@@ -143,9 +143,22 @@ async def get_exchange_rates() -> Dict[str, float]:
                 logger.info("Returning stale exchange rates while refreshing in background")
                 return data
 
-        return await refresh_rates()
+        rates = await refresh_rates()
+
+        if not rates and stale_item:
+            data, ts = stale_item
+            age_minutes = int((now - ts) / 60)
+            logger.warning(f"All rate sources failed, using {age_minutes}min old cache as fallback")
+            return data
+
+        return rates
     except Exception as e:
         logger.error(f"Error fetching exchange rates: {e}")
+        stale_item = cache.get('exchange_rates')
+        if stale_item:
+            data, _ = stale_item
+            logger.warning("Using emergency fallback cache due to exception")
+            return data
         return {}
 
 async def refresh_rates(force: bool = False) -> Dict[str, float]:
@@ -374,13 +387,17 @@ def convert_currency(amount: float, from_currency: str, to_currency: str, rates:
         raise KeyError(f"Rate not available for {from_currency}")
     if to_currency != 'USD' and to_currency not in rates:
         raise KeyError(f"Rate not available for {to_currency}")
+
+    if from_currency != 'USD' and rates.get(from_currency, 0) == 0:
+        raise ValueError(f"Invalid rate for {from_currency}")
+    if to_currency != 'USD' and rates.get(to_currency, 0) == 0:
+        raise ValueError(f"Invalid rate for {to_currency}")
+
     if from_currency == 'USD':
         return amount * rates[to_currency]
     elif to_currency == 'USD':
         return amount / rates[from_currency]
     else:
-        return amount / rates[from_currency] * rates[to_currency]
-
         return amount / rates[from_currency] * rates[to_currency]
 
 _CHANGELOG_CACHE = None

@@ -3,7 +3,7 @@ import asyncio
 import aiosqlite
 from aiosqlite import OperationalError, IntegrityError
 from datetime import datetime
-from typing import List, Dict, Any, Optional, Set
+from typing import List, Dict, Any, Optional
 import logging
 
 from config.config import ACTIVE_CURRENCIES, CRYPTO_CURRENCIES, DB_PATH
@@ -13,6 +13,9 @@ logger = logging.getLogger(__name__)
 INIT_SQL = [
     "PRAGMA journal_mode=WAL;",
     "PRAGMA synchronous=NORMAL;",
+    "PRAGMA cache_size=-64000;",
+    "PRAGMA temp_store=MEMORY;",
+    "PRAGMA mmap_size=268435456;",
     """
     CREATE TABLE IF NOT EXISTS users (
         user_id INTEGER PRIMARY KEY,
@@ -60,14 +63,39 @@ INIT_SQL = [
     """,
     "CREATE INDEX IF NOT EXISTS idx_users_last_seen ON users(last_seen);",
     "CREATE INDEX IF NOT EXISTS idx_users_first_seen ON users(first_seen);",
+    "CREATE INDEX IF NOT EXISTS idx_user_currencies_user ON user_currencies(user_id);",
+    "CREATE INDEX IF NOT EXISTS idx_user_crypto_user ON user_crypto(user_id);",
+    "CREATE INDEX IF NOT EXISTS idx_chat_currencies_chat ON chat_currencies(chat_id);",
+    "CREATE INDEX IF NOT EXISTS idx_chat_crypto_chat ON chat_crypto(chat_id);",
 ]
 
 class UserData:
+    MAX_CACHE_SIZE = 5000
+    MAX_CHAT_CACHE_SIZE = 1000
+
     def __init__(self):
         self.user_data: Dict[str, Any] = {}
         self.chat_data: Dict[str, Any] = {}
         self.bot_launch_date = datetime.now().strftime('%Y-%m-%d')
         self._conn: Optional[aiosqlite.Connection] = None
+
+    def _cleanup_cache_if_needed(self):
+        """Очищает старые записи из кэша если он слишком большой"""
+        if len(self.user_data) > self.MAX_CACHE_SIZE:
+            # Удаляем половину записей (самые старые по last_seen)
+            sorted_users = sorted(
+                self.user_data.items(),
+                key=lambda x: x[1].get('last_seen', '1970-01-01') if isinstance(x[1], dict) else '1970-01-01'
+            )
+            for key, _ in sorted_users[:len(sorted_users) // 2]:
+                del self.user_data[key]
+            logger.info(f"User cache cleanup: reduced from {len(sorted_users)} to {len(self.user_data)}")
+
+        if len(self.chat_data) > self.MAX_CHAT_CACHE_SIZE:
+            items = list(self.chat_data.items())
+            for key, _ in items[:len(items) // 2]:
+                del self.chat_data[key]
+            logger.info(f"Chat cache cleanup: reduced from {len(items)} to {len(self.chat_data)}")
 
     async def _get_conn(self) -> aiosqlite.Connection:
         if self._conn is not None:
@@ -112,6 +140,10 @@ class UserData:
             pass
         except Exception as e:
             logger.error(f"Migration error: {e}")
+        try:
+            await conn.execute("PRAGMA optimize;")
+        except Exception:
+            pass
 
         await conn.commit()
         logger.info("DB initialized.")
@@ -182,15 +214,22 @@ class UserData:
     async def get_user_data(self, user_id: int):
         await self._ensure_user(user_id)
         conn = await self._get_conn()
-        async with conn.execute("SELECT interactions, last_seen, first_seen, language, use_quote_format FROM users WHERE user_id=?", (user_id,)) as cursor:
+
+        async with conn.execute("""
+            SELECT 
+                u.interactions, u.last_seen, u.first_seen, u.language, u.use_quote_format,
+                (SELECT GROUP_CONCAT(currency) FROM user_currencies WHERE user_id = u.user_id) as currencies,
+                (SELECT GROUP_CONCAT(symbol) FROM user_crypto WHERE user_id = u.user_id) as crypto
+            FROM users u WHERE u.user_id = ?
+        """, (user_id,)) as cursor:
             row = await cursor.fetchone()
-            interactions, last_seen, first_seen, language, use_quote = row
 
-        async with conn.execute("SELECT currency FROM user_currencies WHERE user_id=?", (user_id,)) as cursor:
-            currencies = [r[0] for r in await cursor.fetchall()]
+        if not row:
+            return {}
 
-        async with conn.execute("SELECT symbol FROM user_crypto WHERE user_id=?", (user_id,)) as cursor:
-            crypto = [r[0] for r in await cursor.fetchall()]
+        interactions, last_seen, first_seen, language, use_quote, currencies_str, crypto_str = row
+        currencies = currencies_str.split(',') if currencies_str else []
+        crypto = crypto_str.split(',') if crypto_str else []
 
         data = {
             "interactions": interactions,
@@ -207,20 +246,28 @@ class UserData:
     async def get_chat_data(self, chat_id: int):
         await self._ensure_chat(chat_id)
         conn = await self._get_conn()
-        async with conn.execute("SELECT quote_format FROM chats WHERE chat_id=?", (chat_id,)) as cursor:
+
+        async with conn.execute("""
+            SELECT 
+                c.quote_format, c.language,
+                (SELECT GROUP_CONCAT(currency) FROM chat_currencies WHERE chat_id = c.chat_id) as currencies,
+                (SELECT GROUP_CONCAT(symbol) FROM chat_crypto WHERE chat_id = c.chat_id) as crypto
+            FROM chats c WHERE c.chat_id = ?
+        """, (chat_id,)) as cursor:
             row = await cursor.fetchone()
-            quote_format = bool(row[0]) if row else False
-        
-        async with conn.execute("SELECT currency FROM chat_currencies WHERE chat_id=?", (chat_id,)) as cursor:
-            currencies = [r[0] for r in await cursor.fetchall()]
-        
-        async with conn.execute("SELECT symbol FROM chat_crypto WHERE chat_id=?", (chat_id,)) as cursor:
-            crypto = [r[0] for r in await cursor.fetchall()]
+
+        if not row:
+            return {'currencies': [], 'crypto': [], 'quote_format': False, 'language': 'ru'}
+
+        quote_format, language, currencies_str, crypto_str = row
+        currencies = currencies_str.split(',') if currencies_str else []
+        crypto = crypto_str.split(',') if crypto_str else []
 
         data = {
             'currencies': currencies,
             'crypto': crypto,
-            'quote_format': quote_format,
+            'quote_format': bool(quote_format) if quote_format else False,
+            'language': language or 'ru',
         }
         self.chat_data[str(chat_id)] = data
         return data
@@ -233,7 +280,9 @@ class UserData:
     async def update_user_data(self, user_id: int, language_code: Optional[str] = None):
         await self._ensure_user(user_id, language_code=language_code)
         today = datetime.now().strftime('%Y-%m-%d')
-        
+
+        self._cleanup_cache_if_needed()
+
         user_cache = self.user_data.get(str(user_id))
         is_today = user_cache and user_cache.get("last_seen") == today
         

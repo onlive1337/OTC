@@ -21,11 +21,11 @@ router = Router()
 
 @router.message(Command("stats"))
 async def cmd_stats(message: Message):
+    user_lang = await user_data.get_user_language(message.from_user.id)
     if message.from_user.id not in ADMIN_IDS:
-        await message.answer("У вас нет прав для выполнения этой команды.")
+        await message.answer(LANGUAGES[user_lang]['no_admin_rights'])
         return
 
-    user_lang = await user_data.get_user_language(message.from_user.id)
     stats = await user_data.get_statistics()
     stats_message = (
         f"{LANGUAGES[user_lang]['stats_title']}\n\n"
@@ -38,7 +38,9 @@ async def cmd_stats(message: Message):
 
 @router.message(Command("health"))
 async def cmd_health(message: Message):
+    user_lang = await user_data.get_user_language(message.from_user.id)
     if message.from_user.id not in ADMIN_IDS:
+        await message.answer(LANGUAGES[user_lang]['no_admin_rights'])
         return
 
     metrics = get_metrics()

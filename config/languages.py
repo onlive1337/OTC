@@ -80,6 +80,7 @@ LANGUAGES = {
    'conversion_help_message': """Не удалось распознать сумму и валюту.
 
 Формат: 100 USD, 50 евро, 1000 рублей, 10к долларов""",
+   'no_admin_rights': "У вас нет прав для выполнения этой команды.",
     },
     'en': {
         'welcome': """Welcome to OTC!
@@ -162,5 +163,6 @@ Help: /help""",
    'conversion_help_message': """Could not recognize amount and currency.
 
 Format: 100 USD, 50 euro, 1000 rubles, 10k dollars""",
+   'no_admin_rights': "You don't have permission to use this command.",
     }
 }

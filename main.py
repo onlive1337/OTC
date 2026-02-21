@@ -36,6 +36,8 @@ async def _periodic_refresh():
         try:
             await asyncio.wait_for(refresh_rates(force=True), timeout=30.0)
             logger.info("Periodic rate refresh completed")
+        except asyncio.CancelledError:
+            raise
         except asyncio.TimeoutError:
             logger.warning("Periodic rate refresh timed out")
         except Exception:

@@ -67,6 +67,11 @@ INIT_SQL = [
     "CREATE INDEX IF NOT EXISTS idx_user_crypto_user ON user_crypto(user_id);",
     "CREATE INDEX IF NOT EXISTS idx_chat_currencies_chat ON chat_currencies(chat_id);",
     "CREATE INDEX IF NOT EXISTS idx_chat_crypto_chat ON chat_crypto(chat_id);",
+    "CREATE TABLE IF NOT EXISTS schema_version (version INTEGER NOT NULL);",
+]
+
+MIGRATIONS = [
+    (1, "ALTER TABLE chats ADD COLUMN language TEXT NOT NULL DEFAULT 'ru'"),
 ]
 
 class UserData:
@@ -78,11 +83,10 @@ class UserData:
         self.chat_data: Dict[str, Any] = {}
         self.bot_launch_date = datetime.now().strftime('%Y-%m-%d')
         self._conn: Optional[aiosqlite.Connection] = None
+        self._write_lock = asyncio.Lock()
 
     def _cleanup_cache_if_needed(self):
-        """Очищает старые записи из кэша если он слишком большой"""
         if len(self.user_data) > self.MAX_CACHE_SIZE:
-            # Удаляем половину записей (самые старые по last_seen)
             sorted_users = sorted(
                 self.user_data.items(),
                 key=lambda x: x[1].get('last_seen', '1970-01-01') if isinstance(x[1], dict) else '1970-01-01'
@@ -128,25 +132,39 @@ class UserData:
                 else:
                     raise
 
-    async def init_db(self):
-        conn = await self._get_conn()
-        for stmt in INIT_SQL:
-            await conn.execute(stmt)
-        
+    async def _get_schema_version(self, conn) -> int:
         try:
-            await conn.execute("ALTER TABLE chats ADD COLUMN language TEXT NOT NULL DEFAULT 'ru'")
-            logger.info("Migrated chats table: added language column")
+            async with conn.execute("SELECT MAX(version) FROM schema_version") as cursor:
+                row = await cursor.fetchone()
+                return row[0] if row and row[0] else 0
         except OperationalError:
-            pass
-        except Exception as e:
-            logger.error(f"Migration error: {e}")
-        try:
-            await conn.execute("PRAGMA optimize;")
-        except Exception:
-            pass
+            return 0
 
-        await conn.commit()
-        logger.info("DB initialized.")
+    async def init_db(self):
+        async with self._write_lock:
+            conn = await self._get_conn()
+            for stmt in INIT_SQL:
+                await conn.execute(stmt)
+
+            current_version = await self._get_schema_version(conn)
+            for version, sql in MIGRATIONS:
+                if version > current_version:
+                    try:
+                        await conn.execute(sql)
+                        await conn.execute("INSERT INTO schema_version(version) VALUES(?)", (version,))
+                        logger.info(f"Applied migration v{version}")
+                    except OperationalError:
+                        await conn.execute("INSERT OR IGNORE INTO schema_version(version) VALUES(?)", (version,))
+                    except Exception as e:
+                        logger.error(f"Migration v{version} failed: {e}")
+
+            try:
+                await conn.execute("PRAGMA optimize;")
+            except Exception:
+                pass
+
+            await conn.commit()
+            logger.info("DB initialized.")
 
     async def close(self):
         if self._conn is not None:
@@ -171,18 +189,19 @@ class UserData:
             if await cursor.fetchone() is None:
                 default_lang = self._detect_language(language_code)
                 try:
-                    await conn.execute(
-                        "INSERT INTO users(user_id, interactions, last_seen, first_seen, language, use_quote_format) VALUES(?, 0, ?, ?, ?, 1)",
-                        (user_id, datetime.now().strftime('%Y-%m-%d'), datetime.now().strftime('%Y-%m-%d'), default_lang)
-                    )
-                    
-                    currencies_data = [(user_id, c) for c in ACTIVE_CURRENCIES[:5]]
-                    await conn.executemany("INSERT OR IGNORE INTO user_currencies(user_id, currency) VALUES(?, ?)", currencies_data)
-                    
-                    crypto_data = [(user_id, s) for s in CRYPTO_CURRENCIES[:5]]
-                    await conn.executemany("INSERT OR IGNORE INTO user_crypto(user_id, symbol) VALUES(?, ?)", crypto_data)
-                    
-                    await conn.commit()
+                    async with self._write_lock:
+                        await conn.execute(
+                            "INSERT INTO users(user_id, interactions, last_seen, first_seen, language, use_quote_format) VALUES(?, 0, ?, ?, ?, 1)",
+                            (user_id, datetime.now().strftime('%Y-%m-%d'), datetime.now().strftime('%Y-%m-%d'), default_lang)
+                        )
+                        
+                        currencies_data = [(user_id, c) for c in ACTIVE_CURRENCIES[:5]]
+                        await conn.executemany("INSERT OR IGNORE INTO user_currencies(user_id, currency) VALUES(?, ?)", currencies_data)
+                        
+                        crypto_data = [(user_id, s) for s in CRYPTO_CURRENCIES[:5]]
+                        await conn.executemany("INSERT OR IGNORE INTO user_crypto(user_id, symbol) VALUES(?, ?)", crypto_data)
+                        
+                        await conn.commit()
                     logger.info(f"New user {user_id} registered with language '{default_lang}'")
                 except IntegrityError:
                     logger.debug("User %s already exists (race condition handled)", user_id)
@@ -196,15 +215,16 @@ class UserData:
         async with conn.execute("SELECT chat_id FROM chats WHERE chat_id=?", (chat_id,)) as cursor:
             if await cursor.fetchone() is None:
                 try:
-                    await conn.execute("INSERT INTO chats(chat_id, quote_format, language) VALUES(?, 0, 'ru')", (chat_id,))
-                    
-                    currencies_data = [(chat_id, c) for c in ACTIVE_CURRENCIES[:5]]
-                    await conn.executemany("INSERT OR IGNORE INTO chat_currencies(chat_id, currency) VALUES(?, ?)", currencies_data)
-                    
-                    crypto_data = [(chat_id, s) for s in CRYPTO_CURRENCIES[:5]]
-                    await conn.executemany("INSERT OR IGNORE INTO chat_crypto(chat_id, symbol) VALUES(?, ?)", crypto_data)
-                    
-                    await conn.commit()
+                    async with self._write_lock:
+                        await conn.execute("INSERT INTO chats(chat_id, quote_format, language) VALUES(?, 0, 'ru')", (chat_id,))
+                        
+                        currencies_data = [(chat_id, c) for c in ACTIVE_CURRENCIES[:5]]
+                        await conn.executemany("INSERT OR IGNORE INTO chat_currencies(chat_id, currency) VALUES(?, ?)", currencies_data)
+                        
+                        crypto_data = [(chat_id, s) for s in CRYPTO_CURRENCIES[:5]]
+                        await conn.executemany("INSERT OR IGNORE INTO chat_crypto(chat_id, symbol) VALUES(?, ?)", crypto_data)
+                        
+                        await conn.commit()
                 except IntegrityError:
                     logger.debug("Chat %s already exists (race condition handled)", chat_id)
                 except Exception as e:
@@ -285,22 +305,33 @@ class UserData:
 
         user_cache = self.user_data.get(str(user_id))
         is_today = user_cache and user_cache.get("last_seen") == today
-        
-        if is_today:
-            if user_cache:
-                user_cache["interactions"] += 1
-            return
-            
-        conn = await self._get_conn()
-        await conn.execute("UPDATE users SET interactions = interactions + 1, last_seen=? WHERE user_id=?", (today, user_id))
-        await conn.commit()
-        if str(user_id) in self.user_data:
+
+        async with self._write_lock:
+            conn = await self._get_conn()
+            if is_today:
+                await conn.execute(
+                    "UPDATE users SET interactions = interactions + 1 WHERE user_id=?",
+                    (user_id,)
+                )
+            else:
+                await conn.execute(
+                    "UPDATE users SET interactions = interactions + 1, last_seen=? WHERE user_id=?",
+                    (today, user_id)
+                )
+            await conn.commit()
+
+        if user_cache:
+            user_cache["interactions"] = user_cache.get("interactions", 0) + 1
+            if not is_today:
+                user_cache["last_seen"] = today
+        elif str(user_id) in self.user_data:
             self.user_data[str(user_id)]["interactions"] += 1
-            self.user_data[str(user_id)]["last_seen"] = today
+            if not is_today:
+                self.user_data[str(user_id)]["last_seen"] = today
 
     def update_chat_cache(self, chat_id: int):
-        self.chat_data[str(chat_id)] = True
-        logger.info(f"Updated chat cache for chat {chat_id}")
+        self.chat_data.pop(str(chat_id), None)
+        logger.debug(f"Invalidated chat cache for chat {chat_id}")
 
     async def get_user_currencies(self, user_id: int):
         cached = self.user_data.get(str(user_id))
@@ -314,10 +345,11 @@ class UserData:
 
     async def set_user_currencies(self, user_id: int, currencies: List[str]):
         await self._ensure_user(user_id)
-        conn = await self._get_conn()
-        await conn.execute("DELETE FROM user_currencies WHERE user_id=?", (user_id,))
-        await conn.executemany("INSERT OR IGNORE INTO user_currencies(user_id, currency) VALUES(?, ?)", [(user_id, c) for c in currencies])
-        await conn.commit()
+        async with self._write_lock:
+            conn = await self._get_conn()
+            await conn.execute("DELETE FROM user_currencies WHERE user_id=?", (user_id,))
+            await conn.executemany("INSERT OR IGNORE INTO user_currencies(user_id, currency) VALUES(?, ?)", [(user_id, c) for c in currencies])
+            await conn.commit()
         if str(user_id) in self.user_data:
             self.user_data[str(user_id)]["selected_currencies"] = currencies
 
@@ -333,10 +365,11 @@ class UserData:
 
     async def set_user_crypto(self, user_id: int, crypto_list: List[str]):
         await self._ensure_user(user_id)
-        conn = await self._get_conn()
-        await conn.execute("DELETE FROM user_crypto WHERE user_id=?", (user_id,))
-        await conn.executemany("INSERT OR IGNORE INTO user_crypto(user_id, symbol) VALUES(?, ?)", [(user_id, s) for s in crypto_list])
-        await conn.commit()
+        async with self._write_lock:
+            conn = await self._get_conn()
+            await conn.execute("DELETE FROM user_crypto WHERE user_id=?", (user_id,))
+            await conn.executemany("INSERT OR IGNORE INTO user_crypto(user_id, symbol) VALUES(?, ?)", [(user_id, s) for s in crypto_list])
+            await conn.commit()
         if str(user_id) in self.user_data:
             self.user_data[str(user_id)]["selected_crypto"] = crypto_list
 
@@ -352,9 +385,10 @@ class UserData:
 
     async def set_user_language(self, user_id: int, language: str):
         await self._ensure_user(user_id)
-        conn = await self._get_conn()
-        await conn.execute("UPDATE users SET language=? WHERE user_id=?", (language, user_id))
-        await conn.commit()
+        async with self._write_lock:
+            conn = await self._get_conn()
+            await conn.execute("UPDATE users SET language=? WHERE user_id=?", (language, user_id))
+            await conn.commit()
         if str(user_id) in self.user_data:
             self.user_data[str(user_id)]["language"] = language
 
@@ -370,9 +404,10 @@ class UserData:
 
     async def set_user_quote_format(self, user_id: int, use_quote: bool):
         await self._ensure_user(user_id)
-        conn = await self._get_conn()
-        await conn.execute("UPDATE users SET use_quote_format=? WHERE user_id=?", (1 if use_quote else 0, user_id))
-        await conn.commit()
+        async with self._write_lock:
+            conn = await self._get_conn()
+            await conn.execute("UPDATE users SET use_quote_format=? WHERE user_id=?", (1 if use_quote else 0, user_id))
+            await conn.commit()
         if str(user_id) in self.user_data:
             self.user_data[str(user_id)]["use_quote_format"] = use_quote
 
@@ -385,9 +420,10 @@ class UserData:
 
     async def set_chat_quote_format(self, chat_id: int, use_quote: bool):
         await self._ensure_chat(chat_id)
-        conn = await self._get_conn()
-        await conn.execute("UPDATE chats SET quote_format=? WHERE chat_id=?", (1 if use_quote else 0, chat_id))
-        await conn.commit()
+        async with self._write_lock:
+            conn = await self._get_conn()
+            await conn.execute("UPDATE chats SET quote_format=? WHERE chat_id=?", (1 if use_quote else 0, chat_id))
+            await conn.commit()
 
     async def get_chat_currencies(self, chat_id: int):
         await self._ensure_chat(chat_id)
@@ -398,10 +434,11 @@ class UserData:
 
     async def set_chat_currencies(self, chat_id: int, currencies: List[str]):
         await self._ensure_chat(chat_id)
-        conn = await self._get_conn()
-        await conn.execute("DELETE FROM chat_currencies WHERE chat_id=?", (chat_id,))
-        await conn.executemany("INSERT OR IGNORE INTO chat_currencies(chat_id, currency) VALUES(?, ?)", [(chat_id, c) for c in currencies])
-        await conn.commit()
+        async with self._write_lock:
+            conn = await self._get_conn()
+            await conn.execute("DELETE FROM chat_currencies WHERE chat_id=?", (chat_id,))
+            await conn.executemany("INSERT OR IGNORE INTO chat_currencies(chat_id, currency) VALUES(?, ?)", [(chat_id, c) for c in currencies])
+            await conn.commit()
 
     async def get_chat_crypto(self, chat_id: int):
         await self._ensure_chat(chat_id)
@@ -412,10 +449,11 @@ class UserData:
 
     async def set_chat_crypto(self, chat_id: int, crypto_list: List[str]):
         await self._ensure_chat(chat_id)
-        conn = await self._get_conn()
-        await conn.execute("DELETE FROM chat_crypto WHERE chat_id=?", (chat_id,))
-        await conn.executemany("INSERT OR IGNORE INTO chat_crypto(chat_id, symbol) VALUES(?, ?)", [(chat_id, s) for s in crypto_list])
-        await conn.commit()
+        async with self._write_lock:
+            conn = await self._get_conn()
+            await conn.execute("DELETE FROM chat_crypto WHERE chat_id=?", (chat_id,))
+            await conn.executemany("INSERT OR IGNORE INTO chat_crypto(chat_id, symbol) VALUES(?, ?)", [(chat_id, s) for s in crypto_list])
+            await conn.commit()
 
     async def get_chat_language(self, chat_id: int):
         cached = self.chat_data.get(str(chat_id))
@@ -437,9 +475,10 @@ class UserData:
 
     async def set_chat_language(self, chat_id: int, language: str):
         await self._ensure_chat(chat_id)
-        conn = await self._get_conn()
-        await conn.execute("UPDATE chats SET language=? WHERE chat_id=?", (language, chat_id))
-        await conn.commit()
+        async with self._write_lock:
+            conn = await self._get_conn()
+            await conn.execute("UPDATE chats SET language=? WHERE chat_id=?", (language, chat_id))
+            await conn.commit()
         
         if str(chat_id) not in self.chat_data or not isinstance(self.chat_data[str(chat_id)], dict):
             self.chat_data[str(chat_id)] = {}

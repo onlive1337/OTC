@@ -106,52 +106,70 @@ async def broadcast_confirm(callback_query: CallbackQuery, state: FSMContext):
 
     user_ids = await user_data.get_all_user_ids()
     sent, failed, blocked = 0, 0, 0
+    total = len(user_ids)
+    progress_msg = callback_query.message
 
-    sem = asyncio.Semaphore(15)
-    
-    async def send_wrapper(uid):
+    async def send_one(uid):
         nonlocal sent, failed, blocked
-        async with sem:
-            while True:
-                try:
-                    if msg_data["type"] == "text":
-                        await bot.send_message(uid, msg_data["text"], parse_mode="HTML")
-                    elif msg_data["type"] == "photo":
-                        await bot.send_photo(uid, msg_data["file_id"], caption=msg_data.get("caption"), parse_mode="HTML")
-                    elif msg_data["type"] == "video":
-                        await bot.send_video(uid, msg_data["file_id"], caption=msg_data.get("caption"), parse_mode="HTML")
-                    elif msg_data["type"] == "document":
-                        await bot.send_document(uid, msg_data["file_id"], caption=msg_data.get("caption"), parse_mode="HTML")
-                    elif msg_data["type"] == "sticker":
-                        await bot.send_sticker(uid, msg_data["file_id"])
-                    sent += 1
+        retries = 0
+        while True:
+            try:
+                if msg_data["type"] == "text":
+                    await bot.send_message(uid, msg_data["text"], parse_mode="HTML")
+                elif msg_data["type"] == "photo":
+                    await bot.send_photo(uid, msg_data["file_id"], caption=msg_data.get("caption"), parse_mode="HTML")
+                elif msg_data["type"] == "video":
+                    await bot.send_video(uid, msg_data["file_id"], caption=msg_data.get("caption"), parse_mode="HTML")
+                elif msg_data["type"] == "document":
+                    await bot.send_document(uid, msg_data["file_id"], caption=msg_data.get("caption"), parse_mode="HTML")
+                elif msg_data["type"] == "sticker":
+                    await bot.send_sticker(uid, msg_data["file_id"])
+                sent += 1
+                break
+            except TelegramRetryAfter as e:
+                retries += 1
+                if retries > 5:
+                    failed += 1
+                    logger.warning("Broadcast to %s: too many retries", uid)
                     break
-                except TelegramRetryAfter as e:
-                    logger.warning("Flood limit for %s, sleeping %ss", uid, e.retry_after)
-                    await asyncio.sleep(e.retry_after)
-                    continue
-                except Exception as e:
-                    err_msg = str(e).lower()
-                    if any(x in err_msg for x in ["blocked", "deactivated", "not found", "forbidden", "cannot initiate", "entity"]):
-                        blocked += 1
-                    else:
-                        failed += 1
-                        logger.warning("Broadcast to %s failed: %s", uid, e)
-                    break
-            
-            await asyncio.sleep(0.05) 
+                logger.warning("Flood limit for %s, sleeping %ss", uid, e.retry_after)
+                await asyncio.sleep(e.retry_after)
+                continue
+            except Exception as e:
+                err_msg = str(e).lower()
+                if any(x in err_msg for x in ["blocked", "deactivated", "not found", "forbidden", "cannot initiate", "entity"]):
+                    blocked += 1
+                else:
+                    failed += 1
+                    logger.warning("Broadcast to %s failed: %s", uid, e)
+                break
+        await asyncio.sleep(0.05)
 
-    tasks = [send_wrapper(uid) for uid in user_ids]
-    await asyncio.gather(*tasks)
+    BATCH_SIZE = 100
+    PROGRESS_EVERY = 500
+    processed = 0
+
+    for i in range(0, total, BATCH_SIZE):
+        batch = user_ids[i:i + BATCH_SIZE]
+        await asyncio.gather(*(send_one(uid) for uid in batch))
+        processed += len(batch)
+
+        if processed % PROGRESS_EVERY < BATCH_SIZE and total > PROGRESS_EVERY:
+            try:
+                await progress_msg.edit_text(
+                    f"📤 Рассылка... {processed}/{total} ({processed * 100 // total}%)"
+                )
+            except Exception:
+                pass
 
     report = (
         f"📢 <b>Рассылка завершена</b>\n\n"
         f"✅ Отправлено: {sent}\n"
         f"🚫 Заблокировали: {blocked}\n"
         f"❌ Ошибки: {failed}\n"
-        f"📊 Всего: {len(user_ids)}"
+        f"📊 Всего: {total}"
     )
-    await callback_query.message.answer(report, parse_mode="HTML")
+    await progress_msg.edit_text(report, parse_mode="HTML")
 
 
 @router.message(AdminStates.waiting_broadcast)

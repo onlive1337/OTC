@@ -26,14 +26,14 @@ COPY --from=builder /install /usr/local
 
 COPY . .
 
-# Create logs directory and user
-RUN mkdir -p /app/logs && \
+# Create directories and user
+RUN mkdir -p /app/logs /app/data && \
   useradd -m -u 1000 botuser && \
   chown -R botuser:botuser /app
 
 USER botuser
 
-HEALTHCHECK --interval=30s --timeout=5s --retries=3 \
-  CMD pgrep -f "python main.py" > /dev/null || exit 1
+HEALTHCHECK --interval=30s --timeout=10s --retries=3 \
+  CMD python -c "import sqlite3; conn = sqlite3.connect('/app/data/otc.db'); conn.execute('SELECT 1'); conn.close(); print('ok')" || exit 1
 
 CMD ["python", "main.py"]

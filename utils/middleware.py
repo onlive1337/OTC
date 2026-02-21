@@ -11,20 +11,27 @@ from aiogram.exceptions import TelegramRetryAfter, TelegramAPIError
 
 logger = logging.getLogger(__name__)
 
-_metrics = {
-    "start_time": datetime.now(),
-    "total_requests": 0,
-    "total_errors": 0,
-}
+
+class _Metrics:
+    __slots__ = ('start_time', 'total_requests', 'total_errors')
+
+    def __init__(self):
+        self.start_time = datetime.now()
+        self.total_requests = 0
+        self.total_errors = 0
+
+
+_metrics = _Metrics()
+
 
 def get_metrics() -> Dict[str, Any]:
-    uptime = datetime.now() - _metrics["start_time"]
+    uptime = datetime.now() - _metrics.start_time
     hours, remainder = divmod(int(uptime.total_seconds()), 3600)
     minutes, seconds = divmod(remainder, 60)
     return {
         "uptime": f"{hours}h {minutes}m {seconds}s",
-        "total_requests": _metrics["total_requests"],
-        "total_errors": _metrics["total_errors"],
+        "total_requests": _metrics.total_requests,
+        "total_errors": _metrics.total_errors,
     }
 
 
@@ -79,10 +86,6 @@ class RateLimitMiddleware(BaseMiddleware):
 
         timestamps[:] = [t for t in timestamps if now - t < self.window]
 
-        if not timestamps:
-            del self._user_timestamps[uid]
-            timestamps = self._user_timestamps[uid]
-
         if len(timestamps) >= self.limit:
             logger.warning("Rate limit hit for user %s", uid)
             return None
@@ -125,13 +128,13 @@ class ErrorBoundaryMiddleware(BaseMiddleware):
         event: TelegramObject,
         data: Dict[str, Any],
     ) -> Any:
-        _metrics["total_requests"] += 1
+        _metrics.total_requests += 1
         try:
             return await handler(event, data)
         except (TelegramRetryAfter, TelegramAPIError):
             raise
         except Exception as e:
-            _metrics["total_errors"] += 1
+            _metrics.total_errors += 1
             logger.exception("Unhandled error in handler: %s", e)
 
             try:

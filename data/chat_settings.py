@@ -13,6 +13,7 @@ logger = logging.getLogger(__name__)
 from loader import user_data
 
 async def show_chat_currencies(callback_query: CallbackQuery):
+    await callback_query.answer()
     parts = callback_query.data.split('_')
     chat_id = int(parts[3])
     user_id = callback_query.from_user.id
@@ -59,6 +60,7 @@ async def show_chat_currencies(callback_query: CallbackQuery):
             raise
 
 async def show_chat_crypto(callback_query: CallbackQuery):
+    await callback_query.answer()
     chat_id = int(callback_query.data.split('_')[3])
     user_id = callback_query.from_user.id
     
@@ -89,6 +91,7 @@ async def show_chat_crypto(callback_query: CallbackQuery):
             raise
 
 async def toggle_chat_currency(callback_query: CallbackQuery):
+    await callback_query.answer()
     parts = callback_query.data.split('_')
     chat_id = int(parts[3])
     user_id = callback_query.from_user.id
@@ -118,6 +121,7 @@ async def toggle_chat_currency(callback_query: CallbackQuery):
     await show_chat_currencies(new_callback_query)
 
 async def toggle_chat_crypto(callback_query: CallbackQuery):
+    await callback_query.answer()
     chat_id, crypto = callback_query.data.split('_')[3:]
     chat_id = int(chat_id)
     user_id = callback_query.from_user.id

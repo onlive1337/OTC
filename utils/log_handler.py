@@ -25,6 +25,11 @@ class TelegramLogHandler(logging.Handler):
         if not LOG_CHAT_ID:
             return
 
+        try:
+            asyncio.get_running_loop()
+        except RuntimeError:
+            return
+
         log_entry = self.format_error(record)
         _log_buffer.append(log_entry)
 
@@ -32,12 +37,18 @@ class TelegramLogHandler(logging.Handler):
         if now - _last_sent < MIN_INTERVAL_SEC:
             if self._flush_task is None or self._flush_task.done():
                 delay = MIN_INTERVAL_SEC - (now - _last_sent) + 0.1
-                self._flush_task = asyncio.create_task(self._delayed_flush(delay))
+                try:
+                    self._flush_task = asyncio.create_task(self._delayed_flush(delay))
+                except RuntimeError:
+                    pass
             return
 
         _last_sent = now
-        task = asyncio.create_task(self._flush_buffer())
-        task.add_done_callback(lambda t: t.exception() if not t.cancelled() else None)
+        try:
+            task = asyncio.create_task(self._flush_buffer())
+            task.add_done_callback(lambda t: t.exception() if not t.cancelled() else None)
+        except RuntimeError:
+            pass
 
     async def _delayed_flush(self, delay: float):
         global _last_sent

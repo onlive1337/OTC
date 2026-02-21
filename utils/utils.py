@@ -105,14 +105,14 @@ async def _with_retries(coro_factory, host: str, retries: int = HTTP_RETRIES):
     raise RuntimeError("_with_retries failed without exception")
 
 
-async def get_cached_data(key: str) -> Optional[Any]:
+def get_cached_data(key: str) -> Optional[Any]:
     if key in cache:
         cached_data, timestamp = cache[key]
         if time.time() - timestamp < CACHE_EXPIRATION_TIME:
             return cached_data
     return None
 
-async def set_cached_data(key: str, data: Dict[str, float]):
+def set_cached_data(key: str, data: Dict[str, float]):
     cache[key] = (data, time.time())
 
 def _safe_bg_task(coro, name: str = "background"):
@@ -126,9 +126,12 @@ def _safe_bg_task(coro, name: str = "background"):
     task.add_done_callback(_on_done)
     return task
 
+_revalidating = False
+
 async def get_exchange_rates() -> Dict[str, float]:
+    global _revalidating
     try:
-        cached_rates = await get_cached_data('exchange_rates')
+        cached_rates = get_cached_data('exchange_rates')
         if cached_rates:
             logger.debug("Using cached exchange rates")
             return cached_rates
@@ -138,8 +141,9 @@ async def get_exchange_rates() -> Dict[str, float]:
         if stale_item:
             data, ts = stale_item
             if now - ts < (CACHE_EXPIRATION_TIME + STALE_WHILE_REVALIDATE):
-                if not _rates_lock.locked():
-                    _safe_bg_task(refresh_rates(force=True), name="stale_refresh_rates")
+                if not _revalidating:
+                    _revalidating = True
+                    _safe_bg_task(_bg_refresh_rates(), name="stale_refresh_rates")
                 logger.info("Returning stale exchange rates while refreshing in background")
                 return data
 
@@ -161,20 +165,19 @@ async def get_exchange_rates() -> Dict[str, float]:
             return data
         return {}
 
+async def _bg_refresh_rates():
+    global _revalidating
+    try:
+        await refresh_rates(force=True)
+    finally:
+        _revalidating = False
+
 async def refresh_rates(force: bool = False) -> Dict[str, float]:
     if not force:
-        if _rates_lock.locked():
-            for _ in range(10):
-                await asyncio.sleep(0.2)
-                fresh = await get_cached_data('exchange_rates')
-                if fresh:
-                    return fresh
-
         async with _rates_lock:
-            fresh = await get_cached_data('exchange_rates')
+            fresh = get_cached_data('exchange_rates')
             if fresh:
                 return fresh
-
             return await _fetch_rates_unlocked()
     
     async with _rates_lock:
@@ -243,62 +246,34 @@ async def _fetch_rates_unlocked() -> Dict[str, float]:
         crypto_ids = "bitcoin,ethereum,tether,binancecoin,ripple,cardano,solana,polkadot,dogecoin,the-open-network,litecoin"
         url_cg = f'https://api.coingecko.com/api/v3/simple/price?ids={crypto_ids}&vs_currencies=usd'
 
-        try:
+        async def _fetch_coingecko():
             host = _host_of(url_cg)
-
             async def _cg():
                 resp = await session.get(url_cg, timeout=timeout)
                 async with resp:
                     return await resp.json(loads=ujson.loads)
+            return await _with_retries(_cg, host)
 
-            crypto_data = await _with_retries(_cg, host)
-
+        try:
+            cg_result = await _fetch_coingecko()
             crypto_mapping = {
                 'BTC': 'bitcoin', 'ETH': 'ethereum', 'USDT': 'tether', 'BNB': 'binancecoin',
                 'XRP': 'ripple', 'ADA': 'cardano', 'SOL': 'solana', 'DOT': 'polkadot',
                 'DOGE': 'dogecoin', 'TON': 'the-open-network',
                 'LTC': 'litecoin'
             }
-
-            for crypto, id in crypto_mapping.items():
-                if isinstance(crypto_data, dict) and id in crypto_data and isinstance(crypto_data[id], dict):
-                    usd_price = crypto_data[id].get('usd')
+            for crypto, cg_id in crypto_mapping.items():
+                if isinstance(cg_result, dict) and cg_id in cg_result and isinstance(cg_result[cg_id], dict):
+                    usd_price = cg_result[cg_id].get('usd')
                     try:
                         usd_price = float(usd_price)
                     except (TypeError, ValueError):
                         usd_price = None
                     if usd_price and usd_price > 0:
                         rates[crypto] = 1.0 / usd_price
-
-            logger.info("Fetched main crypto rates from CoinGecko")
+            logger.info("Fetched crypto rates from CoinGecko")
         except Exception as e:
             logger.error(f"CoinGecko failed: {e}")
-
-        url_cc = 'https://min-api.cryptocompare.com/data/pricemulti?fsyms=NOT,DUREV,HMSTR&tsyms=USD'
-        try:
-            host = _host_of(url_cc)
-
-            async def _cc():
-                resp = await session.get(url_cc, timeout=timeout)
-                async with resp:
-                    return await resp.json(loads=ujson.loads)
-
-            additional_crypto_data = await _with_retries(_cc, host)
-
-            for crypto in ['NOT', 'DUREV', 'HMSTR']:
-                if isinstance(additional_crypto_data, dict) and crypto in additional_crypto_data:
-                    if isinstance(additional_crypto_data[crypto], dict):
-                        usd_price = additional_crypto_data[crypto].get('USD')
-                        try:
-                            usd_price = float(usd_price)
-                        except (TypeError, ValueError):
-                            usd_price = None
-                        if usd_price and usd_price > 0:
-                            rates[crypto] = 1.0 / usd_price
-
-            logger.info("Fetched additional crypto from CryptoCompare")
-        except Exception as e:
-            logger.warning(f"CryptoCompare failed: {e}")
 
         all_currencies = set(ACTIVE_CURRENCIES + CRYPTO_CURRENCIES)
         missing_currencies = all_currencies - set(rates.keys())
@@ -309,14 +284,13 @@ async def _fetch_rates_unlocked() -> Dict[str, float]:
             missing_crypto = missing_currencies.intersection(set(CRYPTO_CURRENCIES))
             if missing_crypto and COINCAP_API_KEY:
                 logger.info(f"Trying CoinCap v3 for: {missing_crypto}")
+                coincap_mapping = {
+                    'BTC': 'bitcoin', 'ETH': 'ethereum', 'USDT': 'tether',
+                    'BNB': 'binance-coin', 'XRP': 'xrp', 'ADA': 'cardano',
+                    'SOL': 'solana', 'DOT': 'polkadot', 'DOGE': 'dogecoin',
+                    'TON': 'toncoin', 'LTC': 'litecoin'
+                }
                 for crypto in missing_crypto:
-                    coincap_mapping = {
-                        'BTC': 'bitcoin', 'ETH': 'ethereum', 'USDT': 'tether',
-                        'BNB': 'binance-coin', 'XRP': 'xrp', 'ADA': 'cardano',
-                        'SOL': 'solana', 'DOT': 'polkadot', 'DOGE': 'dogecoin',
-                        'TON': 'toncoin', 'LTC': 'litecoin',
-                        'NOT': 'notcoin', 'DUREV': 'durev', 'HMSTR': 'hamster-kombat'
-                    }
                     asset_id = coincap_mapping.get(crypto, crypto.lower())
                     url_cap = f'https://rest.coincap.io/v3/assets/{asset_id}?apiKey={COINCAP_API_KEY}'
                     host = _host_of(url_cap)
@@ -339,7 +313,6 @@ async def _fetch_rates_unlocked() -> Dict[str, float]:
             elif missing_crypto:
                 logger.info(f"Trying CoinGecko individual requests for: {missing_crypto}")
                 gecko_mapping = {
-                    'NOT': 'notcoin', 'DUREV': 'durev', 'HMSTR': 'hamster-kombat',
                     'BTC': 'bitcoin', 'ETH': 'ethereum', 'USDT': 'tether',
                     'BNB': 'binancecoin', 'XRP': 'ripple', 'ADA': 'cardano',
                     'SOL': 'solana', 'DOT': 'polkadot', 'DOGE': 'dogecoin',
@@ -371,7 +344,7 @@ async def _fetch_rates_unlocked() -> Dict[str, float]:
         if final_missing:
             logger.error(f"Still missing currencies after all attempts: {final_missing}")
 
-        await set_cached_data('exchange_rates', rates)
+        set_cached_data('exchange_rates', rates)
         logger.info(f"Successfully cached {len(rates)} exchange rates")
         return rates
 

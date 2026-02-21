@@ -4,6 +4,29 @@ All notable changes to this project will be documented in this file.
 
 ## Changelog
 
+## [1.7.0] - 2026-02-21
+
+### ⚡ Performance
+- **Parallel API Requests**: CoinGecko and fiat sources now fetch concurrently.
+- **O(1) Currency Lookup**: Replaced O(n) pattern scanning with dict lookup in targeted conversion.
+- **Batched DB Queries**: `process_conversion`, `process_multiple_conversions`, `inline_query_handler`, and `process_targeted_conversion` now use a single `get_user_data()`/`get_chat_data()` call instead of 3-5 separate queries.
+- **Sync Cache Access**: `get_cached_data`/`set_cached_data` no longer async — removed unnecessary coroutine overhead.
+- **Lazy Language Loading**: `handle_message` defers language query until actually needed.
+
+### 🛡️ Stability
+- **Safe Log Handler**: `TelegramLogHandler.emit()` now checks for a running event loop before creating tasks — prevents `RuntimeError` in sync contexts.
+- **Batched Broadcast**: Replaced unbounded `asyncio.gather` with batched processing (100 users/batch) with progress reporting.
+- **Race Condition Fix**: Eliminated unsafe `_rates_lock.locked()` check — replaced with atomic `_revalidating` flag.
+- **Callback Answers**: Added `callback_query.answer()` to all settings handlers (`user_settings` + `chat_settings`) — no more 30s loading spinners.
+
+### 🗑️ Removed
+- **NOT, DUREV, HMSTR**: Removed these tokens and the CryptoCompare API dependency.
+- **CryptoCompare**: Entire API integration removed — all crypto now sourced from CoinGecko.
+
+### 🔧 Other
+- Updated `uvloop` requirement to `>=0.21.0` with platform marker for Python 3.14 compatibility.
+- Removed unused `min-api.cryptocompare.com` semaphore limit.
+
 ## [1.6.0] - 2026-02-13
 
 ### 🛡️ Stability Improvements

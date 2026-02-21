@@ -48,6 +48,7 @@ async def toggle_quote_format(callback_query: CallbackQuery):
     await user_data.update_user_data(user_id)
 
 async def show_currencies(callback_query: CallbackQuery):
+    await callback_query.answer()
     page = int(callback_query.data.split('_')[-1])
     user_id = callback_query.from_user.id
     user_currencies = await user_data.get_user_currencies(user_id)
@@ -76,6 +77,7 @@ async def show_currencies(callback_query: CallbackQuery):
     await callback_query.message.edit_text(LANGUAGES[user_lang]['currencies'], reply_markup=kb.as_markup())
 
 async def show_crypto(callback_query: CallbackQuery):
+    await callback_query.answer()
     user_id = callback_query.from_user.id
     user_crypto = await user_data.get_user_crypto(user_id)
     user_lang = await user_data.get_user_language(user_id)
@@ -91,6 +93,7 @@ async def show_crypto(callback_query: CallbackQuery):
     await callback_query.message.edit_text(LANGUAGES[user_lang]['cryptocurrencies'], reply_markup=kb.as_markup())
 
 async def toggle_currency(callback_query: CallbackQuery):
+    await callback_query.answer()
     currency, page = callback_query.data.split('_')[2:]
     page = int(page)
     user_currencies = await user_data.get_user_currencies(callback_query.from_user.id)
@@ -105,6 +108,7 @@ async def toggle_currency(callback_query: CallbackQuery):
     await show_currencies(callback_query)
 
 async def toggle_crypto(callback_query: CallbackQuery):
+    await callback_query.answer()
     crypto = callback_query.data.split('_')[-1]
     user_id = callback_query.from_user.id
     user_crypto = await user_data.get_user_crypto(user_id)

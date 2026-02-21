@@ -11,7 +11,7 @@ if not BOT_TOKEN:
 _log_chat_id_raw = os.getenv('LOG_CHAT_ID', '')
 LOG_CHAT_ID = int(_log_chat_id_raw) if _log_chat_id_raw.strip() else None
 _admin_ids_raw = os.getenv('ADMIN_IDS', '')
-ADMIN_IDS = [int(x) for x in _admin_ids_raw.split(',') if x.strip()] if _admin_ids_raw.strip() else []
+ADMIN_IDS = frozenset(int(x) for x in _admin_ids_raw.split(',') if x.strip()) if _admin_ids_raw.strip() else frozenset()
 LOG_LEVEL = os.getenv('LOG_LEVEL', 'INFO')
 COINCAP_API_KEY = os.getenv('COINCAP_API_KEY')
 if not COINCAP_API_KEY:
@@ -21,7 +21,7 @@ if not COINCAP_API_KEY:
 # Storage
 DB_PATH = os.getenv('DB_PATH', 'otc.db')
 
-CURRENT_VERSION = "1.6.0"
+CURRENT_VERSION = "1.7.0"
 
 # Cache
 CACHE_EXPIRATION_TIME = 600  # seconds
@@ -34,7 +34,6 @@ HTTP_RETRIES = 2
 SEMAPHORE_LIMITS = {
     'open.er-api.com': 5,
     'api.coingecko.com': 3,
-    'min-api.cryptocompare.com': 3,
     'api.exchangerate-api.com': 3,
     'rest.coincap.io': 3,
 }
@@ -48,10 +47,10 @@ ALL_CURRENCIES = {
     'UZS': '🇺🇿', 'UAH': '🇺🇦', 'KZT': '🇰🇿', 'ARS': '🇦🇷', 'VND': '🇻🇳', 'BGN': '🇧🇬', 'HRK': '🇭🇷',
     'BYN': '🇧🇾',
     'BTC': '₿', 'ETH': 'Ξ', 'USDT': '₮', 'BNB': 'BNB', 'XRP': 'XRP', 'ADA': 'ADA', 'SOL': 'SOL', 'DOT': 'DOT',
-    'DOGE': 'Ð', 'TON': 'TON', 'NOT': 'NOT', 'DUREV': 'DUREV', 'LTC': 'Ł', 'HMSTR': 'HMSTR'
+    'DOGE': 'Ð', 'TON': 'TON', 'LTC': 'Ł'
 }
 
-CRYPTO_CURRENCIES = ['BTC', 'ETH', 'USDT', 'BNB', 'XRP', 'ADA', 'SOL', 'DOT', 'DOGE', 'TON', 'NOT', 'DUREV', 'LTC', 'HMSTR']
+CRYPTO_CURRENCIES = ['BTC', 'ETH', 'USDT', 'BNB', 'XRP', 'ADA', 'SOL', 'DOT', 'DOGE', 'TON', 'LTC']
 ACTIVE_CURRENCIES = [cur for cur in ALL_CURRENCIES if cur not in CRYPTO_CURRENCIES]
 
 CURRENCY_SYMBOLS = {
@@ -89,8 +88,6 @@ CURRENCY_ABBREVIATIONS = {
     'тезер': 'USDT', 'юсдт': 'USDT',
     'солана': 'SOL',
     'додж': 'DOGE', 'доги': 'DOGE',
-    'нот': 'NOT', 'ноткоин': 'NOT',
-    'хамстер': 'HMSTR',
 
     # EN — крипта
     'bitcoin': 'BTC', 'btc': 'BTC',
@@ -98,6 +95,4 @@ CURRENCY_ABBREVIATIONS = {
     'tether': 'USDT', 'usdt': 'USDT',
     'solana': 'SOL', 'sol': 'SOL',
     'dogecoin': 'DOGE', 'doge': 'DOGE',
-    'notcoin': 'NOT',
-    'hamster': 'HMSTR',
 }

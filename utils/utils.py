@@ -169,6 +169,8 @@ async def _bg_refresh_rates():
     global _revalidating
     try:
         await refresh_rates(force=True)
+    except asyncio.CancelledError:
+        raise
     finally:
         _revalidating = False
 
@@ -203,45 +205,38 @@ async def _fetch_rates_unlocked() -> Dict[str, float]:
             'https://cdn.jsdelivr.net/npm/@fawazahmed0/currency-api@latest/v1/currencies/usd.json'
         ]
 
-        fiat_fetched = False
-        for fiat_url in fiat_sources:
-            try:
-                host = _host_of(fiat_url)
+        async def _fetch_all_fiat():
+            for fiat_url in fiat_sources:
+                try:
+                    host = _host_of(fiat_url)
 
-                async def _fiat(url=fiat_url):
-                    resp = await session.get(url, timeout=timeout)
-                    async with resp:
-                        return await resp.json(loads=ujson.loads)
+                    async def _fiat(url=fiat_url):
+                        resp = await session.get(url, timeout=timeout)
+                        async with resp:
+                            return await resp.json(loads=ujson.loads)
 
-                fiat_data = await _with_retries(_fiat, host)
+                    fiat_data = await _with_retries(_fiat, host)
 
-                if isinstance(fiat_data, dict):
-                    if fiat_data.get('result') == 'success' and 'rates' in fiat_data:
-                        rates.update(fiat_data['rates'])
-                        fiat_fetched = True
-                        logger.info(f"Fetched fiat rates from {host}")
-                        break
-                    elif 'rates' in fiat_data:
-                        rates.update(fiat_data['rates'])
-                        fiat_fetched = True
-                        logger.info(f"Fetched fiat rates from {host}")
-                        break
-                    elif 'usd' in fiat_data:
-                        usd_rates = fiat_data['usd']
-                        for curr_lower, rate in usd_rates.items():
-                            curr_upper = curr_lower.upper()
-                            if rate and rate > 0:
-                                rates[curr_upper] = float(rate)
-                        rates['USD'] = 1.0
-                        fiat_fetched = True
-                        logger.info(f"Fetched fiat rates from {host}")
-                        break
-            except Exception as e:
-                logger.warning(f"Failed to fetch fiat from {fiat_url}: {e}")
-                continue
-
-        if not fiat_fetched:
-            logger.error("All fiat currency sources failed!")
+                    if isinstance(fiat_data, dict):
+                        if fiat_data.get('result') == 'success' and 'rates' in fiat_data:
+                            logger.info(f"Fetched fiat rates from {host}")
+                            return fiat_data['rates']
+                        elif 'rates' in fiat_data:
+                            logger.info(f"Fetched fiat rates from {host}")
+                            return fiat_data['rates']
+                        elif 'usd' in fiat_data:
+                            usd_rates = fiat_data['usd']
+                            result = {'USD': 1.0}
+                            for curr_lower, rate in usd_rates.items():
+                                curr_upper = curr_lower.upper()
+                                if rate and rate > 0:
+                                    result[curr_upper] = float(rate)
+                            logger.info(f"Fetched fiat rates from {host}")
+                            return result
+                except Exception as e:
+                    logger.warning(f"Failed to fetch fiat from {fiat_url}: {e}")
+                    continue
+            return None
 
         crypto_ids = "bitcoin,ethereum,tether,binancecoin,ripple,cardano,solana,polkadot,dogecoin,the-open-network,litecoin"
         url_cg = f'https://api.coingecko.com/api/v3/simple/price?ids={crypto_ids}&vs_currencies=usd'
@@ -254,26 +249,49 @@ async def _fetch_rates_unlocked() -> Dict[str, float]:
                     return await resp.json(loads=ujson.loads)
             return await _with_retries(_cg, host)
 
-        try:
-            cg_result = await _fetch_coingecko()
-            crypto_mapping = {
-                'BTC': 'bitcoin', 'ETH': 'ethereum', 'USDT': 'tether', 'BNB': 'binancecoin',
-                'XRP': 'ripple', 'ADA': 'cardano', 'SOL': 'solana', 'DOT': 'polkadot',
-                'DOGE': 'dogecoin', 'TON': 'the-open-network',
-                'LTC': 'litecoin'
-            }
-            for crypto, cg_id in crypto_mapping.items():
-                if isinstance(cg_result, dict) and cg_id in cg_result and isinstance(cg_result[cg_id], dict):
-                    usd_price = cg_result[cg_id].get('usd')
-                    try:
-                        usd_price = float(usd_price)
-                    except (TypeError, ValueError):
-                        usd_price = None
-                    if usd_price and usd_price > 0:
-                        rates[crypto] = 1.0 / usd_price
-            logger.info("Fetched crypto rates from CoinGecko")
-        except Exception as e:
-            logger.error(f"CoinGecko failed: {e}")
+        async def _fetch_all_crypto():
+            try:
+                cg_result = await _fetch_coingecko()
+                crypto_mapping = {
+                    'BTC': 'bitcoin', 'ETH': 'ethereum', 'USDT': 'tether', 'BNB': 'binancecoin',
+                    'XRP': 'ripple', 'ADA': 'cardano', 'SOL': 'solana', 'DOT': 'polkadot',
+                    'DOGE': 'dogecoin', 'TON': 'the-open-network',
+                    'LTC': 'litecoin'
+                }
+                result = {}
+                for crypto, cg_id in crypto_mapping.items():
+                    if isinstance(cg_result, dict) and cg_id in cg_result and isinstance(cg_result[cg_id], dict):
+                        usd_price = cg_result[cg_id].get('usd')
+                        try:
+                            usd_price = float(usd_price)
+                        except (TypeError, ValueError):
+                            usd_price = None
+                        if usd_price and usd_price > 0:
+                            result[crypto] = 1.0 / usd_price
+                logger.info("Fetched crypto rates from CoinGecko")
+                return result
+            except Exception as e:
+                logger.error(f"CoinGecko failed: {e}")
+                return None
+
+        fiat_result, crypto_result = await asyncio.gather(
+            _fetch_all_fiat(), _fetch_all_crypto(), return_exceptions=True
+        )
+
+        fiat_fetched = False
+        if isinstance(fiat_result, dict):
+            rates.update(fiat_result)
+            fiat_fetched = True
+        elif isinstance(fiat_result, Exception):
+            logger.error(f"Fiat fetch failed with exception: {fiat_result}")
+
+        if not fiat_fetched:
+            logger.error("All fiat currency sources failed!")
+
+        if isinstance(crypto_result, dict):
+            rates.update(crypto_result)
+        elif isinstance(crypto_result, Exception):
+            logger.error(f"Crypto fetch failed with exception: {crypto_result}")
 
         all_currencies = set(ACTIVE_CURRENCIES + CRYPTO_CURRENCIES)
         missing_currencies = all_currencies - set(rates.keys())
@@ -482,7 +500,6 @@ def parse_amount_and_currency(text: str) -> Tuple[Optional[float], Optional[str]
     if not text:
         return None, None
 
-    original_text = text
     text = text.strip()
     
     text_lower = text.lower()

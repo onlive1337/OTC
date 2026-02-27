@@ -103,16 +103,7 @@ class UserData:
 
     async def _get_conn(self) -> aiosqlite.Connection:
         if self._conn is not None:
-            try:
-                await self._conn.execute("SELECT 1")
-                return self._conn
-            except Exception:
-                logger.warning("DB connection lost, reconnecting...")
-                try:
-                    await self._conn.close()
-                except Exception:
-                    pass
-                self._conn = None
+            return self._conn
 
         max_retries = 3
         for attempt in range(max_retries):
@@ -184,54 +175,61 @@ class UserData:
         if str(user_id) in self.user_data:
             return
 
-        conn = await self._get_conn()
-        async with conn.execute("SELECT user_id FROM users WHERE user_id=?", (user_id,)) as cursor:
-            if await cursor.fetchone() is None:
-                default_lang = self._detect_language(language_code)
-                try:
-                    async with self._write_lock:
-                        await conn.execute(
-                            "INSERT INTO users(user_id, interactions, last_seen, first_seen, language, use_quote_format) VALUES(?, 0, ?, ?, ?, 1)",
-                            (user_id, datetime.now().strftime('%Y-%m-%d'), datetime.now().strftime('%Y-%m-%d'), default_lang)
-                        )
-                        
-                        currencies_data = [(user_id, c) for c in ACTIVE_CURRENCIES[:5]]
-                        await conn.executemany("INSERT OR IGNORE INTO user_currencies(user_id, currency) VALUES(?, ?)", currencies_data)
-                        
-                        crypto_data = [(user_id, s) for s in CRYPTO_CURRENCIES[:5]]
-                        await conn.executemany("INSERT OR IGNORE INTO user_crypto(user_id, symbol) VALUES(?, ?)", crypto_data)
-                        
-                        await conn.commit()
-                    logger.info(f"New user {user_id} registered with language '{default_lang}'")
-                except IntegrityError:
-                    logger.debug("User %s already exists (race condition handled)", user_id)
-                except Exception as e:
-                    logger.error(f"Error registering user {user_id}: {e}")
+        async with self._write_lock:
+            conn = await self._get_conn()
+            async with conn.execute("SELECT user_id FROM users WHERE user_id=?", (user_id,)) as cursor:
+                if await cursor.fetchone() is not None:
+                    return
+            default_lang = self._detect_language(language_code)
+            try:
+                await conn.execute(
+                    "INSERT INTO users(user_id, interactions, last_seen, first_seen, language, use_quote_format) VALUES(?, 0, ?, ?, ?, 1)",
+                    (user_id, datetime.now().strftime('%Y-%m-%d'), datetime.now().strftime('%Y-%m-%d'), default_lang)
+                )
+                
+                currencies_data = [(user_id, c) for c in ACTIVE_CURRENCIES[:5]]
+                await conn.executemany("INSERT OR IGNORE INTO user_currencies(user_id, currency) VALUES(?, ?)", currencies_data)
+                
+                crypto_data = [(user_id, s) for s in CRYPTO_CURRENCIES[:5]]
+                await conn.executemany("INSERT OR IGNORE INTO user_crypto(user_id, symbol) VALUES(?, ?)", crypto_data)
+                
+                await conn.commit()
+                logger.info(f"New user {user_id} registered with language '{default_lang}'")
+            except IntegrityError:
+                logger.debug("User %s already exists (race condition handled)", user_id)
+            except Exception as e:
+                logger.error(f"Error registering user {user_id}: {e}")
 
     async def _ensure_chat(self, chat_id: int):
         if str(chat_id) in self.chat_data:
             return
-        conn = await self._get_conn()
-        async with conn.execute("SELECT chat_id FROM chats WHERE chat_id=?", (chat_id,)) as cursor:
-            if await cursor.fetchone() is None:
-                try:
-                    async with self._write_lock:
-                        await conn.execute("INSERT INTO chats(chat_id, quote_format, language) VALUES(?, 0, 'ru')", (chat_id,))
-                        
-                        currencies_data = [(chat_id, c) for c in ACTIVE_CURRENCIES[:5]]
-                        await conn.executemany("INSERT OR IGNORE INTO chat_currencies(chat_id, currency) VALUES(?, ?)", currencies_data)
-                        
-                        crypto_data = [(chat_id, s) for s in CRYPTO_CURRENCIES[:5]]
-                        await conn.executemany("INSERT OR IGNORE INTO chat_crypto(chat_id, symbol) VALUES(?, ?)", crypto_data)
-                        
-                        await conn.commit()
-                except IntegrityError:
-                    logger.debug("Chat %s already exists (race condition handled)", chat_id)
-                except Exception as e:
-                    logger.error(f"Error registering chat {chat_id}: {e}")
+
+        async with self._write_lock:
+            conn = await self._get_conn()
+            async with conn.execute("SELECT chat_id FROM chats WHERE chat_id=?", (chat_id,)) as cursor:
+                if await cursor.fetchone() is not None:
+                    return
+            try:
+                await conn.execute("INSERT INTO chats(chat_id, quote_format, language) VALUES(?, 0, 'ru')", (chat_id,))
+                
+                currencies_data = [(chat_id, c) for c in ACTIVE_CURRENCIES[:5]]
+                await conn.executemany("INSERT OR IGNORE INTO chat_currencies(chat_id, currency) VALUES(?, ?)", currencies_data)
+                
+                crypto_data = [(chat_id, s) for s in CRYPTO_CURRENCIES[:5]]
+                await conn.executemany("INSERT OR IGNORE INTO chat_crypto(chat_id, symbol) VALUES(?, ?)", crypto_data)
+                
+                await conn.commit()
+            except IntegrityError:
+                logger.debug("Chat %s already exists (race condition handled)", chat_id)
+            except Exception as e:
+                logger.error(f"Error registering chat {chat_id}: {e}")
 
 
     async def get_user_data(self, user_id: int):
+        cached = self.user_data.get(str(user_id))
+        if cached and 'selected_currencies' in cached and 'language' in cached:
+            return cached
+
         await self._ensure_user(user_id)
         conn = await self._get_conn()
 
@@ -264,6 +262,10 @@ class UserData:
         return data
 
     async def get_chat_data(self, chat_id: int):
+        cached = self.chat_data.get(str(chat_id))
+        if isinstance(cached, dict) and 'currencies' in cached and 'language' in cached:
+            return cached
+
         await self._ensure_chat(chat_id)
         conn = await self._get_conn()
 

@@ -87,7 +87,6 @@ async def process_targeted_conversion(message: types.Message, amount: float, fro
 async def process_multiple_conversions(message: types.Message, requests: List[Tuple[float, str]]):
     user_id = message.from_user.id
     chat_id = message.chat.id
-    await user_data.update_user_data(user_id)
     
     if message.chat.type in ('group', 'supergroup'):
         data = await user_data.get_chat_data(chat_id)
@@ -253,7 +252,6 @@ async def handle_message(message: types.Message):
         return
 
     user_id = message.from_user.id
-    await user_data.update_user_data(user_id, language_code=message.from_user.language_code)
 
     if message.text.startswith('/'):
         return 
@@ -276,6 +274,8 @@ async def handle_message(message: types.Message):
             valid_requests.append((parsed_result, request))
     
     if valid_requests:
+        await user_data.update_user_data(user_id, language_code=message.from_user.language_code)
+
         if len(valid_requests) > 10:
             valid_requests = valid_requests[:10]
             logger.warning(f"User {user_id} sent too many conversion requests, truncated to 10")

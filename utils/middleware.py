@@ -139,13 +139,13 @@ class ErrorBoundaryMiddleware(BaseMiddleware):
 
             try:
                 if isinstance(event, Message) and event.chat:
-                    user = data.get("event_from_user")
-                    if user:
-                        from loader import user_data
-                        user_lang = await user_data.get_user_language(user.id)
-                    else:
-                        user_lang = 'en'
+                    from loader import user_data
                     from config.languages import LANGUAGES
+                    if event.chat.type in ('group', 'supergroup'):
+                        user_lang = await user_data.get_chat_language(event.chat.id)
+                    else:
+                        user = data.get("event_from_user")
+                        user_lang = await user_data.get_user_language(user.id) if user else 'en'
                     await event.answer(LANGUAGES[user_lang].get('error', '⚠️ Error'))
             except Exception:
                 pass

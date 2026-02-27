@@ -114,6 +114,7 @@ async def view_changelog(callback_query: CallbackQuery):
 
 @router.callback_query(F.data == "back_to_main")
 async def back_to_main(callback_query: CallbackQuery):
+    await callback_query.answer()
     await user_data.update_user_data(callback_query.from_user.id)
     user_lang = await user_data.get_user_language(callback_query.from_user.id)
     

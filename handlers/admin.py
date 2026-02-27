@@ -105,12 +105,11 @@ async def broadcast_confirm(callback_query: CallbackQuery, state: FSMContext):
     await callback_query.answer()
 
     user_ids = await user_data.get_all_user_ids()
-    sent, failed, blocked = 0, 0, 0
+    counters = {"sent": 0, "failed": 0, "blocked": 0}
     total = len(user_ids)
     progress_msg = callback_query.message
 
     async def send_one(uid):
-        nonlocal sent, failed, blocked
         retries = 0
         while True:
             try:
@@ -124,12 +123,12 @@ async def broadcast_confirm(callback_query: CallbackQuery, state: FSMContext):
                     await bot.send_document(uid, msg_data["file_id"], caption=msg_data.get("caption"), parse_mode="HTML")
                 elif msg_data["type"] == "sticker":
                     await bot.send_sticker(uid, msg_data["file_id"])
-                sent += 1
+                counters["sent"] += 1
                 break
             except TelegramRetryAfter as e:
                 retries += 1
                 if retries > 5:
-                    failed += 1
+                    counters["failed"] += 1
                     logger.warning("Broadcast to %s: too many retries", uid)
                     break
                 logger.warning("Flood limit for %s, sleeping %ss", uid, e.retry_after)
@@ -138,9 +137,9 @@ async def broadcast_confirm(callback_query: CallbackQuery, state: FSMContext):
             except Exception as e:
                 err_msg = str(e).lower()
                 if any(x in err_msg for x in ["blocked", "deactivated", "not found", "forbidden", "cannot initiate", "entity"]):
-                    blocked += 1
+                    counters["blocked"] += 1
                 else:
-                    failed += 1
+                    counters["failed"] += 1
                     logger.warning("Broadcast to %s failed: %s", uid, e)
                 break
         await asyncio.sleep(0.05)
@@ -164,9 +163,9 @@ async def broadcast_confirm(callback_query: CallbackQuery, state: FSMContext):
 
     report = (
         f"📢 <b>Рассылка завершена</b>\n\n"
-        f"✅ Отправлено: {sent}\n"
-        f"🚫 Заблокировали: {blocked}\n"
-        f"❌ Ошибки: {failed}\n"
+        f"✅ Отправлено: {counters['sent']}\n"
+        f"🚫 Заблокировали: {counters['blocked']}\n"
+        f"❌ Ошибки: {counters['failed']}\n"
         f"📊 Всего: {total}"
     )
     await progress_msg.edit_text(report, parse_mode="HTML")

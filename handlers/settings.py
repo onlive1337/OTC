@@ -28,7 +28,6 @@ router = Router()
 async def cmd_settings(message: Message):
     user_id = message.from_user.id
     chat_id = message.chat.id
-    user_lang = await user_data.get_user_language(user_id)
 
     if message.chat.type == 'private':
         user_lang = await user_data.get_user_language(user_id)
@@ -48,6 +47,7 @@ async def cmd_settings(message: Message):
 
 @router.callback_query(F.data == "settings")
 async def process_settings(callback_query: CallbackQuery):
+    await callback_query.answer()
     user_id = callback_query.from_user.id
     user_lang = await user_data.get_user_language(user_id)
     use_quote = await user_data.get_user_quote_format(user_id)
@@ -59,6 +59,7 @@ async def process_settings(callback_query: CallbackQuery):
 
 @router.callback_query(F.data == "back_to_settings")
 async def back_to_settings(callback_query: CallbackQuery):
+    await callback_query.answer()
     await user_data.update_user_data(callback_query.from_user.id)
     user_id = callback_query.from_user.id
     user_lang = await user_data.get_user_language(user_id)

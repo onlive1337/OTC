@@ -4,6 +4,26 @@ All notable changes to this project will be documented in this file.
 
 ## Changelog
 
+## [1.8.0] - 2026-02-28
+
+### ⚡ Performance
+- **True Parallel API Fetching**: Fiat and crypto rates now fetch simultaneously via `asyncio.gather` — previously sequential despite v1.7.0 claiming parallelism.
+- **Deferred DB Write**: `update_user_data` now only called when a valid conversion is found, not on every incoming message.
+- **Cache-First Data Access**: `get_user_data()` and `get_chat_data()` check in-memory cache before hitting SQLite.
+- **Removed DB Health Ping**: Eliminated per-call `SELECT 1` from `_get_conn()` — unnecessary for local SQLite.
+- **Removed Duplicate Queries**: Eliminated redundant `get_user_language` in `/settings` and duplicate `update_user_data` in `process_multiple_conversions`.
+
+### 🛡️ Stability
+- **Race Condition Fixes**: `_ensure_user` and `_ensure_chat` now perform SELECT+INSERT under a single `_write_lock` — eliminates concurrent registration race.
+- **CancelledError Handling**: `_bg_refresh_rates` now explicitly re-raises `CancelledError` before `finally`, preventing `_revalidating` flag from getting stuck.
+- **Group Language Enforcement**: `ErrorBoundaryMiddleware` now sends error messages using the chat's language in groups, not the user's personal language.
+- **Log Buffer Safety**: `_flush_buffer` now uses `_buffer_lock` — prevents log entries from being lost during concurrent emit/flush.
+- **Broadcast Counter Safety**: Replaced `nonlocal` counters with a dict in broadcast to avoid potential concurrent mutation issues.
+- **Missing Callback Answers**: Added `callback_query.answer()` to `back_to_main`, `process_settings`, and `back_to_settings` — eliminates remaining 30s loading spinners.
+
+### 🧹 Cleanup
+- Removed unused `original_text` variable in `parse_amount_and_currency`.
+
 ## [1.7.0] - 2026-02-21
 
 ### ⚡ Performance

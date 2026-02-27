@@ -57,11 +57,12 @@ class TelegramLogHandler(logging.Handler):
         await self._flush_buffer()
 
     async def _flush_buffer(self):
-        if not _log_buffer:
-            return
+        async with _buffer_lock:
+            if not _log_buffer:
+                return
 
-        messages = list(_log_buffer)
-        _log_buffer.clear()
+            messages = list(_log_buffer)
+            _log_buffer.clear()
 
         combined = "\n\n---\n\n".join(messages)
         if len(combined) > MAX_TELEGRAM_LOG_LEN:

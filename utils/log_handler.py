@@ -9,8 +9,9 @@ from collections import deque
 
 MAX_TELEGRAM_LOG_LEN = 3800
 MIN_INTERVAL_SEC = 5
-MAX_BUFFER_SIZE = 10
+MAX_BUFFER_SIZE = 50
 _last_sent = 0.0
+_dropped_count = 0
 _log_buffer: deque = deque(maxlen=MAX_BUFFER_SIZE)
 _buffer_lock = asyncio.Lock()
 
@@ -21,7 +22,7 @@ class TelegramLogHandler(logging.Handler):
         self._flush_task = None
 
     def emit(self, record):
-        global _last_sent
+        global _last_sent, _dropped_count
         if not LOG_CHAT_ID:
             return
 
@@ -29,6 +30,9 @@ class TelegramLogHandler(logging.Handler):
             asyncio.get_running_loop()
         except RuntimeError:
             return
+
+        if len(_log_buffer) >= MAX_BUFFER_SIZE:
+            _dropped_count += 1
 
         log_entry = self.format_error(record)
         _log_buffer.append(log_entry)

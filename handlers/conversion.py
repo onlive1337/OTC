@@ -247,6 +247,9 @@ async def handle_message(message: types.Message):
         logger.debug("Received message without text from user %s in chat %s", message.from_user.id, message.chat.id)
         return
 
+    if message.from_user.is_bot:
+        return
+
     if len(message.text) > 500:
         logger.debug("Message too long from user %s, ignoring", message.from_user.id)
         return
@@ -320,15 +323,13 @@ async def handle_message(message: types.Message):
 
 @router.inline_query()
 async def inline_query_handler(query: InlineQuery):
-    await user_data.update_user_data(query.from_user.id, language_code=query.from_user.language_code)
-    data = await user_data.get_user_data(query.from_user.id)
-    user_lang = data.get('language', 'ru')
-    use_quote = data.get('use_quote_format', True)
-
     if len(query.query) > 100:
         return
 
     if not query.query.strip():
+        await user_data.update_user_data(query.from_user.id, language_code=query.from_user.language_code)
+        data = await user_data.get_user_data(query.from_user.id)
+        user_lang = data.get('language', 'ru')
         empty_input_result = InlineQueryResultArticle(
             id="empty_input",
             title=LANGUAGES[user_lang].get('empty_input_title', "Enter amount and currency"),
@@ -344,6 +345,9 @@ async def inline_query_handler(query: InlineQuery):
     amount, from_currency = parse_amount_and_currency(query.query)
 
     if amount is None or from_currency is None:
+        await user_data.update_user_data(query.from_user.id, language_code=query.from_user.language_code)
+        data = await user_data.get_user_data(query.from_user.id)
+        user_lang = data.get('language', 'ru')
         error_result = InlineQueryResultArticle(
             id="error",
             title=LANGUAGES[user_lang].get('invalid_input', "Invalid Input"),
@@ -357,6 +361,10 @@ async def inline_query_handler(query: InlineQuery):
         return
 
     try:
+        await user_data.update_user_data(query.from_user.id, language_code=query.from_user.language_code)
+        data = await user_data.get_user_data(query.from_user.id)
+        user_lang = data.get('language', 'ru')
+        use_quote = data.get('use_quote_format', True)
         user_currencies = data.get('selected_currencies', [])
         user_crypto = data.get('selected_crypto', [])
 
@@ -453,11 +461,14 @@ async def handle_my_chat_member(event: ChatMemberUpdated, bot: Bot):
     logger.info(f"Event content: {event.model_dump_json()}")
     
     if event.new_chat_member.status == "member":
-        await user_data.initialize_chat_settings(event.chat.id)
-        
-        user_lang = await user_data.get_user_language(event.from_user.id)
-        
-        welcome_message = LANGUAGES[user_lang]['welcome_group_message']
-        
-        await bot.send_message(event.chat.id, welcome_message)
-        logger.info(f"Welcome message sent to chat {event.chat.id}")
+        try:
+            await user_data.initialize_chat_settings(event.chat.id)
+            
+            user_lang = await user_data.get_user_language(event.from_user.id)
+            
+            welcome_message = LANGUAGES[user_lang]['welcome_group_message']
+            
+            await bot.send_message(event.chat.id, welcome_message)
+            logger.info(f"Welcome message sent to chat {event.chat.id}")
+        except Exception as e:
+            logger.warning(f"Failed to handle chat member update for chat {event.chat.id}: {e}")

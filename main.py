@@ -1,6 +1,9 @@
 import asyncio
 import logging
 import signal
+import warnings
+
+warnings.filterwarnings("ignore", message=".*iscoroutinefunction.*", category=DeprecationWarning)
 import ujson
 from aiohttp import ClientSession, ClientTimeout
 
@@ -30,18 +33,21 @@ async def _warmup_rates():
         logger.exception("Warmup failed")
 
 async def _periodic_refresh():
-    interval = max(CACHE_EXPIRATION_TIME - 60, 60)
+    normal_interval = max(CACHE_EXPIRATION_TIME - 60, 60)
+    error_interval = 30
     while True:
-        await asyncio.sleep(interval)
+        await asyncio.sleep(normal_interval)
         try:
             await asyncio.wait_for(refresh_rates(force=True), timeout=30.0)
             logger.info("Periodic rate refresh completed")
         except asyncio.CancelledError:
             raise
         except asyncio.TimeoutError:
-            logger.warning("Periodic rate refresh timed out")
+            logger.warning("Periodic rate refresh timed out, retrying in %ds", error_interval)
+            await asyncio.sleep(error_interval)
         except Exception:
-            logger.exception("Periodic rate refresh failed")
+            logger.exception("Periodic rate refresh failed, retrying in %ds", error_interval)
+            await asyncio.sleep(error_interval)
 
 async def on_startup():
     await setup_telegram_logging(bot)

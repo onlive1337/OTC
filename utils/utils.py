@@ -1,10 +1,16 @@
+import asyncio
+import ast
 import logging
+import operator
 import os
+import random
 import re
 import time
+import urllib.parse
 from typing import Dict, Any, Tuple, Optional, Union
 
 import aiohttp
+import ujson
 from aiogram.types import CallbackQuery, Message
 
 from config.config import CACHE_EXPIRATION_TIME, ACTIVE_CURRENCIES, CRYPTO_CURRENCIES, CURRENCY_ABBREVIATIONS, \
@@ -17,13 +23,6 @@ from loader import user_data
 cache: Dict[str, Any] = {}
 
 logger = logging.getLogger(__name__)
-
-import asyncio
-import random
-import urllib.parse
-import ujson
-import ast
-import operator
 
 _http_session: Optional[aiohttp.ClientSession] = None
 _domain_semaphores: Dict[str, asyncio.Semaphore] = {}
@@ -126,10 +125,9 @@ def _safe_bg_task(coro, name: str = "background"):
     task.add_done_callback(_on_done)
     return task
 
-_revalidating = False
+_revalidation_lock = asyncio.Lock()
 
 async def get_exchange_rates() -> Dict[str, float]:
-    global _revalidating
     try:
         cached_rates = get_cached_data('exchange_rates')
         if cached_rates:
@@ -141,8 +139,7 @@ async def get_exchange_rates() -> Dict[str, float]:
         if stale_item:
             data, ts = stale_item
             if now - ts < (CACHE_EXPIRATION_TIME + STALE_WHILE_REVALIDATE):
-                if not _revalidating:
-                    _revalidating = True
+                if not _revalidation_lock.locked():
                     _safe_bg_task(_bg_refresh_rates(), name="stale_refresh_rates")
                 logger.info("Returning stale exchange rates while refreshing in background")
                 return data
@@ -166,13 +163,13 @@ async def get_exchange_rates() -> Dict[str, float]:
         return {}
 
 async def _bg_refresh_rates():
-    global _revalidating
-    try:
-        await refresh_rates(force=True)
-    except asyncio.CancelledError:
-        raise
-    finally:
-        _revalidating = False
+    async with _revalidation_lock:
+        try:
+            await refresh_rates(force=True)
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            logger.exception("Background rate refresh failed")
 
 async def refresh_rates(force: bool = False) -> Dict[str, float]:
     if not force:
@@ -205,37 +202,53 @@ async def _fetch_rates_unlocked() -> Dict[str, float]:
             'https://cdn.jsdelivr.net/npm/@fawazahmed0/currency-api@latest/v1/currencies/usd.json'
         ]
 
+        async def _fetch_single_fiat(fiat_url: str):
+            host = _host_of(fiat_url)
+
+            async def _fiat(url=fiat_url):
+                resp = await session.get(url, timeout=timeout)
+                async with resp:
+                    return await resp.json(loads=ujson.loads)
+
+            fiat_data = await _with_retries(_fiat, host)
+
+            if isinstance(fiat_data, dict):
+                if fiat_data.get('result') == 'success' and 'rates' in fiat_data:
+                    logger.info(f"Fetched fiat rates from {host}")
+                    return fiat_data['rates']
+                elif 'rates' in fiat_data:
+                    logger.info(f"Fetched fiat rates from {host}")
+                    return fiat_data['rates']
+                elif 'usd' in fiat_data:
+                    usd_rates = fiat_data['usd']
+                    result = {'USD': 1.0}
+                    for curr_lower, rate in usd_rates.items():
+                        curr_upper = curr_lower.upper()
+                        if rate and rate > 0:
+                            result[curr_upper] = float(rate)
+                    logger.info(f"Fetched fiat rates from {host}")
+                    return result
+            return None
+
         async def _fetch_all_fiat():
-            for fiat_url in fiat_sources:
-                try:
-                    host = _host_of(fiat_url)
-
-                    async def _fiat(url=fiat_url):
-                        resp = await session.get(url, timeout=timeout)
-                        async with resp:
-                            return await resp.json(loads=ujson.loads)
-
-                    fiat_data = await _with_retries(_fiat, host)
-
-                    if isinstance(fiat_data, dict):
-                        if fiat_data.get('result') == 'success' and 'rates' in fiat_data:
-                            logger.info(f"Fetched fiat rates from {host}")
-                            return fiat_data['rates']
-                        elif 'rates' in fiat_data:
-                            logger.info(f"Fetched fiat rates from {host}")
-                            return fiat_data['rates']
-                        elif 'usd' in fiat_data:
-                            usd_rates = fiat_data['usd']
-                            result = {'USD': 1.0}
-                            for curr_lower, rate in usd_rates.items():
-                                curr_upper = curr_lower.upper()
-                                if rate and rate > 0:
-                                    result[curr_upper] = float(rate)
-                            logger.info(f"Fetched fiat rates from {host}")
+            tasks = [asyncio.create_task(_fetch_single_fiat(url)) for url in fiat_sources]
+            try:
+                for coro in asyncio.as_completed(tasks):
+                    try:
+                        result = await coro
+                        if result:
+                            for t in tasks:
+                                if not t.done():
+                                    t.cancel()
                             return result
-                except Exception as e:
-                    logger.warning(f"Failed to fetch fiat from {fiat_url}: {e}")
-                    continue
+                    except Exception as e:
+                        logger.warning(f"Fiat source failed: {e}")
+                        continue
+            finally:
+                for t in tasks:
+                    if not t.done():
+                        t.cancel()
+                await asyncio.gather(*tasks, return_exceptions=True)
             return None
 
         crypto_ids = "bitcoin,ethereum,tether,binancecoin,ripple,cardano,solana,polkadot,dogecoin,the-open-network,litecoin"
@@ -308,25 +321,33 @@ async def _fetch_rates_unlocked() -> Dict[str, float]:
                     'SOL': 'solana', 'DOT': 'polkadot', 'DOGE': 'dogecoin',
                     'TON': 'toncoin', 'LTC': 'litecoin'
                 }
-                for crypto in missing_crypto:
-                    asset_id = coincap_mapping.get(crypto, crypto.lower())
+
+                async def _fetch_coincap_single(crypto_sym):
+                    asset_id = coincap_mapping.get(crypto_sym, crypto_sym.lower())
                     url_cap = f'https://rest.coincap.io/v3/assets/{asset_id}?apiKey={COINCAP_API_KEY}'
                     host = _host_of(url_cap)
-
                     async def _cap(u=url_cap):
                         resp = await session.get(u, timeout=timeout)
                         async with resp:
                             return await resp.json(loads=ujson.loads)
-
                     try:
                         alt_crypto_data = await _with_retries(_cap, host)
                         if isinstance(alt_crypto_data, dict) and 'data' in alt_crypto_data:
                             price_usd = float(alt_crypto_data['data'].get('priceUsd', 0))
                             if price_usd > 0:
-                                rates[crypto] = 1.0 / price_usd
-                                logger.info(f"Fetched {crypto} from CoinCap v3")
+                                logger.info(f"Fetched {crypto_sym} from CoinCap v3")
+                                return crypto_sym, 1.0 / price_usd
                     except Exception as e:
-                        logger.warning(f"Failed to fetch {crypto} from CoinCap v3: {e}")
+                        logger.warning(f"Failed to fetch {crypto_sym} from CoinCap v3: {e}")
+                    return crypto_sym, None
+
+                coincap_results = await asyncio.gather(
+                    *(_fetch_coincap_single(c) for c in missing_crypto),
+                    return_exceptions=True
+                )
+                for result in coincap_results:
+                    if isinstance(result, tuple) and result[1] is not None:
+                        rates[result[0]] = result[1]
 
             elif missing_crypto:
                 logger.info(f"Trying CoinGecko individual requests for: {missing_crypto}")
@@ -607,8 +628,14 @@ def format_large_number(number, is_crypto=False, is_original_amount=False):
 
 
 async def delete_conversion_message(callback_query: CallbackQuery):
-    await callback_query.message.delete()
-    await callback_query.answer()
+    try:
+        await callback_query.message.delete()
+    except Exception:
+        pass
+    try:
+        await callback_query.answer()
+    except Exception:
+        pass
 
 async def save_settings(callback_query: CallbackQuery):
     user_lang = await user_data.get_user_language(callback_query.from_user.id)

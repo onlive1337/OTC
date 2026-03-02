@@ -114,7 +114,6 @@ async def toggle_chat_currency(callback_query: CallbackQuery):
         chat_currencies.append(currency)
     
     await user_data.set_chat_currencies(chat_id, chat_currencies)
-    user_data.update_chat_cache(chat_id)
     
     new_data = f"show_chat_currencies_{chat_id}_{page}"
     new_callback_query = callback_query.model_copy(update={'data': new_data})
@@ -141,7 +140,6 @@ async def toggle_chat_crypto(callback_query: CallbackQuery):
         chat_crypto.append(crypto)
     
     await user_data.set_chat_crypto(chat_id, chat_crypto)
-    user_data.update_chat_cache(chat_id)
     
     await show_chat_crypto(callback_query)
 
@@ -238,7 +236,6 @@ async def set_chat_language(callback_query: CallbackQuery):
         return
 
     await user_data.set_chat_language(chat_id, new_lang)
-    user_data.update_chat_cache(chat_id)
     
     user_lang = await user_data.get_chat_language(chat_id)
     

@@ -108,41 +108,43 @@ async def broadcast_confirm(callback_query: CallbackQuery, state: FSMContext):
     counters = {"sent": 0, "failed": 0, "blocked": 0}
     total = len(user_ids)
     progress_msg = callback_query.message
+    broadcast_sem = asyncio.Semaphore(25)
 
     async def send_one(uid):
-        retries = 0
-        while True:
-            try:
-                if msg_data["type"] == "text":
-                    await bot.send_message(uid, msg_data["text"], parse_mode="HTML")
-                elif msg_data["type"] == "photo":
-                    await bot.send_photo(uid, msg_data["file_id"], caption=msg_data.get("caption"), parse_mode="HTML")
-                elif msg_data["type"] == "video":
-                    await bot.send_video(uid, msg_data["file_id"], caption=msg_data.get("caption"), parse_mode="HTML")
-                elif msg_data["type"] == "document":
-                    await bot.send_document(uid, msg_data["file_id"], caption=msg_data.get("caption"), parse_mode="HTML")
-                elif msg_data["type"] == "sticker":
-                    await bot.send_sticker(uid, msg_data["file_id"])
-                counters["sent"] += 1
-                break
-            except TelegramRetryAfter as e:
-                retries += 1
-                if retries > 5:
-                    counters["failed"] += 1
-                    logger.warning("Broadcast to %s: too many retries", uid)
+        async with broadcast_sem:
+            retries = 0
+            while True:
+                try:
+                    if msg_data["type"] == "text":
+                        await bot.send_message(uid, msg_data["text"], parse_mode="HTML")
+                    elif msg_data["type"] == "photo":
+                        await bot.send_photo(uid, msg_data["file_id"], caption=msg_data.get("caption"), parse_mode="HTML")
+                    elif msg_data["type"] == "video":
+                        await bot.send_video(uid, msg_data["file_id"], caption=msg_data.get("caption"), parse_mode="HTML")
+                    elif msg_data["type"] == "document":
+                        await bot.send_document(uid, msg_data["file_id"], caption=msg_data.get("caption"), parse_mode="HTML")
+                    elif msg_data["type"] == "sticker":
+                        await bot.send_sticker(uid, msg_data["file_id"])
+                    counters["sent"] += 1
                     break
-                logger.warning("Flood limit for %s, sleeping %ss", uid, e.retry_after)
-                await asyncio.sleep(e.retry_after)
-                continue
-            except Exception as e:
-                err_msg = str(e).lower()
-                if any(x in err_msg for x in ["blocked", "deactivated", "not found", "forbidden", "cannot initiate", "entity"]):
-                    counters["blocked"] += 1
-                else:
-                    counters["failed"] += 1
-                    logger.warning("Broadcast to %s failed: %s", uid, e)
-                break
-        await asyncio.sleep(0.05)
+                except TelegramRetryAfter as e:
+                    retries += 1
+                    if retries > 5:
+                        counters["failed"] += 1
+                        logger.warning("Broadcast to %s: too many retries", uid)
+                        break
+                    logger.warning("Flood limit for %s, sleeping %ss", uid, e.retry_after)
+                    await asyncio.sleep(e.retry_after)
+                    continue
+                except Exception as e:
+                    err_msg = str(e).lower()
+                    if any(x in err_msg for x in ["blocked", "deactivated", "not found", "forbidden", "cannot initiate", "entity"]):
+                        counters["blocked"] += 1
+                    else:
+                        counters["failed"] += 1
+                        logger.warning("Broadcast to %s failed: %s", uid, e)
+                    break
+            await asyncio.sleep(0.05)
 
     BATCH_SIZE = 100
     PROGRESS_EVERY = 500

@@ -84,11 +84,11 @@ class RateLimitMiddleware(BaseMiddleware):
         now = time.monotonic()
         timestamps = self._user_timestamps[uid]
 
-        timestamps[:] = [t for t in timestamps if now - t < self.window]
-
         if len(timestamps) >= self.limit:
-            logger.warning("Rate limit hit for user %s", uid)
-            return None
+            timestamps[:] = [t for t in timestamps if now - t < self.window]
+            if len(timestamps) >= self.limit:
+                logger.warning("Rate limit hit for user %s", uid)
+                return None
 
         timestamps.append(now)
         return await handler(event, data)

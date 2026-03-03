@@ -103,7 +103,7 @@ async def toggle_chat_currency(callback_query: CallbackQuery):
     currency = parts[4]
     page = int(parts[5]) if len(parts) > 5 else 0
     
-    if str(chat_id) not in user_data.chat_data:
+    if chat_id not in user_data.chat_data:
         await user_data.initialize_chat_settings(chat_id)
     
     chat_currencies = await user_data.get_chat_currencies(chat_id)
@@ -129,7 +129,7 @@ async def toggle_chat_crypto(callback_query: CallbackQuery):
         await show_not_admin_message(callback_query, user_id)
         return
     
-    if str(chat_id) not in user_data.chat_data:
+    if chat_id not in user_data.chat_data:
         await user_data.initialize_chat_settings(chat_id)
     
     chat_crypto = await user_data.get_chat_crypto(chat_id)

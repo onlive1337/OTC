@@ -9,7 +9,8 @@ from aiohttp import ClientSession, ClientTimeout
 
 from config.config import LOG_LEVEL, HTTP_TOTAL_TIMEOUT, HTTP_CONNECT_TIMEOUT, CACHE_EXPIRATION_TIME
 from loader import bot, dp, user_data
-from utils.utils import get_exchange_rates, set_http_session, close_http_session, _safe_bg_task, refresh_rates
+from utils.http import set_http_session, close_http_session, _safe_bg_task
+from utils.rates import get_exchange_rates, refresh_rates
 from utils.log_handler import setup_telegram_logging
 
 from utils.middleware import RateLimitMiddleware, RetryMiddleware, ErrorBoundaryMiddleware

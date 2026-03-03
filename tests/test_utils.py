@@ -3,13 +3,13 @@ import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import pytest
-from utils.utils import (
+from utils.parser import (
     parse_amount_and_currency,
-    convert_currency,
-    format_large_number,
     smart_number_parse,
     parse_mathematical_expression,
 )
+from utils.rates import convert_currency
+from utils.formatter import format_large_number
 
 
 class TestSmartNumberParse:

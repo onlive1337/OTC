@@ -6,7 +6,8 @@ from aiogram.utils.keyboard import InlineKeyboardBuilder
 from config.config import CURRENT_VERSION
 from config.languages import LANGUAGES
 from loader import user_data
-from utils.utils import read_changelog, delete_conversion_message
+from utils.formatter import read_changelog
+from utils.utils import delete_conversion_message
 from utils.button_styles import primary_button, success_button, danger_button, EMOJI
 
 router = Router()

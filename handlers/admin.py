@@ -48,7 +48,7 @@ async def cmd_health(message: Message):
 
     db_ok = "✅"
     try:
-        conn = await user_data._get_conn()
+        conn = await user_data._get_write_conn()
         await conn.execute("SELECT 1")
     except Exception:
         db_ok = "❌"

@@ -9,7 +9,9 @@ from aiogram.utils.keyboard import InlineKeyboardBuilder
 from config.config import ALL_CURRENCIES, CURRENCY_SYMBOLS, CURRENCY_ABBREVIATIONS, CRYPTO_CURRENCIES
 from config.languages import LANGUAGES
 from loader import user_data
-from utils.utils import get_exchange_rates, convert_currency, format_large_number, parse_amount_and_currency
+from utils.rates import get_exchange_rates, convert_currency
+from utils.formatter import format_large_number
+from utils.parser import parse_amount_and_currency
 from utils.button_styles import danger_button, primary_button, EMOJI
 
 logger = logging.getLogger(__name__)

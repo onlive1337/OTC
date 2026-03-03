@@ -53,6 +53,19 @@ ALL_CURRENCIES = {
 CRYPTO_CURRENCIES = ['BTC', 'ETH', 'USDT', 'BNB', 'XRP', 'ADA', 'SOL', 'DOT', 'DOGE', 'TON', 'LTC']
 ACTIVE_CURRENCIES = [cur for cur in ALL_CURRENCIES if cur not in CRYPTO_CURRENCIES]
 
+CRYPTO_ID_MAPPING = {
+    'coingecko': {
+        'BTC': 'bitcoin', 'ETH': 'ethereum', 'USDT': 'tether', 'BNB': 'binancecoin',
+        'XRP': 'ripple', 'ADA': 'cardano', 'SOL': 'solana', 'DOT': 'polkadot',
+        'DOGE': 'dogecoin', 'TON': 'the-open-network', 'LTC': 'litecoin',
+    },
+    'coincap': {
+        'BTC': 'bitcoin', 'ETH': 'ethereum', 'USDT': 'tether', 'BNB': 'binance-coin',
+        'XRP': 'xrp', 'ADA': 'cardano', 'SOL': 'solana', 'DOT': 'polkadot',
+        'DOGE': 'dogecoin', 'TON': 'toncoin', 'LTC': 'litecoin',
+    },
+}
+
 CURRENCY_SYMBOLS = {
     '$': 'USD', '€': 'EUR', '£': 'GBP', '¥': 'JPY', '₽': 'RUB', '₣': 'CHF', '₹': 'INR', '₺': 'TRY',
     '₴': 'UAH', '₿': 'BTC', 'сум': 'UZS', 'грн': 'UAH', '₸': 'KZT', 'Br': 'BYN'

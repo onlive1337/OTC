@@ -1,6 +1,7 @@
 from aiogram.types import CallbackQuery
 from aiogram.exceptions import TelegramBadRequest
 from config.config import ACTIVE_CURRENCIES, ALL_CURRENCIES, CRYPTO_CURRENCIES
+from utils.formatter import get_currency_symbol
 from config.languages import LANGUAGES
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
@@ -62,7 +63,7 @@ async def show_currencies(callback_query: CallbackQuery):
     kb = InlineKeyboardBuilder()
     for currency in current_currencies:
         status = "✅" if currency in user_currencies else "❌"
-        kb.row(primary_button(f"{ALL_CURRENCIES[currency]} {currency} {status}", f"toggle_currency_{currency}_{page}"))
+        kb.row(primary_button(f"{get_currency_symbol(currency)}{currency} {status}", f"toggle_currency_{currency}_{page}"))
     
     nav_buttons = []
     if page > 0:
@@ -85,7 +86,7 @@ async def show_crypto(callback_query: CallbackQuery):
     kb = InlineKeyboardBuilder()
     for crypto in CRYPTO_CURRENCIES:
         status = "✅" if crypto in user_crypto else "❌"
-        kb.row(primary_button(f"{ALL_CURRENCIES[crypto]} {crypto} {status}", f"toggle_crypto_{crypto}"))
+        kb.row(primary_button(f"{get_currency_symbol(crypto)}{crypto} {status}", f"toggle_crypto_{crypto}"))
     
     kb.row(primary_button(LANGUAGES[user_lang]['back_to_settings'], "back_to_settings", emoji=EMOJI['settings']))
     kb.adjust(2, 2, 2, 2, 2, 2, 2, 1)

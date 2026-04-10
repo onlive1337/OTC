@@ -1,4 +1,5 @@
 from config.config import ACTIVE_CURRENCIES, ALL_CURRENCIES, CRYPTO_CURRENCIES
+from utils.formatter import get_currency_symbol
 from config.languages import LANGUAGES
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 from aiogram.types import CallbackQuery, Message
@@ -34,8 +35,8 @@ async def show_chat_currencies(callback_query: CallbackQuery):
     kb = InlineKeyboardBuilder()
     for currency in current_currencies:
         status = "✅" if currency in chat_currencies else "❌"
-        kb.row(primary_button(f"{ALL_CURRENCIES[currency]} {currency} {status}",
-                 f"toggle_chat_currency_{chat_id}_{currency}_{page}"))
+        kb.row(primary_button(f"{get_currency_symbol(currency)}{currency} {status}",
+                              f"toggle_chat_currency_{chat_id}_{currency}_{page}"))
     
     nav_buttons = []
     if page > 0:
@@ -74,8 +75,8 @@ async def show_chat_crypto(callback_query: CallbackQuery):
     kb = InlineKeyboardBuilder()
     for crypto in CRYPTO_CURRENCIES:
         status = "✅" if crypto in chat_crypto else "❌"
-        kb.row(primary_button(f"{ALL_CURRENCIES[crypto]} {crypto} {status}",
-                 f"toggle_chat_crypto_{chat_id}_{crypto}"))
+        kb.row(primary_button(f"{get_currency_symbol(crypto)}{crypto} {status}",
+                              f"toggle_chat_crypto_{chat_id}_{crypto}"))
     
     kb.row(primary_button(LANGUAGES[user_lang]['back_to_settings'],
               f"back_to_chat_settings_{chat_id}", emoji=EMOJI['settings']))

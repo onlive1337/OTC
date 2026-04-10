@@ -453,10 +453,9 @@ async def inline_query_handler(query: InlineQuery):
             if suggestions:
                 results = []
                 for i, code in enumerate(suggestions):
-                    emoji = ALL_CURRENCIES.get(code, '')
                     results.append(InlineQueryResultArticle(
                         id=f"suggest_{code}",
-                        title=f"{emoji} {code}",
+                        title=f"{get_currency_symbol(code)}{code}",
                         description=LANGUAGES[user_lang].get('invalid_input_description', "Tap to use this currency"),
                         input_message_content=InputTextMessageContent(
                             message_text=LANGUAGES[user_lang].get('empty_input_message',

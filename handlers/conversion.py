@@ -362,9 +362,18 @@ async def handle_message(message: types.Message):
                 kb = InlineKeyboardBuilder()
                 kb.row(danger_button(LANGUAGES[user_lang].get('delete_button', 'Delete'), 'delete_conversion', emoji=EMOJI['delete']))
                 
-                response = LANGUAGES[user_lang].get('math_result', '🧮 {expression}\n= <b>{result}</b>').format(
+                result_str = format_large_number(math_result)
+                total_len = len(text_cleaned) + len(result_str)
+                if total_len <= 35:
+                    template_key = 'math_result_short'
+                    fallback = '{expression} = <b>{result}</b>'
+                else:
+                    template_key = 'math_result_long'
+                    fallback = '{expression}\n= <b>{result}</b>'
+                
+                response = LANGUAGES[user_lang].get(template_key, fallback).format(
                     expression=text_cleaned,
-                    result=format_large_number(math_result)
+                    result=result_str
                 )
                 await message.reply(text=response, reply_markup=kb.as_markup(), parse_mode="HTML")
                 return

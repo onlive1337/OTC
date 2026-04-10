@@ -11,7 +11,7 @@ from config.config import ALL_CURRENCIES, CURRENCY_SYMBOLS, CURRENCY_ABBREVIATIO
 from config.languages import LANGUAGES
 from loader import user_data
 from utils.rates import get_exchange_rates, convert_currency
-from utils.formatter import format_large_number
+from utils.formatter import format_large_number, get_currency_symbol
 from utils.parser import parse_amount_and_currency, parse_mathematical_expression
 from utils.button_styles import danger_button, primary_button, EMOJI
 
@@ -122,8 +122,8 @@ async def process_targeted_conversion(message: types.Message, amount: float, fro
         is_crypto = to_currency in CRYPTO_CURRENCIES
 
         response = (
-            f"{format_large_number(amount, is_original_amount=True)} {ALL_CURRENCIES.get(from_currency, '')} {from_currency}\n"
-            f"= {format_large_number(converted, is_crypto)} {ALL_CURRENCIES.get(to_currency, '')} {to_currency}"
+            f"{format_large_number(amount, is_original_amount=True)} {get_currency_symbol(from_currency)}{from_currency}\n"
+            f"= {format_large_number(converted, is_crypto)} {get_currency_symbol(to_currency)}{to_currency}"
         )
 
         kb = InlineKeyboardBuilder()
@@ -165,7 +165,7 @@ async def process_multiple_conversions(message: types.Message, requests: List[Tu
             if amount <= 0 or amount > 1e100 or amount < -1e100:
                 continue
             
-            response = f"{format_large_number(amount, is_original_amount=True)} {ALL_CURRENCIES.get(from_currency, '')} {from_currency}\n"
+            response = f"{format_large_number(amount, is_original_amount=True)} {get_currency_symbol(from_currency)}{from_currency}\n"
             conversion_parts = []
             
             if user_currencies:
@@ -175,7 +175,7 @@ async def process_multiple_conversions(message: types.Message, requests: List[Tu
                     if to_cur != from_currency:
                         try:
                             converted = convert_currency(amount, from_currency, to_cur, rates)
-                            fiat_parts.append(f"{format_large_number(converted)} {ALL_CURRENCIES.get(to_cur, '')} {to_cur}")
+                            fiat_parts.append(f"{format_large_number(converted)} {get_currency_symbol(to_cur)}{to_cur}")
                         except (KeyError, OverflowError):
                             continue
                 if fiat_parts:
@@ -243,7 +243,7 @@ async def process_conversion(message: types.Message, amount: float, from_currenc
             return
         
         response_parts = []
-        response_parts.append(f"{format_large_number(amount, is_original_amount=True)} {ALL_CURRENCIES.get(from_currency, '')} {from_currency}\n")
+        response_parts.append(f"{format_large_number(amount, is_original_amount=True)} {get_currency_symbol(from_currency)}{from_currency}\n")
 
         if user_currencies:
             response_parts.append(f"\n{LANGUAGES[user_lang]['fiat_currencies']}\n")
@@ -252,7 +252,7 @@ async def process_conversion(message: types.Message, amount: float, from_currenc
                 if to_cur != from_currency:
                     try:
                         converted = convert_currency(amount, from_currency, to_cur, rates)
-                        conversion_line = f"{format_large_number(converted)} {ALL_CURRENCIES.get(to_cur, '')} {to_cur}"
+                        conversion_line = f"{format_large_number(converted)} {get_currency_symbol(to_cur)}{to_cur}"
                         fiat_conversions.append(conversion_line)
                     except KeyError:
                         continue
@@ -506,7 +506,7 @@ async def inline_query_handler(query: InlineQuery):
             await query.answer(results=[no_currency_result], cache_time=60)
             return
 
-        result_content = f"{format_large_number(amount, is_original_amount=True)} {ALL_CURRENCIES[from_currency]} {from_currency}\n\n"
+        result_content = f"{format_large_number(amount, is_original_amount=True)} {get_currency_symbol(from_currency)}{from_currency}\n\n"
         
         if user_currencies:
             result_content += f"<b>{LANGUAGES[user_lang].get('fiat_currencies', 'Fiat currencies')}</b>\n\n"
@@ -516,7 +516,7 @@ async def inline_query_handler(query: InlineQuery):
                 if to_cur != from_currency:
                     try:
                         converted = convert_currency(amount, from_currency, to_cur, rates)
-                        result_content += f"{format_large_number(converted)} {ALL_CURRENCIES[to_cur]} {to_cur}\n"
+                        result_content += f"{format_large_number(converted)} {get_currency_symbol(to_cur)}{to_cur}\n"
                     except (KeyError, OverflowError):
                         continue
             if use_quote:
@@ -531,7 +531,7 @@ async def inline_query_handler(query: InlineQuery):
                 if to_cur != from_currency:
                     try:
                         converted = convert_currency(amount, from_currency, to_cur, rates)
-                        result_content += f"{format_large_number(converted, True)} {ALL_CURRENCIES[to_cur]}\n"
+                        result_content += f"{format_large_number(converted, True)} {get_currency_symbol(to_cur)}\n"
                     except (KeyError, OverflowError):
                         continue
             if use_quote:

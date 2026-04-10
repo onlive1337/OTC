@@ -1,8 +1,17 @@
 import os
 import re
 
+from config.config import ALL_CURRENCIES
+
 
 _CHANGELOG_CACHE = None
+
+
+def get_currency_symbol(code: str) -> str:
+    symbol = ALL_CURRENCIES.get(code, '')
+    if not symbol or symbol == code:
+        return ''
+    return symbol + ' '
 
 
 def read_changelog():

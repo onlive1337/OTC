@@ -444,13 +444,35 @@ async def inline_query_handler(query: InlineQuery):
         await user_data.update_user_data(query.from_user.id, language_code=query.from_user.language_code)
         data = await user_data.get_user_data(query.from_user.id)
         user_lang = data.get('language', 'ru')
+        
+        text = query.query.strip()
+
+        unknown_cur = _extract_unknown_currency(text)
+        if unknown_cur:
+            suggestions = _find_similar_currencies(unknown_cur)
+            if suggestions:
+                results = []
+                for i, code in enumerate(suggestions):
+                    emoji = ALL_CURRENCIES.get(code, '')
+                    results.append(InlineQueryResultArticle(
+                        id=f"suggest_{code}",
+                        title=f"{emoji} {code}",
+                        description=LANGUAGES[user_lang].get('invalid_input_description', "Tap to use this currency"),
+                        input_message_content=InputTextMessageContent(
+                            message_text=LANGUAGES[user_lang].get('empty_input_message',
+                            "Enter amount and currency code to convert.")
+                        )
+                    ))
+                await query.answer(results=results, cache_time=60)
+                return
+
         error_result = InlineQueryResultArticle(
             id="error",
-            title=LANGUAGES[user_lang].get('invalid_input', "Invalid Input"),
-            description=LANGUAGES[user_lang].get('invalid_input_description', "Please check your input format"),
+            title=LANGUAGES[user_lang].get('empty_input_title', "Enter amount and currency"),
+            description=LANGUAGES[user_lang].get('empty_input_description', "For example, '100 USD' or '10,982 KZT'"),
             input_message_content=InputTextMessageContent(
-                message_text=LANGUAGES[user_lang].get('invalid_input_message', 
-                "Invalid input. Please enter amount and currency code, e.g., '100 USD' or '10,982 KZT'.")
+                message_text=LANGUAGES[user_lang].get('empty_input_message', 
+                "Enter amount and currency code: 100 USD or 10,982 KZT.")
             )
         )
         await query.answer(results=[error_result], cache_time=60)

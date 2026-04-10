@@ -1,3 +1,4 @@
+import difflib
 import re
 import logging
 from typing import List, Tuple, Optional
@@ -11,7 +12,7 @@ from config.languages import LANGUAGES
 from loader import user_data
 from utils.rates import get_exchange_rates, convert_currency
 from utils.formatter import format_large_number
-from utils.parser import parse_amount_and_currency
+from utils.parser import parse_amount_and_currency, parse_mathematical_expression
 from utils.button_styles import danger_button, primary_button, EMOJI
 
 logger = logging.getLogger(__name__)
@@ -33,6 +34,55 @@ _SEPARATORS = [
     r';', r'\n', r',\s+(?=\d)', r'\s+\+\s+'
 ]
 _SEPARATORS_REGEX = re.compile(f"({'|'.join(_SEPARATORS)})", re.IGNORECASE)
+
+_MATH_ONLY_REGEX = re.compile(
+    r'^[\d\s.,+\-*/()^×÷:хk]+$'
+)
+
+_ALL_KNOWN_CODES = set(k.upper() for k in ALL_CURRENCIES.keys())
+_ALL_KNOWN_WORDS = set()
+for p in CURRENCY_SYMBOLS:
+    _ALL_KNOWN_WORDS.add(p.lower())
+for p in CURRENCY_ABBREVIATIONS:
+    _ALL_KNOWN_WORDS.add(p.lower())
+for k in ALL_CURRENCIES:
+    _ALL_KNOWN_WORDS.add(k.lower())
+
+
+def _find_similar_currencies(text: str, max_results: int = 3) -> List[str]:
+    text_upper = text.upper().strip()
+    text_lower = text.lower().strip()
+    
+    suggestions = []
+    
+    code_matches = difflib.get_close_matches(text_upper, _ALL_KNOWN_CODES, n=max_results, cutoff=0.5)
+    suggestions.extend(code_matches)
+    
+    if len(suggestions) < max_results:
+        word_matches = difflib.get_close_matches(text_lower, _ALL_KNOWN_WORDS, n=max_results, cutoff=0.5)
+        for w in word_matches:
+            code = _TARGET_PATTERNS_LOWER.get(w)
+            if code and code not in suggestions:
+                suggestions.append(code)
+    
+    return suggestions[:max_results]
+
+
+def _extract_unknown_currency(text: str) -> Optional[str]:
+    text = text.strip()
+
+    pattern = re.compile(
+        r'^([\d\s.,]+)\s+([a-zA-Zа-яА-ЯёЁ]{2,10})$'
+        r'|^([a-zA-Zа-яА-ЯёЁ]{2,10})\s+([\d\s.,]+)$'
+    )
+    m = pattern.match(text)
+    if m:
+        if m.group(2):
+            return m.group(2)
+        elif m.group(3):
+            return m.group(3)
+    return None
+
 
 
 def _find_target_currency(text: str, from_currency: str) -> Optional[str]:
@@ -295,31 +345,66 @@ async def handle_message(message: types.Message):
             else:
                 await process_conversion(message, amount, currency)
     else:
+        has_numbers = any(char.isdigit() for char in message.text)
+        if not has_numbers:
+            return
+        
+        if message.chat.type in ('group', 'supergroup'):
+            user_lang = (await user_data.get_chat_data(message.chat.id)).get('language', 'ru')
+        else:
+            user_lang = (await user_data.get_user_data(user_id)).get('language', 'ru')
+
+        text_cleaned = message.text.strip()
+        if _MATH_ONLY_REGEX.match(text_cleaned):
+            expr_normalized = text_cleaned.replace(' ', '').replace(',', '.')
+            math_result = parse_mathematical_expression(expr_normalized)
+            if math_result is not None:
+                kb = InlineKeyboardBuilder()
+                kb.row(danger_button(LANGUAGES[user_lang].get('delete_button', 'Delete'), 'delete_conversion', emoji=EMOJI['delete']))
+                
+                response = LANGUAGES[user_lang].get('math_result', '🧮 {expression}\n= <b>{result}</b>').format(
+                    expression=text_cleaned,
+                    result=format_large_number(math_result)
+                )
+                await message.reply(text=response, reply_markup=kb.as_markup(), parse_mode="HTML")
+                return
+
+        unknown_cur = _extract_unknown_currency(message.text)
+        if unknown_cur:
+            suggestions = _find_similar_currencies(unknown_cur)
+            if suggestions:
+                formatted = ", ".join(f"<b>{s}</b>" for s in suggestions)
+                error_msg = LANGUAGES[user_lang].get(
+                    'unknown_currency',
+                    '⚠️ Currency <b>{currency}</b> not found.\n\nDid you mean: {suggestions}?\n\nCurrency list — /settings'
+                ).format(currency=unknown_cur.upper(), suggestions=formatted)
+            else:
+                error_msg = LANGUAGES[user_lang].get(
+                    'unknown_currency_no_suggestions',
+                    '⚠️ Currency <b>{currency}</b> not found.\n\nUse codes like: USD, EUR, RUB, etc.\nCurrency list — /settings'
+                ).format(currency=unknown_cur.upper())
+            
+            await message.reply(text=error_msg, parse_mode="HTML")
+            return
+
         trigger_words = {
             'ru': ['конвертировать', 'перевести', 'convert'],
             'en': ['convert', 'exchange', 'convert']
         }
         
-        has_numbers = any(char.isdigit() for char in message.text)
-        if has_numbers:
-            if message.chat.type in ('group', 'supergroup'):
-                user_lang = (await user_data.get_chat_data(message.chat.id)).get('language', 'ru')
-            else:
-                user_lang = (await user_data.get_user_data(user_id)).get('language', 'ru')
-
-            has_trigger_word = any(word in message.text.lower() for word in trigger_words.get(user_lang, trigger_words['en']))
+        has_trigger_word = any(word in message.text.lower() for word in trigger_words.get(user_lang, trigger_words['en']))
+        
+        if has_trigger_word:
+            kb = InlineKeyboardBuilder()
+            kb.row(primary_button(LANGUAGES[user_lang].get('help_button', 'Help'), "howto", emoji=EMOJI['help']))
             
-            if has_trigger_word:
-                kb = InlineKeyboardBuilder()
-                kb.row(primary_button(LANGUAGES[user_lang].get('help_button', 'Help'), "howto", emoji=EMOJI['help']))
-                
-                error_message = LANGUAGES[user_lang].get('conversion_help_message', 
-                    LANGUAGES['en']['conversion_help_message'])
-                
-                await message.reply(
-                    error_message,
-                    reply_markup=kb.as_markup()
-                )
+            error_message = LANGUAGES[user_lang].get('conversion_help_message', 
+                LANGUAGES['en']['conversion_help_message'])
+            
+            await message.reply(
+                error_message,
+                reply_markup=kb.as_markup()
+            )
         
         logger.debug("No valid conversion requests found in message: %s from user %s", message.text, user_id)
 

@@ -4,6 +4,15 @@ All notable changes to this project will be documented in this file.
 
 ## Changelog
 
+## [1.8.1] - 2026-04-11
+
+### ✨ New Features
+- **Unknown Currency Warning**: Bot now warns when an unrecognized currency is entered (e.g., `300 bny`) and suggests similar codes (`BYN`, `BNB`, `CNY`) using fuzzy matching.
+- **Standalone Math Calculator**: Pure math expressions without a currency (e.g., `50+50`, `1000*3-20`, `100/4`) now return calculated results.
+
+### 🔧 Other
+- Added `unknown_currency`, `unknown_currency_no_suggestions`, and `math_result` localization strings for RU/EN.
+
 ## [1.8.0] - 2026-02-28
 
 ### ⚡ Performance

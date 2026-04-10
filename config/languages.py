@@ -80,6 +80,9 @@ LANGUAGES = {
    'conversion_help_message': """Не удалось распознать сумму и валюту.
 
 Формат: 100 USD, 50 евро, 1000 рублей, 10к долларов""",
+   'unknown_currency': "⚠️ Валюта <b>{currency}</b> не найдена.\n\nВозможно, вы имели в виду: {suggestions}?\n\nСписок валют — /settings",
+   'unknown_currency_no_suggestions': "⚠️ Валюта <b>{currency}</b> не найдена.\n\nИспользуйте коды: USD, EUR, RUB и т.д.\nСписок валют — /settings",
+   'math_result': "🧮 {expression}\n= <b>{result}</b>",
    'no_admin_rights': "У вас нет прав для выполнения этой команды.",
     },
     'en': {
@@ -163,6 +166,9 @@ Help: /help""",
    'conversion_help_message': """Could not recognize amount and currency.
 
 Format: 100 USD, 50 euro, 1000 rubles, 10k dollars""",
+   'unknown_currency': "⚠️ Currency <b>{currency}</b> not found.\n\nDid you mean: {suggestions}?\n\nCurrency list — /settings",
+   'unknown_currency_no_suggestions': "⚠️ Currency <b>{currency}</b> not found.\n\nUse codes like: USD, EUR, RUB, etc.\nCurrency list — /settings",
+   'math_result': "🧮 {expression}\n= <b>{result}</b>",
    'no_admin_rights': "You don't have permission to use this command.",
     }
 }

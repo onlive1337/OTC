@@ -44,7 +44,7 @@ ALL_CURRENCIES = {
     'INR': '🇮🇳', 'BRL': '🇧🇷', 'MXN': '🇲🇽', 'SGD': '🇸🇬', 'HKD': '🇭🇰', 'KRW': '🇰🇷', 'TRY': '🇹🇷',
     'PLN': '🇵🇱', 'THB': '🇹🇭', 'IDR': '🇮🇩', 'HUF': '🇭🇺', 'CZK': '🇨🇿', 'ILS': '🇮🇱', 'CLP': '🇨🇱',
     'PHP': '🇵🇭', 'AED': '🇦🇪', 'COP': '🇨🇴', 'SAR': '🇸🇦', 'MYR': '🇲🇾', 'RON': '🇷🇴',
-    'UZS': '🇺🇿', 'UAH': '🇺🇦', 'KZT': '🇰🇿', 'ARS': '🇦🇷', 'VND': '🇻🇳', 'BGN': '🇧🇬', 'HRK': '🇭🇷',
+    'UZS': '🇺🇿', 'UAH': '🇺🇦', 'KZT': '🇰🇿', 'ARS': '🇦🇷', 'VND': '🇻🇳',
     'BYN': '🇧🇾',
     'BTC': '₿', 'ETH': 'Ξ', 'USDT': '₮', 'BNB': 'BNB', 'XRP': 'XRP', 'ADA': 'ADA', 'SOL': 'SOL', 'DOT': 'DOT',
     'DOGE': 'Ð', 'TON': 'TON', 'LTC': 'Ł'

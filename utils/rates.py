@@ -139,16 +139,20 @@ async def _fetch_rates_unlocked() -> Dict[str, float]:
             return None
 
         async def _fetch_all_fiat():
+            needed_fiat = set(ACTIVE_CURRENCIES)
+            merged: Dict[str, float] = {}
             tasks = [asyncio.create_task(_fetch_single_fiat(url)) for url in fiat_sources]
             try:
                 for coro in asyncio.as_completed(tasks):
                     try:
                         result = await coro
                         if result:
-                            for t in tasks:
-                                if not t.done():
-                                    t.cancel()
-                            return result
+                            merged.update(result)
+                            if needed_fiat.issubset(merged.keys()):
+                                for t in tasks:
+                                    if not t.done():
+                                        t.cancel()
+                                return merged
                     except Exception as e:
                         logger.warning(f"Fiat source failed: {e}")
                         continue
@@ -157,7 +161,7 @@ async def _fetch_rates_unlocked() -> Dict[str, float]:
                     if not t.done():
                         t.cancel()
                 await asyncio.gather(*tasks, return_exceptions=True)
-            return None
+            return merged or None
 
         gecko_mapping = CRYPTO_ID_MAPPING['coingecko']
         crypto_ids = ','.join(gecko_mapping.values())

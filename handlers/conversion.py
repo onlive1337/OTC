@@ -378,23 +378,24 @@ async def handle_message(message: types.Message):
                 await message.reply(text=response, reply_markup=kb.as_markup(), parse_mode="HTML")
                 return
 
-        unknown_cur = _extract_unknown_currency(message.text)
-        if unknown_cur:
-            suggestions = _find_similar_currencies(unknown_cur)
-            if suggestions:
-                formatted = ", ".join(f"<b>{s}</b>" for s in suggestions)
-                error_msg = LANGUAGES[user_lang].get(
-                    'unknown_currency',
-                    '⚠️ Currency <b>{currency}</b> not found.\n\nDid you mean: {suggestions}?\n\nCurrency list — /settings'
-                ).format(currency=unknown_cur.upper(), suggestions=formatted)
-            else:
-                error_msg = LANGUAGES[user_lang].get(
-                    'unknown_currency_no_suggestions',
-                    '⚠️ Currency <b>{currency}</b> not found.\n\nUse codes like: USD, EUR, RUB, etc.\nCurrency list — /settings'
-                ).format(currency=unknown_cur.upper())
-            
-            await message.reply(text=error_msg, parse_mode="HTML")
-            return
+        if message.chat.type == 'private':
+            unknown_cur = _extract_unknown_currency(message.text)
+            if unknown_cur:
+                suggestions = _find_similar_currencies(unknown_cur)
+                if suggestions:
+                    formatted = ", ".join(f"<b>{s}</b>" for s in suggestions)
+                    error_msg = LANGUAGES[user_lang].get(
+                        'unknown_currency',
+                        '⚠️ Currency <b>{currency}</b> not found.\n\nDid you mean: {suggestions}?\n\nCurrency list — /settings'
+                    ).format(currency=unknown_cur.upper(), suggestions=formatted)
+                else:
+                    error_msg = LANGUAGES[user_lang].get(
+                        'unknown_currency_no_suggestions',
+                        '⚠️ Currency <b>{currency}</b> not found.\n\nUse codes like: USD, EUR, RUB, etc.\nCurrency list — /settings'
+                    ).format(currency=unknown_cur.upper())
+                
+                await message.reply(text=error_msg, parse_mode="HTML")
+                return
 
         trigger_words = {
             'ru': ['конвертировать', 'перевести', 'convert'],

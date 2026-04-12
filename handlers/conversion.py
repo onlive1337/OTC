@@ -355,7 +355,8 @@ async def handle_message(message: types.Message):
             user_lang = (await user_data.get_user_data(user_id)).get('language', 'ru')
 
         text_cleaned = message.text.strip()
-        if _MATH_ONLY_REGEX.match(text_cleaned):
+        math_operators = {'+', '-', '*', '/', '^', '×', '÷', ':', 'х'}
+        if _MATH_ONLY_REGEX.match(text_cleaned) and any(op in text_cleaned for op in math_operators):
             expr_normalized = text_cleaned.replace(' ', '').replace(',', '.')
             math_result = parse_mathematical_expression(expr_normalized)
             if math_result is not None:

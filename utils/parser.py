@@ -145,7 +145,7 @@ def parse_amount_and_currency(text: str) -> Tuple[Optional[float], Optional[str]
     if not currency:
         return None, None
     
-    amount_text = text_lower[:currency_match.start()] + text_lower[currency_match.end():]
+    amount_text = _CURRENCY_REGEX.sub('', text_lower)
     amount_text = amount_text.strip()
     
     math_operators = ['+', '-', '*', '/', '(', ')', '^', 'х', '×', '÷', ':']

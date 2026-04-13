@@ -144,6 +144,32 @@ async def toggle_chat_crypto(callback_query: CallbackQuery):
     
     await show_chat_crypto(callback_query)
 
+async def toggle_chat_quote_format(callback_query: CallbackQuery):
+    await callback_query.answer()
+    parts = callback_query.data.split('_')
+    chat_id = int(parts[4])
+    user_id = callback_query.from_user.id
+    
+    if not await check_admin_rights(callback_query, user_id, chat_id):
+        await show_not_admin_message(callback_query, user_id)
+        return
+        
+    use_quote = await user_data.get_chat_quote_format(chat_id)
+    new_format = not use_quote
+    await user_data.set_chat_quote_format(chat_id, new_format)
+    
+    user_lang = await user_data.get_chat_language(chat_id)
+    kb = build_chat_settings_kb(user_lang, chat_id)
+    
+    try:
+        await callback_query.message.edit_text(
+            format_settings_text(user_lang, new_format, is_chat=True),
+            reply_markup=kb.as_markup()
+        )
+    except TelegramBadRequest as e:
+        if "message is not modified" not in str(e):
+            raise
+
 async def show_chat_settings(message: Message):
     user_id = message.from_user.id
     chat_id = message.chat.id

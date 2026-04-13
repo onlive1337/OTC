@@ -12,7 +12,8 @@ from utils.keyboards import build_settings_kb, format_settings_text
 from data.chat_settings import (
     show_chat_settings, save_chat_settings, show_chat_currencies, 
     show_chat_crypto, toggle_chat_crypto, toggle_chat_currency, 
-    back_to_chat_settings, change_chat_language, set_chat_language
+    back_to_chat_settings, change_chat_language, set_chat_language,
+    toggle_chat_quote_format
 )
 from data.user_settings import (
     show_currencies, show_crypto, toggle_crypto, toggle_currency, 
@@ -85,3 +86,4 @@ router.callback_query.register(save_chat_settings, F.data.startswith("save_chat_
 router.callback_query.register(back_to_chat_settings, F.data.startswith("back_to_chat_settings_"))
 router.callback_query.register(change_chat_language, F.data.startswith("change_chat_language_"))
 router.callback_query.register(set_chat_language, F.data.startswith("set_chat_language_"))
+router.callback_query.register(toggle_chat_quote_format, F.data.startswith("toggle_chat_quote_format_"))

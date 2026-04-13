@@ -21,7 +21,7 @@ class ChatRepoMixin:
             default_currencies = ACTIVE_CURRENCIES[:5]
             default_crypto = CRYPTO_CURRENCIES[:5]
             try:
-                await conn.execute("INSERT INTO chats(chat_id, quote_format, language) VALUES(?, 0, 'ru')", (chat_id,))
+                await conn.execute("INSERT INTO chats(chat_id, quote_format, language) VALUES(?, 0, 'en')", (chat_id,))
                 currencies_data = [(chat_id, c) for c in default_currencies]
                 await conn.executemany("INSERT OR IGNORE INTO chat_currencies(chat_id, currency) VALUES(?, ?)", currencies_data)
                 crypto_data = [(chat_id, s) for s in default_crypto]
@@ -31,7 +31,7 @@ class ChatRepoMixin:
                     'currencies': list(default_currencies),
                     'crypto': list(default_crypto),
                     'quote_format': False,
-                    'language': 'ru',
+                    'language': 'en',
                 }
             except IntegrityError:
                 logger.debug("Chat %s already exists (race condition handled)", chat_id)
@@ -56,7 +56,7 @@ class ChatRepoMixin:
             row = await cursor.fetchone()
 
         if not row:
-            return {'currencies': [], 'crypto': [], 'quote_format': False, 'language': 'ru'}
+            return {'currencies': [], 'crypto': [], 'quote_format': False, 'language': 'en'}
 
         quote_format, language, currencies_str, crypto_str = row
         currencies = currencies_str.split(',') if currencies_str else []
@@ -66,7 +66,7 @@ class ChatRepoMixin:
             'currencies': currencies,
             'crypto': crypto,
             'quote_format': bool(quote_format) if quote_format else False,
-            'language': language or 'ru',
+            'language': language or 'en',
         }
         self.chat_data[chat_id] = data
         return data
@@ -158,7 +158,7 @@ class ChatRepoMixin:
         conn = await self._get_read_conn()
         async with conn.execute("SELECT language FROM chats WHERE chat_id=?", (chat_id,)) as cursor:
             row = await cursor.fetchone()
-        lang = row[0] if row and row[0] else 'ru'
+        lang = row[0] if row and row[0] else 'en'
         if chat_id not in self.chat_data or not isinstance(self.chat_data[chat_id], dict):
             self.chat_data[chat_id] = {}
         self.chat_data[chat_id]['language'] = lang

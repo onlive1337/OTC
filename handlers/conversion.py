@@ -583,9 +583,9 @@ async def handle_my_chat_member(event: ChatMemberUpdated, bot: Bot):
         try:
             await user_data.initialize_chat_settings(event.chat.id)
             
-            user_lang = await user_data.get_user_language(event.from_user.id)
+            chat_lang = await user_data.get_chat_language(event.chat.id)
             
-            welcome_message = LANGUAGES[user_lang]['welcome_group_message']
+            welcome_message = LANGUAGES[chat_lang]['welcome_group_message']
             
             await bot.send_message(event.chat.id, welcome_message)
             logger.info(f"Welcome message sent to chat {event.chat.id}")

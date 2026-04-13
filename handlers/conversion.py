@@ -355,29 +355,30 @@ async def handle_message(message: types.Message):
             user_lang = (await user_data.get_user_data(user_id)).get('language', 'ru')
 
         text_cleaned = message.text.strip()
-        math_operators = {'+', '-', '*', '/', '^', '×', '÷', ':', 'х'}
-        if _MATH_ONLY_REGEX.match(text_cleaned) and any(op in text_cleaned for op in math_operators):
-            expr_normalized = text_cleaned.replace(' ', '').replace(',', '.')
-            math_result = parse_mathematical_expression(expr_normalized)
-            if math_result is not None:
-                kb = InlineKeyboardBuilder()
-                kb.row(danger_button(LANGUAGES[user_lang].get('delete_button', 'Delete'), 'delete_conversion', emoji=EMOJI['delete']))
-                
-                result_str = format_large_number(math_result)
-                total_len = len(text_cleaned) + len(result_str)
-                if total_len <= 35:
-                    template_key = 'math_result_short'
-                    fallback = '{expression} = <b>{result}</b>'
-                else:
-                    template_key = 'math_result_long'
-                    fallback = '{expression}\n= <b>{result}</b>'
-                
-                response = LANGUAGES[user_lang].get(template_key, fallback).format(
-                    expression=text_cleaned,
-                    result=result_str
-                )
-                await message.reply(text=response, reply_markup=kb.as_markup(), parse_mode="HTML")
-                return
+        if message.chat.type == 'private':
+            math_operators = {'+', '-', '*', '/', '^', '×', '÷', ':', 'х'}
+            if _MATH_ONLY_REGEX.match(text_cleaned) and any(op in text_cleaned for op in math_operators):
+                expr_normalized = text_cleaned.replace(' ', '').replace(',', '.')
+                math_result = parse_mathematical_expression(expr_normalized)
+                if math_result is not None:
+                    kb = InlineKeyboardBuilder()
+                    kb.row(danger_button(LANGUAGES[user_lang].get('delete_button', 'Delete'), 'delete_conversion', emoji=EMOJI['delete']))
+                    
+                    result_str = format_large_number(math_result)
+                    total_len = len(text_cleaned) + len(result_str)
+                    if total_len <= 35:
+                        template_key = 'math_result_short'
+                        fallback = '{expression} = <b>{result}</b>'
+                    else:
+                        template_key = 'math_result_long'
+                        fallback = '{expression}\n= <b>{result}</b>'
+                    
+                    response = LANGUAGES[user_lang].get(template_key, fallback).format(
+                        expression=text_cleaned,
+                        result=result_str
+                    )
+                    await message.reply(text=response, reply_markup=kb.as_markup(), parse_mode="HTML")
+                    return
 
         if message.chat.type == 'private':
             unknown_cur = _extract_unknown_currency(message.text)
@@ -448,6 +449,36 @@ async def inline_query_handler(query: InlineQuery):
         user_lang = data.get('language', 'ru')
         
         text = query.query.strip()
+        
+        math_operators = {'+', '-', '*', '/', '^', '×', '÷', ':', 'х'}
+        if _MATH_ONLY_REGEX.match(text) and any(op in text for op in math_operators):
+            expr_normalized = text.replace(' ', '').replace(',', '.')
+            math_result = parse_mathematical_expression(expr_normalized)
+            if math_result is not None:
+                result_str = format_large_number(math_result)
+                total_len = len(text) + len(result_str)
+                if total_len <= 35:
+                    template_key = 'math_result_short'
+                    fallback = '{expression} = <b>{result}</b>'
+                else:
+                    template_key = 'math_result_long'
+                    fallback = '{expression}\n= <b>{result}</b>'
+                
+                response = LANGUAGES[user_lang].get(template_key, fallback).format(
+                    expression=text,
+                    result=result_str
+                )
+                math_article = InlineQueryResultArticle(
+                    id="math_result",
+                    title=f"{text} = {result_str}",
+                    description=LANGUAGES[user_lang].get('conversion_result', "Result"),
+                    input_message_content=InputTextMessageContent(
+                        message_text=response,
+                        parse_mode="HTML"
+                    )
+                )
+                await query.answer(results=[math_article], cache_time=60)
+                return
 
         unknown_cur = _extract_unknown_currency(text)
         if unknown_cur:

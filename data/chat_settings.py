@@ -14,7 +14,6 @@ logger = logging.getLogger(__name__)
 from loader import user_data
 
 async def show_chat_currencies(callback_query: CallbackQuery):
-    await callback_query.answer()
     parts = callback_query.data.split('_')
     chat_id = int(parts[3])
     user_id = callback_query.from_user.id
@@ -22,6 +21,7 @@ async def show_chat_currencies(callback_query: CallbackQuery):
     if not await check_admin_rights(callback_query, user_id, chat_id):
         await show_not_admin_message(callback_query, user_id)
         return
+    await callback_query.answer()
     
     page = int(parts[4]) if len(parts) > 4 and parts[4].isdigit() else 0
     chat_currencies = await user_data.get_chat_currencies(chat_id)
@@ -61,13 +61,13 @@ async def show_chat_currencies(callback_query: CallbackQuery):
             raise
 
 async def show_chat_crypto(callback_query: CallbackQuery):
-    await callback_query.answer()
     chat_id = int(callback_query.data.split('_')[3])
     user_id = callback_query.from_user.id
     
     if not await check_admin_rights(callback_query, user_id, chat_id):
         await show_not_admin_message(callback_query, user_id)
         return
+    await callback_query.answer()
     
     chat_crypto = await user_data.get_chat_crypto(chat_id)
     user_lang = await user_data.get_chat_language(chat_id)
@@ -92,7 +92,6 @@ async def show_chat_crypto(callback_query: CallbackQuery):
             raise
 
 async def toggle_chat_currency(callback_query: CallbackQuery):
-    await callback_query.answer()
     parts = callback_query.data.split('_')
     chat_id = int(parts[3])
     user_id = callback_query.from_user.id
@@ -100,6 +99,7 @@ async def toggle_chat_currency(callback_query: CallbackQuery):
     if not await check_admin_rights(callback_query, user_id, chat_id):
         await show_not_admin_message(callback_query, user_id)
         return
+    await callback_query.answer()
     
     currency = parts[4]
     page = int(parts[5]) if len(parts) > 5 else 0
@@ -121,7 +121,6 @@ async def toggle_chat_currency(callback_query: CallbackQuery):
     await show_chat_currencies(new_callback_query)
 
 async def toggle_chat_crypto(callback_query: CallbackQuery):
-    await callback_query.answer()
     chat_id, crypto = callback_query.data.split('_')[3:]
     chat_id = int(chat_id)
     user_id = callback_query.from_user.id
@@ -129,6 +128,7 @@ async def toggle_chat_crypto(callback_query: CallbackQuery):
     if not await check_admin_rights(callback_query, user_id, chat_id):
         await show_not_admin_message(callback_query, user_id)
         return
+    await callback_query.answer()
     
     if chat_id not in user_data.chat_data:
         await user_data.initialize_chat_settings(chat_id)
@@ -145,7 +145,6 @@ async def toggle_chat_crypto(callback_query: CallbackQuery):
     await show_chat_crypto(callback_query)
 
 async def toggle_chat_quote_format(callback_query: CallbackQuery):
-    await callback_query.answer()
     parts = callback_query.data.split('_')
     chat_id = int(parts[4])
     user_id = callback_query.from_user.id
@@ -153,6 +152,7 @@ async def toggle_chat_quote_format(callback_query: CallbackQuery):
     if not await check_admin_rights(callback_query, user_id, chat_id):
         await show_not_admin_message(callback_query, user_id)
         return
+    await callback_query.answer()
         
     use_quote = await user_data.get_chat_quote_format(chat_id)
     new_format = not use_quote
@@ -214,6 +214,7 @@ async def back_to_chat_settings(callback_query: CallbackQuery):
     if not await check_admin_rights(callback_query, user_id, chat_id):
         await show_not_admin_message(callback_query, user_id)
         return
+    await callback_query.answer()
     
     user_lang = await user_data.get_chat_language(chat_id)
     use_quote = await user_data.get_chat_quote_format(chat_id)
@@ -236,6 +237,7 @@ async def change_chat_language(callback_query: CallbackQuery):
     if not await check_admin_rights(callback_query, user_id, chat_id):
         await show_not_admin_message(callback_query, user_id)
         return
+    await callback_query.answer()
     
     user_lang = await user_data.get_chat_language(chat_id)
     

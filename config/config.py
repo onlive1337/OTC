@@ -21,22 +21,31 @@ if not COINCAP_API_KEY:
 # Storage
 DB_PATH = os.getenv('DB_PATH', 'otc.db')
 
-CURRENT_VERSION = "1.8.1"
+CURRENT_VERSION = "1.8.2"
 
 # Cache
 CACHE_EXPIRATION_TIME = 600  # seconds
 STALE_WHILE_REVALIDATE = 300  # seconds
+MIN_CONVERSION_AMOUNT = float(os.getenv('MIN_CONVERSION_AMOUNT', '0.0001'))
+MAX_CONVERSION_AMOUNT = float(os.getenv('MAX_CONVERSION_AMOUNT', '1000000000000'))
 
 # HTTP defaults
 HTTP_TOTAL_TIMEOUT = 5
 HTTP_CONNECT_TIMEOUT = 2
 HTTP_RETRIES = 2
+HTTP_CONNECTOR_LIMIT = int(os.getenv('HTTP_CONNECTOR_LIMIT', '200'))
+HTTP_CONNECTOR_LIMIT_PER_HOST = int(os.getenv('HTTP_CONNECTOR_LIMIT_PER_HOST', '20'))
+HTTP_DNS_CACHE_TTL = int(os.getenv('HTTP_DNS_CACHE_TTL', '300'))
 SEMAPHORE_LIMITS = {
     'open.er-api.com': 5,
     'api.coingecko.com': 3,
     'api.exchangerate-api.com': 3,
     'rest.coincap.io': 3,
 }
+
+# SQLite defaults
+SQLITE_BUSY_TIMEOUT_MS = int(os.getenv('SQLITE_BUSY_TIMEOUT_MS', '5000'))
+SQLITE_WAL_AUTOCHECKPOINT_PAGES = int(os.getenv('SQLITE_WAL_AUTOCHECKPOINT_PAGES', '1000'))
 
 ALL_CURRENCIES = {
     'USD': '🇺🇸', 'EUR': '🇪🇺', 'GBP': '🇬🇧', 'JPY': '🇯🇵', 'CHF': '🇨🇭', 'CNY': '🇨🇳', 'RUB': '🇷🇺',
@@ -74,7 +83,7 @@ CURRENCY_SYMBOLS = {
 CURRENCY_ABBREVIATIONS = {
     # RU — фиат
     'доллар': 'USD', 'долларов': 'USD', 'доллары': 'USD', 'доллара': 'USD', 'бакс': 'USD', 'баксов': 'USD',
-    'евро': 'EUR', 'евро': 'EUR',
+    'евро': 'EUR',
     'рублей': 'RUB', 'рубль': 'RUB', 'рубля': 'RUB', 'руб': 'RUB',
     'гривны': 'UAH', 'грн': 'UAH', 'гривен': 'UAH', 'гривна': 'UAH',
     'сум': 'UZS', 'сумов': 'UZS',

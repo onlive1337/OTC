@@ -84,9 +84,9 @@ class TelegramLogHandler(logging.Handler):
             base = base[:MAX_TELEGRAM_LOG_LEN] + '...'
         return base
 
-    async def send_log_to_telegram(self, log_entry):
+    async def send_log_to_telegram(self, log_entry: str):
         try:
-            safe_entry = html.escape(log_entry)
+            safe_entry = html.escape(str(log_entry))
             await self.bot.send_message(LOG_CHAT_ID, safe_entry)
         except Exception as e:
             print(f"Failed to send log to Telegram: {e}")

@@ -42,6 +42,16 @@ def _get_semaphore(host: str) -> asyncio.Semaphore:
     return _domain_semaphores[host]
 
 
+def _retry_delay_from_429(err: aiohttp.ClientResponseError, attempt: int) -> float:
+    header_val = (err.headers or {}).get("Retry-After") if err.headers else None
+    if header_val:
+        try:
+            return max(float(header_val), 0.1)
+        except (TypeError, ValueError):
+            pass
+    return 0.5 * (2 ** attempt) + random.random() * 0.2
+
+
 async def _with_retries(coro_factory, host: str, retries: int = HTTP_RETRIES):
     last_exc = None
     sem = _get_semaphore(host)
@@ -49,6 +59,16 @@ async def _with_retries(coro_factory, host: str, retries: int = HTTP_RETRIES):
         try:
             async with sem:
                 return await coro_factory()
+        except aiohttp.ClientResponseError as e:
+            last_exc = e
+            if attempt == retries:
+                break
+            if e.status == 429:
+                delay = _retry_delay_from_429(e, attempt)
+                logger.warning("HTTP 429 from %s, retrying in %.2fs (attempt %d/%d)", host, delay, attempt + 1, retries + 1)
+                await asyncio.sleep(delay)
+                continue
+            await asyncio.sleep(0.3 * (2 ** attempt) + random.random() * 0.2)
         except (asyncio.TimeoutError, aiohttp.ClientError) as e:
             last_exc = e
             if attempt == retries:
@@ -59,7 +79,7 @@ async def _with_retries(coro_factory, host: str, retries: int = HTTP_RETRIES):
     raise RuntimeError("_with_retries failed without exception")
 
 
-def _safe_bg_task(coro, name: str = "background"):
+def safe_bg_task(coro, name: str = "background"):
     task = asyncio.create_task(coro, name=name)
     def _on_done(t: asyncio.Task):
         if t.cancelled():
@@ -69,3 +89,8 @@ def _safe_bg_task(coro, name: str = "background"):
             logger.error(f"Background task '{name}' failed: {exc}", exc_info=exc)
     task.add_done_callback(_on_done)
     return task
+
+
+def _safe_bg_task(coro, name: str = "background"):
+    return safe_bg_task(coro, name=name)
+

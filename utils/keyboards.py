@@ -31,8 +31,10 @@ def build_chat_settings_kb(user_lang: str, chat_id: int) -> InlineKeyboardBuilde
     return kb
 
 
-def build_settings_kb(user_lang: str, is_chat: bool = False, chat_id: int = None) -> InlineKeyboardBuilder:
+def build_settings_kb(user_lang: str, is_chat: bool = False, chat_id: int | None = None) -> InlineKeyboardBuilder:
     if is_chat:
+        if chat_id is None:
+            raise ValueError("chat_id is required when is_chat=True")
         return build_chat_settings_kb(user_lang, chat_id)
     return build_user_settings_kb(user_lang)
 

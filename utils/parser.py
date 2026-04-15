@@ -1,8 +1,9 @@
 import ast
 import logging
+import math
 import operator
 import re
-from typing import Dict, Tuple, Optional
+from typing import Tuple, Optional, cast
 
 from config.config import CURRENCY_ABBREVIATIONS, ALL_CURRENCIES, CURRENCY_SYMBOLS
 
@@ -31,6 +32,9 @@ _PATTERN_TO_CODE = {p.lower(): c for p, c in _ALL_CURRENCY_PATTERNS.items()}
 
 _SPACE_DIGIT_REGEX = re.compile(r'(\d)\s+(\d)')
 _STARTING_NUMBER_REGEX = re.compile(r'^([\d\s,.]+)')
+_SCIENTIFIC_REGEX = re.compile(r'^[-+]?(?:\d+(?:[.,]\d+)?|[.,]\d+)[eE][-+]?\d+$')
+_CONTAINS_SCI_NOTATION_REGEX = re.compile(r'\d[eE][-+]?\d')
+_MAX_ALLOWED_AMOUNT = 1e100
 
 _MULTIPLIERS = {
     'тыс': 1000, 'тысяч': 1000, 'тысячи': 1000, 'тысяча': 1000,
@@ -46,15 +50,21 @@ _MULTIPLIER_REGEXES = {
     for txt, val in _MULTIPLIERS.items()
 }
 
-_FIND_NUMBERS_REGEX = re.compile(r'[\d\s,\.]+')
+_FIND_NUMBERS_REGEX = re.compile(r'[-+]?(?:\d[\d\s,.]*\d|\d|[.,]\d+)(?:[eE][-+]?\d+)?')
 _SIMPLE_NUMBER_REGEX = re.compile(r'[^\d.]')
 
 _URL_REGEX = re.compile(
-    r'http[s]?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\(\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+'
+    r'http[s]?://(?:[a-zA-Z0-9]|[$-_@.&+]|[!*(),]|%[0-9a-fA-F][0-9a-fA-F])+'
 )
 
 
 def smart_number_parse(text: str) -> str:
+    text = text.strip()
+    if _SCIENTIFIC_REGEX.fullmatch(text):
+        mantissa, exponent = re.split(r'[eE]', text, maxsplit=1)
+        mantissa = smart_number_parse(mantissa)
+        return f"{mantissa}e{exponent}"
+
     text = _SPACE_DIGIT_REGEX.sub(r'\1\2', text)
     
     number_match = _STARTING_NUMBER_REGEX.match(text)
@@ -89,12 +99,22 @@ def smart_number_parse(text: str) -> str:
             return number_str.replace(',', '')
     
     elif commas > 1:
-        return number_str.replace(',', '')
-    
+        parts = number_str.split(',')
+        if all(len(part) == 3 for part in parts[1:]) and len(parts[0]) <= 3:
+            return ''.join(parts)
+        return number_str
+
     elif dots > 1:
-        return number_str.replace('.', '')
-    
+        parts = number_str.split('.')
+        if all(len(part) == 3 for part in parts[1:]) and len(parts[0]) <= 3:
+            return ''.join(parts)
+        return number_str
+
     return number_str
+
+
+def _is_valid_amount(value: float) -> bool:
+    return math.isfinite(value) and 0 <= value <= _MAX_ALLOWED_AMOUNT
 
 
 def parse_mathematical_expression(expr: str) -> Optional[float]:
@@ -103,17 +123,17 @@ def parse_mathematical_expression(expr: str) -> Optional[float]:
         ast.Mult: operator.mul, ast.Div: operator.truediv,
     }
     
-    def _safe_eval(node):
+    def _safe_eval(node: ast.AST) -> float:
         if isinstance(node, ast.Constant) and isinstance(node.value, (int, float)):
             return float(node.value)
         elif isinstance(node, ast.BinOp) and type(node.op) in ops:
-            left = _safe_eval(node.left)
-            right = _safe_eval(node.right)
+            left = _safe_eval(cast(ast.AST, node.left))
+            right = _safe_eval(cast(ast.AST, node.right))
             if isinstance(node.op, ast.Div) and right == 0:
                 raise ValueError("Division by zero")
             return ops[type(node.op)](left, right)
         elif isinstance(node, ast.UnaryOp) and isinstance(node.op, ast.USub):
-            return -_safe_eval(node.operand)
+            return -_safe_eval(cast(ast.AST, node.operand))
         raise ValueError("Unsafe expression")
 
     try:
@@ -144,13 +164,11 @@ def parse_amount_and_currency(text: str) -> Tuple[Optional[float], Optional[str]
     text_lower = text.lower()
     
     currency = None
-    currency_match = None
     
     match = _CURRENCY_REGEX.search(text_lower)
     if match:
         matched_text = match.group(0)
         currency = _PATTERN_TO_CODE.get(matched_text.lower())
-        currency_match = match
         
     if not currency:
         return None, None
@@ -163,7 +181,7 @@ def parse_amount_and_currency(text: str) -> Tuple[Optional[float], Optional[str]
     
     if has_math:
         result = parse_mathematical_expression(amount_text)
-        if result is not None:
+        if result is not None and _is_valid_amount(result):
             return result, currency
     
     for pattern, mult_value in _MULTIPLIER_REGEXES.items():
@@ -172,7 +190,8 @@ def parse_amount_and_currency(text: str) -> Tuple[Optional[float], Optional[str]
             base_number = smart_number_parse(match.group(1))
             try:
                 amount = float(base_number) * mult_value
-                return amount, currency
+                if _is_valid_amount(amount):
+                    return amount, currency
             except (ValueError, TypeError) as e:
                 logger.debug(f"Failed to parse multiplier number '{match.group(1)}': {e}")
                 pass
@@ -180,21 +199,24 @@ def parse_amount_and_currency(text: str) -> Tuple[Optional[float], Optional[str]
     number_matches = _FIND_NUMBERS_REGEX.findall(amount_text)
     
     for number_str in number_matches:
+        if not number_str or not any(ch.isdigit() for ch in number_str):
+            continue
         cleaned_number = smart_number_parse(number_str)
         try:
             amount = float(cleaned_number)
-            if amount >= 0:
+            if _is_valid_amount(amount):
                 return amount, currency
         except (ValueError, TypeError):
             continue
     
-    try:
-        simple_number = _SIMPLE_NUMBER_REGEX.sub('', amount_text)
-        if simple_number:
-            amount = float(simple_number)
-            if amount >= 0:
-                return amount, currency
-    except (ValueError, TypeError):
-        pass
-    
+    if not _CONTAINS_SCI_NOTATION_REGEX.search(amount_text):
+        try:
+            simple_number = _SIMPLE_NUMBER_REGEX.sub('', amount_text)
+            if simple_number:
+                amount = float(simple_number)
+                if _is_valid_amount(amount):
+                    return amount, currency
+        except (ValueError, TypeError):
+            pass
+
     return None, None

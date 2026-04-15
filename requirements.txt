@@ -1,6 +1,7 @@
-aiogram==3.24.0
-aiohttp==3.13.3
-python-dotenv==1.2.1
+aiogram==3.27.0
+aiohttp==3.13.5
+python-dotenv==1.2.2
 aiosqlite==0.22.1
-ujson==5.10.0
-uvloop>=0.21.0; sys_platform != 'win32'
+ujson==5.12.0
+uvloop==0.22.1; sys_platform != 'win32'
+pytest

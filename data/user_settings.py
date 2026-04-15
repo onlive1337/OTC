@@ -1,13 +1,14 @@
-from aiogram.types import CallbackQuery
 from aiogram.exceptions import TelegramBadRequest
-from config.config import ACTIVE_CURRENCIES, ALL_CURRENCIES, CRYPTO_CURRENCIES
-from utils.formatter import get_currency_symbol
-from config.languages import LANGUAGES
+from aiogram.types import CallbackQuery
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
+from config.config import ACTIVE_CURRENCIES, CRYPTO_CURRENCIES
+from config.languages import LANGUAGES
 from loader import user_data
-from utils.button_styles import primary_button, success_button, EMOJI
+from utils.button_styles import primary_button, EMOJI
+from utils.formatter import get_currency_symbol
 from utils.keyboards import build_user_settings_kb, build_chat_settings_kb, format_settings_text
+
 
 async def toggle_quote_format(callback_query: CallbackQuery):
     parts = callback_query.data.split('_')
@@ -96,7 +97,6 @@ async def show_crypto(callback_query: CallbackQuery):
 async def toggle_currency(callback_query: CallbackQuery):
     await callback_query.answer()
     currency, page = callback_query.data.split('_')[2:]
-    page = int(page)
     user_currencies = await user_data.get_user_currencies(callback_query.from_user.id)
     
     if currency in user_currencies:

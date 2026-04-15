@@ -1,15 +1,25 @@
 import asyncio
+import importlib
 import logging
 import signal
+import sys
 import warnings
 
 warnings.filterwarnings("ignore", message=".*iscoroutinefunction.*", category=DeprecationWarning)
 import ujson
-from aiohttp import ClientSession, ClientTimeout
+from aiohttp import ClientSession, ClientTimeout, TCPConnector
 
-from config.config import LOG_LEVEL, HTTP_TOTAL_TIMEOUT, HTTP_CONNECT_TIMEOUT, CACHE_EXPIRATION_TIME
+from config.config import (
+    LOG_LEVEL,
+    HTTP_TOTAL_TIMEOUT,
+    HTTP_CONNECT_TIMEOUT,
+    CACHE_EXPIRATION_TIME,
+    HTTP_CONNECTOR_LIMIT,
+    HTTP_CONNECTOR_LIMIT_PER_HOST,
+    HTTP_DNS_CACHE_TTL,
+)
 from loader import bot, dp, user_data
-from utils.http import set_http_session, close_http_session, _safe_bg_task
+from utils.http import set_http_session, close_http_session, safe_bg_task
 from utils.rates import get_exchange_rates, refresh_rates
 from utils.log_handler import setup_telegram_logging
 
@@ -54,14 +64,19 @@ async def on_startup():
     await setup_telegram_logging(bot)
     session = ClientSession(
         timeout=ClientTimeout(total=HTTP_TOTAL_TIMEOUT, connect=HTTP_CONNECT_TIMEOUT),
+        connector=TCPConnector(
+            limit=HTTP_CONNECTOR_LIMIT,
+            limit_per_host=HTTP_CONNECTOR_LIMIT_PER_HOST,
+            ttl_dns_cache=HTTP_DNS_CACHE_TTL,
+        ),
         json_serialize=ujson.dumps
     )
     set_http_session(session)
     
     await user_data.init_db()
     
-    _bg_tasks.append(_safe_bg_task(_warmup_rates(), name="warmup_rates"))
-    _bg_tasks.append(_safe_bg_task(_periodic_refresh(), name="periodic_refresh"))
+    _bg_tasks.append(safe_bg_task(_warmup_rates(), name="warmup_rates"))
+    _bg_tasks.append(safe_bg_task(_periodic_refresh(), name="periodic_refresh"))
 
 async def on_shutdown():
     for task in _bg_tasks:
@@ -91,7 +106,7 @@ async def main():
 
     for sig in (signal.SIGTERM, signal.SIGINT):
         try:
-            loop.add_signal_handler(sig, handle_shutdown_signal)
+            loop.add_signal_handler(sig, handle_shutdown_signal)  # type: ignore[call-arg]
         except NotImplementedError:
             pass
 
@@ -115,10 +130,24 @@ async def main():
     dp.startup.register(on_startup)
     dp.shutdown.register(on_shutdown)
 
-    await dp.start_polling(bot)
+    await dp.start_polling(bot, allowed_updates=dp.resolve_used_update_types())
+
+def run_app():
+    if sys.platform != 'win32':
+        try:
+            _uvloop = importlib.import_module("uvloop")
+        except ModuleNotFoundError:
+            _uvloop = None
+
+        if _uvloop is not None:
+            with asyncio.Runner(loop_factory=_uvloop.new_event_loop) as runner:
+                runner.run(main())
+            return
+
+    asyncio.run(main())
 
 if __name__ == '__main__':
     try:
-        asyncio.run(main())
+        run_app()
     except (KeyboardInterrupt, SystemExit):
         logger.info("Bot stopped")

@@ -1,7 +1,7 @@
-from aiogram import Router, F
-from aiogram.types import Message, CallbackQuery
-from aiogram.filters import Command
 import logging
+from aiogram import Router, F
+from aiogram.filters import Command
+from aiogram.types import Message, CallbackQuery
 
 logger = logging.getLogger(__name__)
 
@@ -10,7 +10,7 @@ from loader import user_data
 from utils.keyboards import build_settings_kb, format_settings_text
 
 from data.chat_settings import (
-    show_chat_settings, save_chat_settings, show_chat_currencies, 
+    save_chat_settings, show_chat_currencies,
     show_chat_crypto, toggle_chat_crypto, toggle_chat_currency, 
     back_to_chat_settings, change_chat_language, set_chat_language,
     toggle_chat_quote_format

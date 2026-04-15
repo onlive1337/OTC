@@ -26,6 +26,18 @@ def build_main_menu_kb(user_lang):
     kb.row(success_button(LANGUAGES[user_lang]['support_button'], 'support', emoji=EMOJI['support']))
     return kb
 
+
+async def _prepare_callback_user_lang(callback_query: CallbackQuery) -> str:
+    await user_data.update_user_data(callback_query.from_user.id)
+    await callback_query.answer()
+    return await user_data.get_user_language(callback_query.from_user.id)
+
+
+def _build_back_to_main_kb(user_lang: str) -> InlineKeyboardBuilder:
+    kb = InlineKeyboardBuilder()
+    kb.row(primary_button(LANGUAGES[user_lang]['back'], 'back_to_main', emoji=EMOJI['back']))
+    return kb
+
 @router.message(CommandStart())
 async def cmd_start(message: Message):
     await user_data.update_user_data(message.from_user.id, language_code=message.from_user.language_code)
@@ -45,13 +57,9 @@ async def cmd_start(message: Message):
 
 @router.callback_query(F.data == "howto")
 async def process_howto(callback_query: CallbackQuery):
-    await user_data.update_user_data(callback_query.from_user.id)
-    await callback_query.answer()
-    user_lang = await user_data.get_user_language(callback_query.from_user.id)
-    
-    kb = InlineKeyboardBuilder()
-    kb.row(primary_button(LANGUAGES[user_lang]['back'], 'back_to_main', emoji=EMOJI['back']))
-    
+    user_lang = await _prepare_callback_user_lang(callback_query)
+    kb = _build_back_to_main_kb(user_lang)
+
     await callback_query.message.edit_text(LANGUAGES[user_lang]['help'], reply_markup=kb.as_markup())
 
 @router.message(Command("help"))
@@ -66,21 +74,15 @@ async def cmd_help(message: Message):
 
 @router.callback_query(F.data == "feedback")
 async def process_feedback(callback_query: CallbackQuery):
-    await user_data.update_user_data(callback_query.from_user.id)
-    await callback_query.answer()
-    user_lang = await user_data.get_user_language(callback_query.from_user.id)
-    
-    kb = InlineKeyboardBuilder()
-    kb.row(primary_button(LANGUAGES[user_lang]['back'], 'back_to_main', emoji=EMOJI['back']))
-    
+    user_lang = await _prepare_callback_user_lang(callback_query)
+    kb = _build_back_to_main_kb(user_lang)
+
     await callback_query.message.edit_text(LANGUAGES[user_lang]['feedback'], reply_markup=kb.as_markup())
 
 @router.callback_query(F.data == "support")
 async def process_support(callback_query: CallbackQuery):
-    await user_data.update_user_data(callback_query.from_user.id)
-    await callback_query.answer()
-    user_lang = await user_data.get_user_language(callback_query.from_user.id)
-    
+    user_lang = await _prepare_callback_user_lang(callback_query)
+
     kb = InlineKeyboardBuilder()
     kb.row(success_button(LANGUAGES[user_lang]['donate_button'], url="https://boosty.to/onlive/donate", emoji=EMOJI['support']))
     kb.row(primary_button(LANGUAGES[user_lang]['back'], 'back_to_main', emoji=EMOJI['back']))
@@ -89,10 +91,8 @@ async def process_support(callback_query: CallbackQuery):
 
 @router.callback_query(F.data == "about")
 async def process_about(callback_query: CallbackQuery):
-    await user_data.update_user_data(callback_query.from_user.id)
-    await callback_query.answer()
-    user_lang = await user_data.get_user_language(callback_query.from_user.id)
-    
+    user_lang = await _prepare_callback_user_lang(callback_query)
+
     about_message = f"{LANGUAGES[user_lang]['about_message']}\n\n" \
                     f"{LANGUAGES[user_lang]['current_version']} {CURRENT_VERSION}"
     
@@ -104,10 +104,8 @@ async def process_about(callback_query: CallbackQuery):
 
 @router.callback_query(F.data == "view_changelog")
 async def view_changelog(callback_query: CallbackQuery):
-    await user_data.update_user_data(callback_query.from_user.id)
-    await callback_query.answer()
-    user_lang = await user_data.get_user_language(callback_query.from_user.id)
-    
+    user_lang = await _prepare_callback_user_lang(callback_query)
+
     kb = InlineKeyboardBuilder()
     kb.row(primary_button(LANGUAGES[user_lang]['back'], 'about', emoji=EMOJI['back']))
     

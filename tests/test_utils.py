@@ -132,6 +132,31 @@ class TestParseAmountAndCurrency:
         assert amount == 10982.0
         assert currency == "KZT"
 
+    def test_invalid_multiple_dots_rejected(self):
+        amount, currency = parse_amount_and_currency("100.5.5 USD")
+        assert amount is None
+        assert currency is None
+
+    def test_scientific_notation_too_large_rejected(self):
+        amount, currency = parse_amount_and_currency("1e500 USD")
+        assert amount is None
+        assert currency is None
+
+    def test_scientific_notation_over_limit_rejected(self):
+        amount, currency = parse_amount_and_currency("1e101 USD")
+        assert amount is None
+        assert currency is None
+
+    def test_scientific_notation_at_limit(self):
+        amount, currency = parse_amount_and_currency("1e100 USD")
+        assert amount == pytest.approx(1e100)
+        assert currency == "USD"
+
+    def test_tiny_dollar_amount(self):
+        amount, currency = parse_amount_and_currency("$.000000000000000001")
+        assert amount == pytest.approx(1e-18)
+        assert currency == "USD"
+
 
 class TestConvertCurrency:
     RATES = {
@@ -211,6 +236,11 @@ class TestFormatLargeNumber:
         result = format_large_number(1000.5, is_original_amount=True)
         assert "1 000" in result
         assert ".5" in result
+
+    def test_original_amount_tiny_not_zero(self):
+        result = format_large_number(1e-18, is_original_amount=True)
+        assert result != "0"
+        assert "1" in result
 
     def test_crypto_zero(self):
         result = format_large_number(0, is_crypto=True)

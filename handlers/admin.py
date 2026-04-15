@@ -7,13 +7,13 @@ from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
-from aiogram.exceptions import TelegramRetryAfter, TelegramAPIError
+from aiogram.exceptions import TelegramRetryAfter, TelegramAPIError, TelegramForbiddenError, TelegramBadRequest
 from config.config import ADMIN_IDS
 from config.languages import LANGUAGES
 from loader import bot, user_data
 from states.states import AdminStates
 from utils.middleware import get_metrics
-from utils.button_styles import primary_button, success_button, danger_button, EMOJI
+from utils.button_styles import success_button, danger_button
 
 logger = logging.getLogger(__name__)
 
@@ -46,12 +46,7 @@ async def cmd_health(message: Message):
     metrics = get_metrics()
     stats = await user_data.get_statistics()
 
-    db_ok = "✅"
-    try:
-        conn = await user_data._get_write_conn()
-        await conn.execute("SELECT 1")
-    except Exception:
-        db_ok = "❌"
+    db_ok = "✅" if await user_data.ping_db() else "❌"
 
     text = (
         f"🏥 <b>Bot Health</b>\n\n"
@@ -62,7 +57,7 @@ async def cmd_health(message: Message):
         f"👥 Active today: {stats['active_today']}\n"
         f"👤 Total users: {stats['total_users']}"
     )
-    await message.answer(text, parse_mode="HTML")
+    await message.answer(text)
 
 
 @router.message(Command("broadcast"))
@@ -70,15 +65,14 @@ async def cmd_broadcast(message: Message, state: FSMContext):
     if message.from_user.id not in ADMIN_IDS:
         return
 
+    user_lang = await user_data.get_user_language(message.from_user.id)
+    lang = LANGUAGES[user_lang]
+
     kb = InlineKeyboardBuilder()
-    kb.row(danger_button("❌ Отмена", "broadcast_cancel"))
+    kb.row(danger_button(lang.get("broadcast_cancel_button", "❌ Cancel"), "broadcast_cancel"))
 
     await message.answer(
-        "📢 <b>Рассылка</b>\n\n"
-        "Отправьте сообщение, которое нужно разослать всем пользователям.\n"
-        "Поддерживается текст, фото, видео, документ и стикер.\n\n"
-        "Для отмены нажмите кнопку ниже.",
-        parse_mode="HTML",
+        f"{lang.get('broadcast_title', '📢 <b>Broadcast</b>')}\n\n{lang.get('broadcast_prompt')}",
         reply_markup=kb.as_markup()
     )
     await state.set_state(AdminStates.waiting_broadcast)
@@ -86,22 +80,25 @@ async def cmd_broadcast(message: Message, state: FSMContext):
 
 @router.callback_query(F.data == "broadcast_cancel")
 async def broadcast_cancel(callback_query: CallbackQuery, state: FSMContext):
+    user_lang = await user_data.get_user_language(callback_query.from_user.id)
     await state.clear()
-    await callback_query.message.edit_text("❌ Рассылка отменена.")
+    await callback_query.message.edit_text(LANGUAGES[user_lang].get('broadcast_cancelled', '❌ Broadcast canceled.'))
     await callback_query.answer()
 
 
 @router.callback_query(F.data == "broadcast_confirm")
 async def broadcast_confirm(callback_query: CallbackQuery, state: FSMContext):
+    user_lang = await user_data.get_user_language(callback_query.from_user.id)
+    lang = LANGUAGES[user_lang]
     data = await state.get_data()
     await state.clear()
 
     msg_data = data.get("broadcast_msg")
     if not msg_data:
-        await callback_query.message.edit_text("⚠️ Сообщение не найдено. Попробуйте снова.")
+        await callback_query.message.edit_text(lang.get('broadcast_msg_not_found', '⚠️ Message not found. Please try again.'))
         return
 
-    await callback_query.message.edit_text("📤 Рассылка начата...")
+    await callback_query.message.edit_text(lang.get('broadcast_started', '📤 Broadcast started...'))
     await callback_query.answer()
 
     user_ids = await user_data.get_all_user_ids()
@@ -116,13 +113,13 @@ async def broadcast_confirm(callback_query: CallbackQuery, state: FSMContext):
             while True:
                 try:
                     if msg_data["type"] == "text":
-                        await bot.send_message(uid, msg_data["text"], parse_mode="HTML")
+                        await bot.send_message(uid, msg_data["text"])
                     elif msg_data["type"] == "photo":
-                        await bot.send_photo(uid, msg_data["file_id"], caption=msg_data.get("caption"), parse_mode="HTML")
+                        await bot.send_photo(uid, msg_data["file_id"], caption=msg_data.get("caption"))
                     elif msg_data["type"] == "video":
-                        await bot.send_video(uid, msg_data["file_id"], caption=msg_data.get("caption"), parse_mode="HTML")
+                        await bot.send_video(uid, msg_data["file_id"], caption=msg_data.get("caption"))
                     elif msg_data["type"] == "document":
-                        await bot.send_document(uid, msg_data["file_id"], caption=msg_data.get("caption"), parse_mode="HTML")
+                        await bot.send_document(uid, msg_data["file_id"], caption=msg_data.get("caption"))
                     elif msg_data["type"] == "sticker":
                         await bot.send_sticker(uid, msg_data["file_id"])
                     counters["sent"] += 1
@@ -136,6 +133,21 @@ async def broadcast_confirm(callback_query: CallbackQuery, state: FSMContext):
                     logger.warning("Flood limit for %s, sleeping %ss", uid, e.retry_after)
                     await asyncio.sleep(e.retry_after)
                     continue
+                except TelegramForbiddenError:
+                    counters["blocked"] += 1
+                    break
+                except TelegramBadRequest as e:
+                    err_msg = str(e).lower()
+                    if any(x in err_msg for x in ["chat not found", "user not found", "forbidden", "cannot initiate"]):
+                        counters["blocked"] += 1
+                    else:
+                        counters["failed"] += 1
+                        logger.warning("Broadcast to %s bad request: %s", uid, e)
+                    break
+                except TelegramAPIError as e:
+                    counters["failed"] += 1
+                    logger.warning("Broadcast to %s API error: %s", uid, e)
+                    break
                 except Exception as e:
                     err_msg = str(e).lower()
                     if any(x in err_msg for x in ["blocked", "deactivated", "not found", "forbidden", "cannot initiate", "entity"]):
@@ -158,19 +170,22 @@ async def broadcast_confirm(callback_query: CallbackQuery, state: FSMContext):
         if processed % PROGRESS_EVERY < BATCH_SIZE and total > PROGRESS_EVERY:
             try:
                 await progress_msg.edit_text(
-                    f"📤 Рассылка... {processed}/{total} ({processed * 100 // total}%)"
+                    lang.get('broadcast_progress', '📤 Broadcasting... {processed}/{total} ({percent}%)').format(
+                        processed=processed,
+                        total=total,
+                        percent=processed * 100 // total,
+                    )
                 )
             except Exception:
                 pass
 
-    report = (
-        f"📢 <b>Рассылка завершена</b>\n\n"
-        f"✅ Отправлено: {counters['sent']}\n"
-        f"🚫 Заблокировали: {counters['blocked']}\n"
-        f"❌ Ошибки: {counters['failed']}\n"
-        f"📊 Всего: {total}"
+    report = lang.get('broadcast_done', '📢 <b>Broadcast completed</b>\n\n✅ Sent: {sent}\n🚫 Blocked: {blocked}\n❌ Failed: {failed}\n📊 Total: {total}').format(
+        sent=counters['sent'],
+        blocked=counters['blocked'],
+        failed=counters['failed'],
+        total=total,
     )
-    await progress_msg.edit_text(report, parse_mode="HTML")
+    await progress_msg.edit_text(report)
 
 
 @router.message(AdminStates.waiting_broadcast)
@@ -179,7 +194,8 @@ async def process_broadcast_message(message: Message, state: FSMContext):
         await state.clear()
         return
 
-    msg_data = {}
+    user_lang = await user_data.get_user_language(message.from_user.id)
+    lang = LANGUAGES[user_lang]
 
     if message.photo:
         msg_data = {"type": "photo", "file_id": message.photo[-1].file_id, "caption": message.caption or ""}
@@ -192,7 +208,7 @@ async def process_broadcast_message(message: Message, state: FSMContext):
     elif message.text:
         msg_data = {"type": "text", "text": message.text}
     else:
-        await message.answer("⚠️ Этот тип сообщения не поддерживается. Отправьте текст, фото, видео, документ или стикер.")
+        await message.answer(lang.get('broadcast_unsupported_type', '⚠️ This message type is not supported.'))
         return
 
     await state.update_data(broadcast_msg=msg_data)
@@ -201,9 +217,12 @@ async def process_broadcast_message(message: Message, state: FSMContext):
 
     kb = InlineKeyboardBuilder()
     kb.row(
-        success_button("✅ Отправить", "broadcast_confirm"),
-        danger_button("❌ Отмена", "broadcast_cancel")
+        success_button(lang.get('broadcast_send_button', '✅ Send'), "broadcast_confirm"),
+        danger_button(lang.get('broadcast_cancel_button', '❌ Cancel'), "broadcast_cancel")
     )
 
-    preview_text = f"📢 <b>Предпросмотр рассылки</b>\n\nТип: {msg_data['type']}\n👥 Получатели: {stats['total_users']} пользователей\n\nОтправить?"
-    await message.answer(preview_text, parse_mode="HTML", reply_markup=kb.as_markup())
+    preview_text = lang.get('broadcast_preview', '📢 <b>Broadcast Preview</b>\n\nType: {msg_type}\n👥 Recipients: {total_users} users\n\nSend now?').format(
+        msg_type=msg_data['type'],
+        total_users=stats['total_users'],
+    )
+    await message.answer(preview_text, reply_markup=kb.as_markup())

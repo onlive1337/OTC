@@ -6,7 +6,7 @@ from typing import Dict, Any, Optional
 import aiosqlite
 from aiosqlite import OperationalError
 
-from config.config import DB_PATH
+from config.config import DB_PATH, SQLITE_BUSY_TIMEOUT_MS, SQLITE_WAL_AUTOCHECKPOINT_PAGES
 from data.schema import INIT_SQL, MIGRATIONS
 
 logger = logging.getLogger(__name__)
@@ -52,6 +52,8 @@ class DatabaseMixin:
                 conn.row_factory = None
                 await conn.execute("PRAGMA journal_mode=WAL;")
                 await conn.execute("PRAGMA synchronous=NORMAL;")
+                await conn.execute(f"PRAGMA busy_timeout={SQLITE_BUSY_TIMEOUT_MS};")
+                await conn.execute(f"PRAGMA wal_autocheckpoint={SQLITE_WAL_AUTOCHECKPOINT_PAGES};")
                 if readonly:
                     await conn.execute("PRAGMA query_only=ON;")
                     await conn.execute("PRAGMA read_uncommitted=ON;")
@@ -65,17 +67,31 @@ class DatabaseMixin:
                 else:
                     raise
 
+        raise RuntimeError("Failed to open database connection after retries")
+
     async def _get_read_conn(self) -> aiosqlite.Connection:
         if self._read_conn is not None:
             return self._read_conn
         self._read_conn = await self._open_connection(readonly=True)
-        return self._read_conn
+        conn = self._read_conn
+        assert conn is not None
+        return conn
 
     async def _get_write_conn(self) -> aiosqlite.Connection:
         if self._write_conn is not None:
             return self._write_conn
         self._write_conn = await self._open_connection(readonly=False)
-        return self._write_conn
+        conn = self._write_conn
+        assert conn is not None
+        return conn
+
+    async def ping_db(self) -> bool:
+        try:
+            conn = await self._get_write_conn()
+            await conn.execute("SELECT 1")
+            return True
+        except Exception:
+            return False
 
     async def _get_schema_version(self, conn) -> int:
         try:

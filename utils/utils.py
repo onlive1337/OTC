@@ -5,16 +5,6 @@ from aiogram.types import CallbackQuery, Message
 from config.languages import LANGUAGES
 from loader import user_data
 
-from utils.http import set_http_session, close_http_session, _safe_bg_task
-from utils.rates import (
-    get_exchange_rates, refresh_rates, convert_currency,
-    get_cached_data, set_cached_data,
-)
-from utils.parser import (
-    smart_number_parse, parse_mathematical_expression, parse_amount_and_currency,
-)
-from utils.formatter import format_large_number, read_changelog
-
 
 async def delete_conversion_message(callback_query: CallbackQuery):
     try:

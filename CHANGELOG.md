@@ -4,6 +4,29 @@ All notable changes to this project will be documented in this file.
 
 ## Changelog
 
+## [1.8.2] - 2026-04-16
+
+### ♻️ Refactor
+- Migrated uvloop startup path to `asyncio.Runner(loop_factory=uvloop.new_event_loop)` for Python 3.14+ compatibility.
+- Removed deprecated global event-loop policy setup from `loader.py`.
+- Added public APIs to avoid protected-member access in app code (`ping_db`, `safe_bg_task`).
+
+
+### ⚡ Performance
+- Moved aiohttp connector tuning to config (`HTTP_CONNECTOR_LIMIT`, `HTTP_CONNECTOR_LIMIT_PER_HOST`, `HTTP_DNS_CACHE_TTL`) and applied the same limits to startup and fallback HTTP sessions.
+
+### 🛡️ Stability
+- Added SQLite lock-resilience pragmas: `busy_timeout` and `wal_autocheckpoint` for read/write connections.
+- Added the same SQLite pragmas to initial schema setup for consistent behavior on fresh databases.
+
+### 🐛 Fixes
+- Hardened amount parser: invalid formats like `100.5.5 USD` and oversized values (`>1e100`) are now rejected.
+- Added explicit scientific notation boundary behavior: `1e100` is accepted, `1e101+` is rejected.
+- Improved UX for failed conversion parses: bot now replies with a clear amount-format/size hint instead of silent ignore when currency is recognized.
+
+### 🧪 Testing
+- Added parser boundary regression test for `1e100 USD`.
+
 ## [1.8.1] - 2026-04-11
 
 ### ✨ New Features

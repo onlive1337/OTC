@@ -1,5 +1,5 @@
-import os
 import re
+from pathlib import Path
 
 from config.config import ALL_CURRENCIES
 
@@ -19,12 +19,10 @@ def read_changelog():
     if _CHANGELOG_CACHE is not None:
         return _CHANGELOG_CACHE
 
-    current_file = os.path.abspath(__file__)
-    parent_dir = os.path.dirname(os.path.dirname(current_file))
-    changelog_path = os.path.join(parent_dir, 'CHANGELOG.md')
-    
+    changelog_path = Path(__file__).resolve().parent.parent / 'CHANGELOG.md'
+
     try:
-        with open(changelog_path, 'r', encoding='utf-8') as file:
+        with changelog_path.open('r', encoding='utf-8') as file:
             content = file.read()
         
         versions = re.split(r'(?=^## \[)', content, flags=re.MULTILINE)
@@ -45,8 +43,8 @@ def read_changelog():
 
 def format_large_number(number, is_crypto=False, is_original_amount=False):
     if abs(number) > 1e100:
-        return "♾️ Бесконечность"
-    
+        return "♾️ Infinity"
+
     sign = "-" if number < 0 else ""
     number = abs(number)
     
@@ -54,6 +52,11 @@ def format_large_number(number, is_crypto=False, is_original_amount=False):
         if number == int(number):
             return f"{sign}{int(number):,}".replace(',', ' ')
         else:
+            if 0 < number < 1e-10:
+                tiny = f"{sign}{number:.18f}".rstrip('0').rstrip('.')
+                if tiny != f"{sign}0":
+                    return tiny
+                return f"{sign}{number:.2e}"
             formatted = f"{sign}{number:,.10f}".rstrip('0').rstrip('.')
             parts = formatted.split('.')
             if len(parts) == 2:

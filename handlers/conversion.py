@@ -1,13 +1,21 @@
 import difflib
 import re
 import logging
+from decimal import Decimal, InvalidOperation
 from typing import List, Tuple, Optional
 
 from aiogram import Router, types, Bot
-from aiogram.types import Message, InlineQuery, InlineQueryResultArticle, InputTextMessageContent, ChatMemberUpdated
+from aiogram.types import InlineQuery, InlineQueryResultArticle, InputTextMessageContent, ChatMemberUpdated
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
-from config.config import ALL_CURRENCIES, CURRENCY_SYMBOLS, CURRENCY_ABBREVIATIONS, CRYPTO_CURRENCIES
+from config.config import (
+    ALL_CURRENCIES,
+    CURRENCY_SYMBOLS,
+    CURRENCY_ABBREVIATIONS,
+    CRYPTO_CURRENCIES,
+    MAX_CONVERSION_AMOUNT,
+    MIN_CONVERSION_AMOUNT,
+)
 from config.languages import LANGUAGES
 from loader import user_data
 from utils.rates import get_exchange_rates, convert_currency
@@ -26,6 +34,16 @@ _TARGET_CURRENCY_PATTERNS.update({k.upper(): k.upper() for k in ALL_CURRENCIES.k
 
 _TARGET_PATTERNS_LOWER = {p.lower(): c for p, c in _TARGET_CURRENCY_PATTERNS.items()}
 
+_KNOWN_CURRENCY_REGEX_PARTS = []
+for pattern in sorted(_TARGET_PATTERNS_LOWER.keys(), key=len, reverse=True):
+    pattern_str = str(pattern)
+    starts_with_word = re.match(r'^\w', pattern_str, re.UNICODE) is not None
+    ends_with_word = re.search(r'\w$', pattern_str, re.UNICODE) is not None
+    prefix = r'(?<!\w)' if starts_with_word else ''
+    suffix = r'(?!\w)' if ends_with_word else ''
+    _KNOWN_CURRENCY_REGEX_PARTS.append(rf'{prefix}{re.escape(pattern_str)}{suffix}')
+_KNOWN_CURRENCY_REGEX = re.compile('|'.join(_KNOWN_CURRENCY_REGEX_PARTS), re.IGNORECASE)
+
 _SPLIT_TOKENS_REGEX = re.compile(r'[\s,]+')
 _SKIP_TOKENS_REGEX = re.compile(r'^[\d.,+\-*/()^×÷:хk]+$')
 
@@ -38,6 +56,9 @@ _SEPARATORS_REGEX = re.compile(f"({'|'.join(_SEPARATORS)})", re.IGNORECASE)
 _MATH_ONLY_REGEX = re.compile(
     r'^[\d\s.,+\-*/()^×÷:хk]+$'
 )
+
+_MAX_SAFE_CONVERSION_AMOUNT = MAX_CONVERSION_AMOUNT
+_MIN_SAFE_CONVERSION_AMOUNT = MIN_CONVERSION_AMOUNT
 
 _ALL_KNOWN_CODES = set(k.upper() for k in ALL_CURRENCIES.keys())
 _ALL_KNOWN_WORDS = set()
@@ -99,23 +120,124 @@ def _find_target_currency(text: str, from_currency: str) -> Optional[str]:
     return found[0] if len(found) == 1 else None
 
 
-async def process_targeted_conversion(message: types.Message, amount: float, from_currency: str, to_currency: str):
+def _contains_known_currency(text: str) -> bool:
+    return _KNOWN_CURRENCY_REGEX.search(text.lower()) is not None
+
+
+def _too_large_message(user_lang: str) -> str:
+    default_msg = f"Number is too large. Max allowed: {format_large_number(_MAX_SAFE_CONVERSION_AMOUNT, is_original_amount=True)}"
+    template = LANGUAGES[user_lang].get('number_too_large', default_msg)
+    if '{max_amount}' in template:
+        return template.format(max_amount=format_large_number(_MAX_SAFE_CONVERSION_AMOUNT, is_original_amount=True))
+    return template
+
+
+def _too_small_message(user_lang: str) -> str:
+    default_msg = f"Amount is too small. Minimum: {format_large_number(_MIN_SAFE_CONVERSION_AMOUNT, is_original_amount=True)}"
+    template = LANGUAGES[user_lang].get('number_too_small', default_msg)
+    if '{min_amount}' in template:
+        return template.format(min_amount=format_large_number(_MIN_SAFE_CONVERSION_AMOUNT, is_original_amount=True))
+    return template
+
+
+def _detect_amount_bounds_from_text(text: str) -> Optional[str]:
+    amount_text = _KNOWN_CURRENCY_REGEX.sub('', text.lower()).replace(' ', '')
+    candidates = re.findall(r'[-+]?(?:\d+(?:[.,]\d+)?|[.,]\d+)(?:[eE][-+]?\d+)?', amount_text)
+
+    max_amount = Decimal(str(_MAX_SAFE_CONVERSION_AMOUNT))
+    min_amount = Decimal(str(_MIN_SAFE_CONVERSION_AMOUNT))
+
+    for token in candidates:
+        normalized = token.replace(',', '.')
+        try:
+            value = Decimal(normalized)
+        except (InvalidOperation, ValueError):
+            continue
+
+        if not value.is_finite() or value.is_nan():
+            continue
+        if value <= 0:
+            continue
+        if value > max_amount:
+            return 'too_large'
+        if value < min_amount:
+            return 'too_small'
+
+    return None
+
+
+async def _validate_amount_or_reply(message: types.Message, user_lang: str, amount: float) -> bool:
+    if amount <= 0:
+        await message.answer(LANGUAGES[user_lang].get('negative_or_zero_amount'))
+        return False
+    if amount < _MIN_SAFE_CONVERSION_AMOUNT:
+        await message.answer(_too_small_message(user_lang))
+        return False
+    if amount > _MAX_SAFE_CONVERSION_AMOUNT:
+        await message.answer(_too_large_message(user_lang))
+        return False
+    return True
+
+
+async def _get_rates_or_reply(message: types.Message, user_lang: str):
+    rates = await get_exchange_rates()
+    if not rates:
+        await message.answer(LANGUAGES[user_lang]['error'])
+        return None
+    return rates
+
+
+async def _resolve_chat_user_prefs(message: types.Message):
     user_id = message.from_user.id
     if message.chat.type in ('group', 'supergroup'):
         data = await user_data.get_chat_data(message.chat.id)
-        user_lang = data.get('language', 'ru')
+        return (
+            data.get('language', 'ru'),
+            data.get('currencies', []),
+            data.get('crypto', []),
+            data.get('quote_format', False),
+            user_id,
+            message.chat.id,
+        )
+
+    data = await user_data.get_user_data(user_id)
+    return (
+        data.get('language', 'ru'),
+        data.get('selected_currencies', []),
+        data.get('selected_crypto', []),
+        data.get('use_quote_format', True),
+        user_id,
+        message.chat.id,
+    )
+
+
+def _build_delete_conversion_kb(user_lang: str):
+    kb = InlineKeyboardBuilder()
+    kb.row(danger_button(LANGUAGES[user_lang].get('delete_button', 'Delete'), 'delete_conversion', emoji=EMOJI['delete']))
+    return kb
+
+
+def _build_math_response(user_lang: str, expression: str, result: float) -> str:
+    result_str = format_large_number(result)
+    total_len = len(expression) + len(result_str)
+    if total_len <= 35:
+        template_key = 'math_result_short'
+        fallback = '{expression} = <b>{result}</b>'
     else:
-        data = await user_data.get_user_data(user_id)
-        user_lang = data.get('language', 'ru')
+        template_key = 'math_result_long'
+        fallback = '{expression}\n= <b>{result}</b>'
+    return LANGUAGES[user_lang].get(template_key, fallback).format(expression=expression, result=result_str)
+
+
+async def process_targeted_conversion(message: types.Message, amount: float, from_currency: str, to_currency: str):
+    user_lang, _, _, _, user_id, _ = await _resolve_chat_user_prefs(message)
 
     try:
-        if amount <= 0:
-            await message.answer(LANGUAGES[user_lang].get('negative_or_zero_amount'))
+        if not await _validate_amount_or_reply(message, user_lang, amount):
             return
 
-        rates = await get_exchange_rates()
-        if not rates:
-            await message.answer(LANGUAGES[user_lang]['error'])
+        rates = await _get_rates_or_reply(message, user_lang)
+        if rates is None:
             return
 
         converted = convert_currency(amount, from_currency, to_currency, rates)
@@ -126,10 +248,8 @@ async def process_targeted_conversion(message: types.Message, amount: float, fro
             f"= {format_large_number(converted, is_crypto)} {get_currency_symbol(to_currency)}{to_currency}"
         )
 
-        kb = InlineKeyboardBuilder()
-        kb.row(danger_button(LANGUAGES[user_lang].get('delete_button', 'Delete'), 'delete_conversion', emoji=EMOJI['delete']))
-
-        await message.reply(text=response, reply_markup=kb.as_markup(), parse_mode="HTML")
+        kb = _build_delete_conversion_kb(user_lang)
+        await message.reply(text=response, reply_markup=kb.as_markup())
     except KeyError:
         await message.answer(LANGUAGES[user_lang]['error'])
     except Exception as e:
@@ -137,32 +257,20 @@ async def process_targeted_conversion(message: types.Message, amount: float, fro
         await message.answer(LANGUAGES[user_lang]['error'])
 
 async def process_multiple_conversions(message: types.Message, requests: List[Tuple[float, str]]):
-    user_id = message.from_user.id
-    chat_id = message.chat.id
-    
-    if message.chat.type in ('group', 'supergroup'):
-        data = await user_data.get_chat_data(chat_id)
-        user_lang = data.get('language', 'ru')
-        user_currencies = data.get('currencies', [])
-        user_crypto = data.get('crypto', [])
-        use_quote = data.get('quote_format', False)
-    else:
-        data = await user_data.get_user_data(user_id)
-        user_lang = data.get('language', 'ru')
-        user_currencies = data.get('selected_currencies', [])
-        user_crypto = data.get('selected_crypto', [])
-        use_quote = data.get('use_quote_format', True)
-    
+    user_lang, user_currencies, user_crypto, use_quote, user_id, _ = await _resolve_chat_user_prefs(message)
+
     try:
-        rates = await get_exchange_rates()
-        if not rates:
-            await message.answer(LANGUAGES[user_lang]['error'])
+        rates = await _get_rates_or_reply(message, user_lang)
+        if rates is None:
             return
         
         final_response = ""
-        
+        skipped_too_large = False
+
         for amount, from_currency in requests:
-            if amount <= 0 or amount > 1e100 or amount < -1e100:
+            if amount <= 0 or amount > _MAX_SAFE_CONVERSION_AMOUNT:
+                if amount > _MAX_SAFE_CONVERSION_AMOUNT:
+                    skipped_too_large = True
                 continue
             
             response = f"{format_large_number(amount, is_original_amount=True)} {get_currency_symbol(from_currency)}{from_currency}\n"
@@ -202,44 +310,28 @@ async def process_multiple_conversions(message: types.Message, requests: List[Tu
             final_response += response
         
         if final_response:
-            kb = InlineKeyboardBuilder()
-            kb.row(danger_button(LANGUAGES[user_lang].get('delete_button', "Delete"), "delete_conversion", emoji=EMOJI['delete']))
-            
+            kb = _build_delete_conversion_kb(user_lang)
+
             await message.reply(
                 text=final_response.strip(),
-                reply_markup=kb.as_markup(),
-                parse_mode="HTML"
+                reply_markup=kb.as_markup()
             )
-            
+        elif skipped_too_large:
+            await message.answer(_too_large_message(user_lang))
+
     except Exception as e:
         logger.error(f"Error in process_multiple_conversions for user {user_id}: {e}")
         await message.answer(LANGUAGES[user_lang]['error'])
 
 async def process_conversion(message: types.Message, amount: float, from_currency: str):
-    user_id = message.from_user.id
-    chat_id = message.chat.id
-    
-    if message.chat.type in ('group', 'supergroup'):
-        data = await user_data.get_chat_data(chat_id)
-        user_lang = data.get('language', 'ru')
-        user_currencies = data.get('currencies', [])
-        user_crypto = data.get('crypto', [])
-        use_quote = data.get('quote_format', False)
-    else:
-        data = await user_data.get_user_data(user_id)
-        user_lang = data.get('language', 'ru')
-        user_currencies = data.get('selected_currencies', [])
-        user_crypto = data.get('selected_crypto', [])
-        use_quote = data.get('use_quote_format', True)
-    
+    user_lang, user_currencies, user_crypto, use_quote, user_id, _ = await _resolve_chat_user_prefs(message)
+
     try:
-        if amount <= 0:
-            await message.answer(LANGUAGES[user_lang].get('negative_or_zero_amount'))
+        if not await _validate_amount_or_reply(message, user_lang, amount):
             return
 
-        rates = await get_exchange_rates()
-        if not rates:
-            await message.answer(LANGUAGES[user_lang]['error'])
+        rates = await _get_rates_or_reply(message, user_lang)
+        if rates is None:
             return
         
         response_parts = []
@@ -277,15 +369,13 @@ async def process_conversion(message: types.Message, amount: float, from_currenc
             else:
                 response_parts.append("\n".join(crypto_conversions))
         
-        kb = InlineKeyboardBuilder()
-        kb.row(danger_button(LANGUAGES[user_lang].get('delete_button', "Delete"), "delete_conversion", emoji=EMOJI['delete']))
-        
+        kb = _build_delete_conversion_kb(user_lang)
+
         final_response = "".join(response_parts).strip()
         
         await message.reply(
             text=final_response,
-            reply_markup=kb.as_markup(),
-            parse_mode="HTML"
+            reply_markup=kb.as_markup()
         )
     except Exception as e:
         logger.error(f"Error in process_conversion for user {user_id}: {e}")
@@ -360,28 +450,14 @@ async def handle_message(message: types.Message):
             expr_normalized = text_cleaned.replace(' ', '').replace(',', '.')
             math_result = parse_mathematical_expression(expr_normalized)
             if math_result is not None:
-                kb = InlineKeyboardBuilder()
-                kb.row(danger_button(LANGUAGES[user_lang].get('delete_button', 'Delete'), 'delete_conversion', emoji=EMOJI['delete']))
-                
-                result_str = format_large_number(math_result)
-                total_len = len(text_cleaned) + len(result_str)
-                if total_len <= 35:
-                    template_key = 'math_result_short'
-                    fallback = '{expression} = <b>{result}</b>'
-                else:
-                    template_key = 'math_result_long'
-                    fallback = '{expression}\n= <b>{result}</b>'
-                
-                response = LANGUAGES[user_lang].get(template_key, fallback).format(
-                    expression=text_cleaned,
-                    result=result_str
-                )
-                await message.reply(text=response, reply_markup=kb.as_markup(), parse_mode="HTML")
+                kb = _build_delete_conversion_kb(user_lang)
+                response = _build_math_response(user_lang, text_cleaned, math_result)
+                await message.reply(text=response, reply_markup=kb.as_markup())
                 return
 
         if message.chat.type == 'private':
             unknown_cur = _extract_unknown_currency(message.text)
-            if unknown_cur:
+            if unknown_cur and unknown_cur.lower() not in _TARGET_PATTERNS_LOWER:
                 suggestions = _find_similar_currencies(unknown_cur)
                 if suggestions:
                     formatted = ", ".join(f"<b>{s}</b>" for s in suggestions)
@@ -395,8 +471,24 @@ async def handle_message(message: types.Message):
                         '⚠️ Currency <b>{currency}</b> not found.\n\nUse codes like: USD, EUR, RUB, etc.\nCurrency list — /settings'
                     ).format(currency=unknown_cur.upper())
                 
-                await message.reply(text=error_msg, parse_mode="HTML")
+                await message.reply(text=error_msg)
                 return
+
+        if _contains_known_currency(message.text):
+            bounds_state = _detect_amount_bounds_from_text(message.text)
+            if bounds_state == 'too_large':
+                await message.reply(_too_large_message(user_lang))
+                return
+            if bounds_state == 'too_small':
+                await message.reply(_too_small_message(user_lang))
+                return
+            await message.reply(
+                LANGUAGES[user_lang].get(
+                    'invalid_amount_or_too_large',
+                    'Could not parse amount. Check number format (e.g., 100.50 USD).'
+                )
+            )
+            return
 
         trigger_words = {
             'ru': ['конвертировать', 'перевести', 'convert'],
@@ -423,6 +515,8 @@ async def handle_message(message: types.Message):
 async def inline_query_handler(query: InlineQuery):
     if len(query.query) > 100:
         return
+
+    user_lang = 'en'
 
     if not query.query.strip():
         await user_data.update_user_data(query.from_user.id, language_code=query.from_user.language_code)
@@ -455,18 +549,7 @@ async def inline_query_handler(query: InlineQuery):
             math_result = parse_mathematical_expression(expr_normalized)
             if math_result is not None:
                 result_str = format_large_number(math_result)
-                total_len = len(text) + len(result_str)
-                if total_len <= 35:
-                    template_key = 'math_result_short'
-                    fallback = '{expression} = <b>{result}</b>'
-                else:
-                    template_key = 'math_result_long'
-                    fallback = '{expression}\n= <b>{result}</b>'
-                
-                response = LANGUAGES[user_lang].get(template_key, fallback).format(
-                    expression=text,
-                    result=result_str
-                )
+                response = _build_math_response(user_lang, text, math_result)
                 math_article = InlineQueryResultArticle(
                     id="math_result",
                     title=f"{text} = {result_str}",
@@ -497,6 +580,27 @@ async def inline_query_handler(query: InlineQuery):
                 await query.answer(results=results, cache_time=60)
                 return
 
+        if _contains_known_currency(text):
+            bounds_state = _detect_amount_bounds_from_text(text)
+            if bounds_state == 'too_large':
+                too_large_result = InlineQueryResultArticle(
+                    id="too_large_invalid",
+                    title=_too_large_message(user_lang),
+                    description=LANGUAGES[user_lang].get('invalid_input_description', 'Check your input format'),
+                    input_message_content=InputTextMessageContent(message_text=_too_large_message(user_lang)),
+                )
+                await query.answer(results=[too_large_result], cache_time=30)
+                return
+            if bounds_state == 'too_small':
+                too_small_result = InlineQueryResultArticle(
+                    id="too_small_invalid",
+                    title=_too_small_message(user_lang),
+                    description=LANGUAGES[user_lang].get('invalid_input_description', 'Check your input format'),
+                    input_message_content=InputTextMessageContent(message_text=_too_small_message(user_lang)),
+                )
+                await query.answer(results=[too_small_result], cache_time=30)
+                return
+
         error_result = InlineQueryResultArticle(
             id="error",
             title=LANGUAGES[user_lang].get('empty_input_title', "Enter amount and currency"),
@@ -519,6 +623,30 @@ async def inline_query_handler(query: InlineQuery):
 
         if from_currency not in ALL_CURRENCIES:
             raise ValueError(f"Invalid currency: {from_currency}")
+
+        if amount > _MAX_SAFE_CONVERSION_AMOUNT:
+            too_large_result = InlineQueryResultArticle(
+                id="too_large",
+                title=_too_large_message(user_lang),
+                description=LANGUAGES[user_lang].get('invalid_input_description', 'Check your input format'),
+                input_message_content=InputTextMessageContent(
+                    message_text=_too_large_message(user_lang)
+                )
+            )
+            await query.answer(results=[too_large_result], cache_time=30)
+            return
+
+        if amount < _MIN_SAFE_CONVERSION_AMOUNT:
+            too_small_result = InlineQueryResultArticle(
+                id="too_small",
+                title=_too_small_message(user_lang),
+                description=LANGUAGES[user_lang].get('invalid_input_description', 'Check your input format'),
+                input_message_content=InputTextMessageContent(
+                    message_text=_too_small_message(user_lang)
+                )
+            )
+            await query.answer(results=[too_small_result], cache_time=30)
+            return
 
         rates = await get_exchange_rates()
         if not rates:

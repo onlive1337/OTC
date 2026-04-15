@@ -9,7 +9,8 @@ import ujson
 from config.config import (
     CACHE_EXPIRATION_TIME, ACTIVE_CURRENCIES, CRYPTO_CURRENCIES,
     CRYPTO_ID_MAPPING, HTTP_TOTAL_TIMEOUT, HTTP_CONNECT_TIMEOUT,
-    STALE_WHILE_REVALIDATE
+    STALE_WHILE_REVALIDATE, HTTP_CONNECTOR_LIMIT,
+    HTTP_CONNECTOR_LIMIT_PER_HOST, HTTP_DNS_CACHE_TTL
 )
 from utils.http import _host_of, _with_retries, _safe_bg_task, get_http_session
 
@@ -18,6 +19,10 @@ logger = logging.getLogger(__name__)
 cache: Dict[str, Any] = {}
 _revalidation_lock = asyncio.Lock()
 _rates_lock = asyncio.Lock()
+
+
+def _as_rates_dict(payload: Any) -> Optional[Dict[str, float]]:
+    return payload if isinstance(payload, dict) else None
 
 
 def get_cached_data(key: str) -> Optional[Any]:
@@ -34,7 +39,7 @@ def set_cached_data(key: str, data: Dict[str, float]):
 
 async def get_exchange_rates() -> Dict[str, float]:
     try:
-        cached_rates = get_cached_data('exchange_rates')
+        cached_rates = _as_rates_dict(get_cached_data('exchange_rates'))
         if cached_rates:
             logger.debug("Using cached exchange rates")
             return cached_rates
@@ -81,7 +86,7 @@ async def _bg_refresh_rates():
 async def refresh_rates(force: bool = False) -> Dict[str, float]:
     if not force:
         async with _rates_lock:
-            fresh = get_cached_data('exchange_rates')
+            fresh = _as_rates_dict(get_cached_data('exchange_rates'))
             if fresh:
                 return fresh
             return await _fetch_rates_unlocked()
@@ -98,7 +103,14 @@ async def _fetch_rates_unlocked() -> Dict[str, float]:
 
         session = get_http_session()
         if session is None:
-            session_to_close = aiohttp.ClientSession(json_serialize=ujson.dumps)
+            session_to_close = aiohttp.ClientSession(
+                connector=aiohttp.TCPConnector(
+                    limit=HTTP_CONNECTOR_LIMIT,
+                    limit_per_host=HTTP_CONNECTOR_LIMIT_PER_HOST,
+                    ttl_dns_cache=HTTP_DNS_CACHE_TTL,
+                ),
+                json_serialize=ujson.dumps,
+            )
             session = session_to_close
 
         rates: Dict[str, float] = {}
@@ -116,6 +128,7 @@ async def _fetch_rates_unlocked() -> Dict[str, float]:
             async def _fiat(url=fiat_url):
                 resp = await session.get(url, timeout=timeout)
                 async with resp:
+                    resp.raise_for_status()
                     return await resp.json(loads=ujson.loads)
 
             fiat_data = await _with_retries(_fiat, host)
@@ -172,6 +185,7 @@ async def _fetch_rates_unlocked() -> Dict[str, float]:
             async def _cg():
                 resp = await session.get(url_cg, timeout=timeout)
                 async with resp:
+                    resp.raise_for_status()
                     return await resp.json(loads=ujson.loads)
             return await _with_retries(_cg, host)
 
@@ -231,6 +245,7 @@ async def _fetch_rates_unlocked() -> Dict[str, float]:
                     async def _cap(u=url_cap):
                         resp = await session.get(u, timeout=timeout)
                         async with resp:
+                            resp.raise_for_status()
                             return await resp.json(loads=ujson.loads)
                     try:
                         alt_crypto_data = await _with_retries(_cap, host)
@@ -263,6 +278,7 @@ async def _fetch_rates_unlocked() -> Dict[str, float]:
                         async def _gecko(u=url_gecko):
                             resp = await session.get(u, timeout=timeout)
                             async with resp:
+                                resp.raise_for_status()
                                 return await resp.json(loads=ujson.loads)
 
                         try:

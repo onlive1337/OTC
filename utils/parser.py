@@ -17,11 +17,13 @@ _SORTED_CURRENCY_PATTERNS = sorted(_ALL_CURRENCY_PATTERNS.items(), key=lambda x:
 
 _REGEX_PARTS = []
 for pattern, _ in _SORTED_CURRENCY_PATTERNS:
-    is_symbol = pattern in CURRENCY_SYMBOLS or re.match(r'^\W+$', pattern, re.UNICODE) is not None
-    if is_symbol:
-        _REGEX_PARTS.append(re.escape(pattern.lower()))
-    else:
-        _REGEX_PARTS.append(rf'(?<!\w){re.escape(pattern.lower())}(?!\w)')
+    starts_with_word = re.match(r'^\w', pattern, re.UNICODE) is not None
+    ends_with_word = re.search(r'\w$', pattern, re.UNICODE) is not None
+    
+    prefix = r'(?<!\w)' if starts_with_word else ''
+    suffix = r'(?!\w)' if ends_with_word else ''
+    
+    _REGEX_PARTS.append(rf'{prefix}{re.escape(pattern.lower())}{suffix}')
 
 _CURRENCY_REGEX = re.compile('|'.join(_REGEX_PARTS), re.IGNORECASE)
 
@@ -46,6 +48,10 @@ _MULTIPLIER_REGEXES = {
 
 _FIND_NUMBERS_REGEX = re.compile(r'[\d\s,\.]+')
 _SIMPLE_NUMBER_REGEX = re.compile(r'[^\d.]')
+
+_URL_REGEX = re.compile(
+    r'http[s]?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\(\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+'
+)
 
 
 def smart_number_parse(text: str) -> str:
@@ -126,6 +132,10 @@ def parse_mathematical_expression(expr: str) -> Optional[float]:
 
 
 def parse_amount_and_currency(text: str) -> Tuple[Optional[float], Optional[str]]:
+    if not text:
+        return None, None
+
+    text = _URL_REGEX.sub('', text)
     if not text:
         return None, None
 

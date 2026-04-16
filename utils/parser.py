@@ -17,14 +17,14 @@ _ALL_CURRENCY_PATTERNS.update({k.upper(): k.upper() for k in ALL_CURRENCIES.keys
 _SORTED_CURRENCY_PATTERNS = sorted(_ALL_CURRENCY_PATTERNS.items(), key=lambda x: len(x[0]), reverse=True)
 
 _REGEX_PARTS = []
-for pattern, _ in _SORTED_CURRENCY_PATTERNS:
-    starts_with_word = re.match(r'^\w', pattern, re.UNICODE) is not None
-    ends_with_word = re.search(r'\w$', pattern, re.UNICODE) is not None
-    
+for currency_pattern, _ in _SORTED_CURRENCY_PATTERNS:
+    starts_with_word = re.match(r'^\w', currency_pattern, re.UNICODE) is not None
+    ends_with_word = re.search(r'\w$', currency_pattern, re.UNICODE) is not None
+
     prefix = r'(?<!\w)' if starts_with_word else ''
     suffix = r'(?!\w)' if ends_with_word else ''
     
-    _REGEX_PARTS.append(rf'{prefix}{re.escape(pattern.lower())}{suffix}')
+    _REGEX_PARTS.append(rf'{prefix}{re.escape(currency_pattern.lower())}{suffix}')
 
 _CURRENCY_REGEX = re.compile('|'.join(_REGEX_PARTS), re.IGNORECASE)
 
@@ -114,7 +114,7 @@ def smart_number_parse(text: str) -> str:
 
 
 def _is_valid_amount(value: float) -> bool:
-    return math.isfinite(value) and 0 <= value <= _MAX_ALLOWED_AMOUNT
+    return math.isfinite(value) and abs(value) <= _MAX_ALLOWED_AMOUNT
 
 
 def parse_mathematical_expression(expr: str) -> Optional[float]:
@@ -147,13 +147,15 @@ def parse_mathematical_expression(expr: str) -> Optional[float]:
         
         tree = ast.parse(expr, mode='eval')
         return _safe_eval(tree.body)
-    except Exception:
+    except (SyntaxError, ValueError, TypeError, ZeroDivisionError, OverflowError):
         return None
 
 
 def parse_amount_and_currency(text: str) -> Tuple[Optional[float], Optional[str]]:
     if not text:
         return None, None
+
+    text = text.replace('−', '-').replace('–', '-').replace('—', '-').replace('‑', '-')
 
     text = _URL_REGEX.sub('', text)
     if not text:
@@ -184,8 +186,8 @@ def parse_amount_and_currency(text: str) -> Tuple[Optional[float], Optional[str]
         if result is not None and _is_valid_amount(result):
             return result, currency
     
-    for pattern, mult_value in _MULTIPLIER_REGEXES.items():
-        match = pattern.search(amount_text)
+    for mult_pattern, mult_value in _MULTIPLIER_REGEXES.items():
+        match = mult_pattern.search(amount_text)
         if match:
             base_number = smart_number_parse(match.group(1))
             try:

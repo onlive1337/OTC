@@ -1,3 +1,6 @@
+from typing import Any
+
+from aiogram.types import Message
 from aiogram.exceptions import TelegramBadRequest
 from aiogram.types import CallbackQuery
 from aiogram.utils.keyboard import InlineKeyboardBuilder
@@ -10,26 +13,43 @@ from utils.formatter import get_currency_symbol
 from utils.keyboards import build_user_settings_kb, build_chat_settings_kb, format_settings_text
 
 
+async def _safe_edit_text(message: Any, text: str, reply_markup=None):
+    if not isinstance(message, Message):
+        return
+    try:
+        await message.edit_text(text, reply_markup=reply_markup)
+    except TelegramBadRequest as e:
+        if "message is not modified" not in str(e):
+            raise
+
+
 async def toggle_quote_format(callback_query: CallbackQuery):
-    parts = callback_query.data.split('_')
-    user_id = callback_query.from_user.id
+    data = callback_query.data
+    from_user = callback_query.from_user
+    if data is None or from_user is None:
+        return
+
+    parts = data.split('_')
+    user_id = from_user.id
     user_lang = await user_data.get_user_language(user_id)
     
-    if 'chat' in callback_query.data:
+    if 'chat' in data:
         chat_id = int(parts[-1])
         current_setting = await user_data.get_chat_quote_format(chat_id)
         new_setting = not current_setting
         await user_data.set_chat_quote_format(chat_id, new_setting)
         
         kb = build_chat_settings_kb(user_lang, chat_id)
-        try:
-            await callback_query.message.edit_text(
-                format_settings_text(user_lang, new_setting, is_chat=True),
-                reply_markup=kb.as_markup()
-            )
-        except TelegramBadRequest as e:
-            if "message is not modified" not in str(e):
-                raise
+        message = callback_query.message
+        if not isinstance(message, Message):
+            await callback_query.answer(LANGUAGES[user_lang]['setting_updated'])
+            return
+
+        await _safe_edit_text(
+            message,
+            format_settings_text(user_lang, new_setting, is_chat=True),
+            reply_markup=kb.as_markup(),
+        )
         await callback_query.answer(LANGUAGES[user_lang]['setting_updated'])
     else:
         current_setting = await user_data.get_user_quote_format(user_id)
@@ -37,22 +57,29 @@ async def toggle_quote_format(callback_query: CallbackQuery):
         await user_data.set_user_quote_format(user_id, new_setting)
         
         kb = build_user_settings_kb(user_lang)
-        try:
-            await callback_query.message.edit_text(
-                format_settings_text(user_lang, new_setting),
-                reply_markup=kb.as_markup()
-            )
-        except TelegramBadRequest as e:
-            if "message is not modified" not in str(e):
-                raise
+        message = callback_query.message
+        if not isinstance(message, Message):
+            await callback_query.answer(LANGUAGES[user_lang]['setting_updated'])
+            return
+
+        await _safe_edit_text(
+            message,
+            format_settings_text(user_lang, new_setting),
+            reply_markup=kb.as_markup(),
+        )
         await callback_query.answer(LANGUAGES[user_lang]['setting_updated'])
     
     await user_data.update_user_data(user_id)
 
 async def show_currencies(callback_query: CallbackQuery):
     await callback_query.answer()
-    page = int(callback_query.data.split('_')[-1])
-    user_id = callback_query.from_user.id
+    data = callback_query.data
+    from_user = callback_query.from_user
+    if data is None or from_user is None:
+        return
+
+    page = int(data.split('_')[-1])
+    user_id = from_user.id
     user_currencies = await user_data.get_user_currencies(user_id)
     user_lang = await user_data.get_user_language(user_id)
     
@@ -76,11 +103,19 @@ async def show_currencies(callback_query: CallbackQuery):
     
     kb.row(primary_button(LANGUAGES[user_lang]['back_to_settings'], "back_to_settings", emoji=EMOJI['settings']))
     
-    await callback_query.message.edit_text(LANGUAGES[user_lang]['currencies'], reply_markup=kb.as_markup())
+    message = callback_query.message
+    if not isinstance(message, Message):
+        return
+
+    await _safe_edit_text(message, LANGUAGES[user_lang]['currencies'], reply_markup=kb.as_markup())
 
 async def show_crypto(callback_query: CallbackQuery):
     await callback_query.answer()
-    user_id = callback_query.from_user.id
+    from_user = callback_query.from_user
+    if from_user is None:
+        return
+
+    user_id = from_user.id
     user_crypto = await user_data.get_user_crypto(user_id)
     user_lang = await user_data.get_user_language(user_id)
     
@@ -92,26 +127,40 @@ async def show_crypto(callback_query: CallbackQuery):
     kb.row(primary_button(LANGUAGES[user_lang]['back_to_settings'], "back_to_settings", emoji=EMOJI['settings']))
     kb.adjust(2, 2, 2, 2, 2, 2, 2, 1)
     
-    await callback_query.message.edit_text(LANGUAGES[user_lang]['cryptocurrencies'], reply_markup=kb.as_markup())
+    message = callback_query.message
+    if not isinstance(message, Message):
+        return
+
+    await _safe_edit_text(message, LANGUAGES[user_lang]['cryptocurrencies'], reply_markup=kb.as_markup())
 
 async def toggle_currency(callback_query: CallbackQuery):
     await callback_query.answer()
-    currency, page = callback_query.data.split('_')[2:]
-    user_currencies = await user_data.get_user_currencies(callback_query.from_user.id)
-    
+    data = callback_query.data
+    from_user = callback_query.from_user
+    if data is None or from_user is None:
+        return
+
+    currency, page = data.split('_')[2:]
+    user_currencies = await user_data.get_user_currencies(from_user.id)
+
     if currency in user_currencies:
         user_currencies.remove(currency)
     else:
         user_currencies.append(currency)
     
-    await user_data.set_user_currencies(callback_query.from_user.id, user_currencies)
-    await user_data.update_user_data(callback_query.from_user.id)
+    await user_data.set_user_currencies(from_user.id, user_currencies)
+    await user_data.update_user_data(from_user.id)
     await show_currencies(callback_query)
 
 async def toggle_crypto(callback_query: CallbackQuery):
     await callback_query.answer()
-    crypto = callback_query.data.split('_')[-1]
-    user_id = callback_query.from_user.id
+    data = callback_query.data
+    from_user = callback_query.from_user
+    if data is None or from_user is None:
+        return
+
+    crypto = data.split('_')[-1]
+    user_id = from_user.id
     user_crypto = await user_data.get_user_crypto(user_id)
     
     if crypto in user_crypto:
@@ -124,7 +173,11 @@ async def toggle_crypto(callback_query: CallbackQuery):
     await show_crypto(callback_query)
 
 async def change_language(callback_query: CallbackQuery):
-    user_id = callback_query.from_user.id
+    from_user = callback_query.from_user
+    if from_user is None:
+        return
+
+    user_id = from_user.id
     current_lang = await user_data.get_user_language(user_id)
     
     kb = InlineKeyboardBuilder()
@@ -134,16 +187,29 @@ async def change_language(callback_query: CallbackQuery):
     )
     kb.row(primary_button(LANGUAGES[current_lang]['back_to_settings'], "back_to_settings", emoji=EMOJI['back']))
     
-    await callback_query.message.edit_text(LANGUAGES[current_lang]['language'], reply_markup=kb.as_markup())
+    message = callback_query.message
+    if not isinstance(message, Message):
+        return
+
+    await _safe_edit_text(message, LANGUAGES[current_lang]['language'], reply_markup=kb.as_markup())
 
 async def set_language(callback_query: CallbackQuery):
-    user_id = callback_query.from_user.id
-    new_lang = callback_query.data.split('_')[-1]
+    data = callback_query.data
+    from_user = callback_query.from_user
+    if data is None or from_user is None:
+        return
+
+    user_id = from_user.id
+    new_lang = data.split('_')[-1]
     await user_data.set_user_language(user_id, new_lang)
     await user_data.update_user_data(user_id)
     
     kb = InlineKeyboardBuilder()
     kb.row(primary_button(LANGUAGES[new_lang]['back_to_settings'], "back_to_settings", emoji=EMOJI['back']))
     
-    await callback_query.message.edit_text(LANGUAGES[new_lang]['language_changed'], reply_markup=kb.as_markup())
+    message = callback_query.message
+    if not isinstance(message, Message):
+        return
+
+    await _safe_edit_text(message, LANGUAGES[new_lang]['language_changed'], reply_markup=kb.as_markup())
     await callback_query.answer(LANGUAGES[new_lang]['language_changed'])

@@ -74,7 +74,8 @@ class TelegramLogHandler(logging.Handler):
 
         await self.send_log_to_telegram(combined)
 
-    def format_error(self, record):
+    @staticmethod
+    def format_error(record):
         base = f"{record.levelname} [{record.name}]: {record.getMessage()}"
         if record.exc_info:
             tb_list = traceback.format_exception(*record.exc_info)

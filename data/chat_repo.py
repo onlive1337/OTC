@@ -1,15 +1,28 @@
 import logging
-from typing import List
+from typing import Any, List, Protocol
+
+import asyncio
 
 from aiosqlite import IntegrityError
+import aiosqlite
 
 from config.config import ACTIVE_CURRENCIES, CRYPTO_CURRENCIES
 
 logger = logging.getLogger(__name__)
 
 
+class _ChatRepoDeps(Protocol):
+    chat_data: dict[int, dict[str, Any]]
+    _write_lock: asyncio.Lock
+
+    async def _ensure_chat(self, chat_id: int): ...
+    async def _get_read_conn(self) -> aiosqlite.Connection: ...
+    async def _get_write_conn(self) -> aiosqlite.Connection: ...
+    def _cleanup_cache_if_needed(self) -> None: ...
+
+
 class ChatRepoMixin:
-    async def _ensure_chat(self, chat_id: int):
+    async def _ensure_chat(self: _ChatRepoDeps, chat_id: int):
         if chat_id in self.chat_data:
             return
 
@@ -38,7 +51,7 @@ class ChatRepoMixin:
             except Exception as e:
                 logger.error(f"Error registering chat {chat_id}: {e}")
 
-    async def get_chat_data(self, chat_id: int) -> dict:
+    async def get_chat_data(self: _ChatRepoDeps, chat_id: int) -> dict:
         cached = self.chat_data.get(chat_id)
         if isinstance(cached, dict) and 'currencies' in cached and 'language' in cached:
             return cached
@@ -71,15 +84,15 @@ class ChatRepoMixin:
         self.chat_data[chat_id] = data
         return data
 
-    async def initialize_chat_settings(self, chat_id: int):
+    async def initialize_chat_settings(self: _ChatRepoDeps, chat_id: int):
         await self._ensure_chat(chat_id)
         logger.info(f"Initialized settings for chat {chat_id}")
 
-    def update_chat_cache(self, chat_id: int):
+    def update_chat_cache(self: _ChatRepoDeps, chat_id: int):
         self.chat_data.pop(chat_id, None)
         logger.debug(f"Invalidated chat cache for chat {chat_id}")
 
-    async def get_chat_quote_format(self, chat_id: int) -> bool:
+    async def get_chat_quote_format(self: _ChatRepoDeps, chat_id: int) -> bool:
         cached = self.chat_data.get(chat_id)
         if isinstance(cached, dict) and 'quote_format' in cached:
             return cached['quote_format']
@@ -93,7 +106,7 @@ class ChatRepoMixin:
         self.chat_data[chat_id]['quote_format'] = result
         return result
 
-    async def set_chat_quote_format(self, chat_id: int, use_quote: bool):
+    async def set_chat_quote_format(self: _ChatRepoDeps, chat_id: int, use_quote: bool):
         await self._ensure_chat(chat_id)
         async with self._write_lock:
             conn = await self._get_write_conn()
@@ -102,7 +115,7 @@ class ChatRepoMixin:
         if chat_id in self.chat_data and isinstance(self.chat_data[chat_id], dict):
             self.chat_data[chat_id]['quote_format'] = use_quote
 
-    async def get_chat_currencies(self, chat_id: int) -> list:
+    async def get_chat_currencies(self: _ChatRepoDeps, chat_id: int) -> list:
         cached = self.chat_data.get(chat_id)
         if isinstance(cached, dict) and 'currencies' in cached:
             return cached['currencies']
@@ -116,7 +129,7 @@ class ChatRepoMixin:
         self.chat_data[chat_id]['currencies'] = currencies
         return currencies
 
-    async def set_chat_currencies(self, chat_id: int, currencies: List[str]):
+    async def set_chat_currencies(self: _ChatRepoDeps, chat_id: int, currencies: List[str]):
         await self._ensure_chat(chat_id)
         async with self._write_lock:
             conn = await self._get_write_conn()
@@ -126,7 +139,7 @@ class ChatRepoMixin:
         if chat_id in self.chat_data and isinstance(self.chat_data[chat_id], dict):
             self.chat_data[chat_id]['currencies'] = currencies
 
-    async def get_chat_crypto(self, chat_id: int) -> list:
+    async def get_chat_crypto(self: _ChatRepoDeps, chat_id: int) -> list:
         cached = self.chat_data.get(chat_id)
         if isinstance(cached, dict) and 'crypto' in cached:
             return cached['crypto']
@@ -140,7 +153,7 @@ class ChatRepoMixin:
         self.chat_data[chat_id]['crypto'] = crypto
         return crypto
 
-    async def set_chat_crypto(self, chat_id: int, crypto_list: List[str]):
+    async def set_chat_crypto(self: _ChatRepoDeps, chat_id: int, crypto_list: List[str]):
         await self._ensure_chat(chat_id)
         async with self._write_lock:
             conn = await self._get_write_conn()
@@ -150,7 +163,7 @@ class ChatRepoMixin:
         if chat_id in self.chat_data and isinstance(self.chat_data[chat_id], dict):
             self.chat_data[chat_id]['crypto'] = crypto_list
 
-    async def get_chat_language(self, chat_id: int) -> str:
+    async def get_chat_language(self: _ChatRepoDeps, chat_id: int) -> str:
         cached = self.chat_data.get(chat_id)
         if isinstance(cached, dict) and 'language' in cached:
             return cached['language']
@@ -164,7 +177,7 @@ class ChatRepoMixin:
         self.chat_data[chat_id]['language'] = lang
         return lang
 
-    async def set_chat_language(self, chat_id: int, language: str):
+    async def set_chat_language(self: _ChatRepoDeps, chat_id: int, language: str):
         await self._ensure_chat(chat_id)
         async with self._write_lock:
             conn = await self._get_write_conn()

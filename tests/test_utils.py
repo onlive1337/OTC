@@ -157,6 +157,16 @@ class TestParseAmountAndCurrency:
         assert amount == pytest.approx(1e-18)
         assert currency == "USD"
 
+    def test_negative_amount_keeps_sign(self):
+        amount, currency = parse_amount_and_currency("-10 USD")
+        assert amount == -10.0
+        assert currency == "USD"
+
+    def test_unicode_minus_amount_keeps_sign(self):
+        amount, currency = parse_amount_and_currency("−10 USD")
+        assert amount == -10.0
+        assert currency == "USD"
+
 
 class TestConvertCurrency:
     RATES = {

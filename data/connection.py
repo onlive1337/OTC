@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import sqlite3
 from datetime import datetime
 from typing import Dict, Any, Optional
 
@@ -44,7 +45,8 @@ class DatabaseMixin:
                 del self.chat_data[key]
             logger.info(f"Chat cache cleanup: reduced from {len(items)} to {len(self.chat_data)}")
 
-    async def _open_connection(self, readonly: bool = False) -> aiosqlite.Connection:
+    @staticmethod
+    async def _open_connection(readonly: bool = False) -> aiosqlite.Connection:
         max_retries = 3
         for attempt in range(max_retries):
             try:
@@ -60,7 +62,7 @@ class DatabaseMixin:
                 if attempt > 0:
                     logger.info(f"DB {'read' if readonly else 'write'} connection established after {attempt + 1} attempts")
                 return conn
-            except Exception as e:
+            except sqlite3.Error as e:
                 logger.error(f"DB connection attempt {attempt + 1}/{max_retries} failed: {e}")
                 if attempt < max_retries - 1:
                     await asyncio.sleep(0.5 * (2 ** attempt))
@@ -90,10 +92,11 @@ class DatabaseMixin:
             conn = await self._get_write_conn()
             await conn.execute("SELECT 1")
             return True
-        except Exception:
+        except sqlite3.Error:
             return False
 
-    async def _get_schema_version(self, conn) -> int:
+    @staticmethod
+    async def _get_schema_version(conn) -> int:
         try:
             async with conn.execute("SELECT MAX(version) FROM schema_version") as cursor:
                 row = await cursor.fetchone()
@@ -116,12 +119,13 @@ class DatabaseMixin:
                         logger.info(f"Applied migration v{version}")
                     except OperationalError:
                         await conn.execute("INSERT OR IGNORE INTO schema_version(version) VALUES(?)", (version,))
-                    except Exception as e:
+                    except sqlite3.Error as e:
                         logger.error(f"Migration v{version} failed: {e}")
+                        raise
 
             try:
                 await conn.execute("PRAGMA optimize;")
-            except Exception:
+            except sqlite3.Error:
                 pass
 
             await conn.commit()
@@ -131,11 +135,15 @@ class DatabaseMixin:
         self._start_flush_task()
 
     def _start_flush_task(self):
-        if self._flush_task is None or self._flush_task.done():
-            self._flush_task = asyncio.create_task(self._periodic_flush(), name="db_flush_interactions")
-            self._flush_task.add_done_callback(
-                lambda t: logger.error(f"Flush task failed: {t.exception()}") if not t.cancelled() and t.exception() else None
-            )
+        flush_task = self._flush_task
+        if flush_task is None or flush_task.done():
+            def _on_flush_done(t: asyncio.Task):
+                if not t.cancelled() and t.exception():
+                    logger.error(f"Flush task failed: {t.exception()}")
+
+            flush_task = asyncio.create_task(self._periodic_flush(), name="db_flush_interactions")
+            self._flush_task = flush_task
+            flush_task.add_done_callback(_on_flush_done)
 
     async def _periodic_flush(self):
         while True:
@@ -145,7 +153,7 @@ class DatabaseMixin:
             except asyncio.CancelledError:
                 await self._flush_interactions()
                 raise
-            except Exception:
+            except sqlite3.Error:
                 logger.exception("Error flushing interactions")
 
     async def _flush_interactions(self):
@@ -185,14 +193,14 @@ class DatabaseMixin:
 
         try:
             await self._flush_interactions()
-        except Exception:
+        except sqlite3.Error:
             logger.exception("Error during final interaction flush")
 
         for conn_name, conn in [("read", self._read_conn), ("write", self._write_conn)]:
             if conn is not None:
                 try:
                     await conn.close()
-                except Exception:
+                except sqlite3.Error:
                     logger.exception(f"Error closing {conn_name} DB connection")
         self._read_conn = None
         self._write_conn = None

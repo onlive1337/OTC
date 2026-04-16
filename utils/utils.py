@@ -1,33 +1,45 @@
+import logging
 from typing import Union
 
+from aiogram.exceptions import TelegramAPIError
 from aiogram.types import CallbackQuery, Message
 
 from config.languages import LANGUAGES
 from loader import user_data
 
+logger = logging.getLogger(__name__)
+
 
 async def delete_conversion_message(callback_query: CallbackQuery):
-    try:
-        await callback_query.message.delete()
-    except Exception:
-        pass
+    if isinstance(callback_query.message, Message):
+        try:
+            await callback_query.message.delete()
+        except TelegramAPIError:
+            pass
     try:
         await callback_query.answer()
-    except Exception:
+    except TelegramAPIError:
         pass
 
 async def save_settings(callback_query: CallbackQuery):
+    if not isinstance(callback_query.message, Message):
+        await callback_query.answer()
+        return
+
     user_lang = await user_data.get_user_language(callback_query.from_user.id)
     await callback_query.message.edit_text(LANGUAGES[user_lang]['save_settings'])
     await callback_query.answer()
 
 async def check_admin_rights(message_or_callback: Union[Message, CallbackQuery], user_id: int, chat_id: int) -> bool:
+    bot = message_or_callback.bot
+    if bot is None:
+        return False
+
     try:
-        chat_member = await message_or_callback.bot.get_chat_member(chat_id, user_id)
+        chat_member = await bot.get_chat_member(chat_id, user_id)
         return chat_member.status in ['creator', 'administrator']
-    except Exception as e:
-        import logging
-        logging.getLogger(__name__).error(f"Error checking admin rights: {e}")
+    except TelegramAPIError as e:
+        logger.error(f"Error checking admin rights: {e}")
         return False
 
 async def show_not_admin_message(message_or_callback: Union[Message, CallbackQuery], user_id: int):

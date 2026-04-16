@@ -28,9 +28,14 @@ def build_main_menu_kb(user_lang):
 
 
 async def _prepare_callback_user_lang(callback_query: CallbackQuery) -> str:
-    await user_data.update_user_data(callback_query.from_user.id)
+    from_user = callback_query.from_user
+    if from_user is None:
+        await callback_query.answer()
+        return 'en'
+
+    await user_data.update_user_data(from_user.id)
     await callback_query.answer()
-    return await user_data.get_user_language(callback_query.from_user.id)
+    return await user_data.get_user_language(from_user.id)
 
 
 def _build_back_to_main_kb(user_lang: str) -> InlineKeyboardBuilder:
@@ -40,17 +45,21 @@ def _build_back_to_main_kb(user_lang: str) -> InlineKeyboardBuilder:
 
 @router.message(CommandStart())
 async def cmd_start(message: Message):
-    await user_data.update_user_data(message.from_user.id, language_code=message.from_user.language_code)
-    user_lang = await user_data.get_user_language(message.from_user.id)
-    
+    from_user = message.from_user
+    if from_user is None:
+        return
+
+    await user_data.update_user_data(from_user.id, language_code=from_user.language_code)
+    user_lang = await user_data.get_user_language(from_user.id)
+
     if message.chat.type in ['group', 'supergroup']:
         chat_lang = await user_data.get_chat_language(message.chat.id)
-        chat_member = await message.chat.get_member(message.from_user.id)
-        if chat_member.status in ['creator', 'administrator']:
-            from data.chat_settings import show_chat_settings
-            await show_chat_settings(message)
-        else:
-            await message.answer(LANGUAGES[chat_lang]['admin_only'])
+        await message.answer(
+            LANGUAGES[chat_lang].get(
+                'welcome_group_message',
+                LANGUAGES[chat_lang].get('welcome', LANGUAGES['en']['welcome'])
+            )
+        )
     else:
         kb = build_main_menu_kb(user_lang)
         await message.answer(LANGUAGES[user_lang]['welcome'], reply_markup=kb.as_markup())
@@ -60,13 +69,20 @@ async def process_howto(callback_query: CallbackQuery):
     user_lang = await _prepare_callback_user_lang(callback_query)
     kb = _build_back_to_main_kb(user_lang)
 
+    if not isinstance(callback_query.message, Message):
+        return
+
     await callback_query.message.edit_text(LANGUAGES[user_lang]['help'], reply_markup=kb.as_markup())
 
 @router.message(Command("help"))
 async def cmd_help(message: Message):
-    await user_data.update_user_data(message.from_user.id)
-    user_lang = await user_data.get_user_language(message.from_user.id)
-    
+    from_user = message.from_user
+    if from_user is None:
+        return
+
+    await user_data.update_user_data(from_user.id)
+    user_lang = await user_data.get_user_language(from_user.id)
+
     kb = InlineKeyboardBuilder()
     kb.row(danger_button(LANGUAGES[user_lang].get('delete_button', "Delete"), "delete_conversion", emoji=EMOJI['delete']))
     
@@ -77,6 +93,9 @@ async def process_feedback(callback_query: CallbackQuery):
     user_lang = await _prepare_callback_user_lang(callback_query)
     kb = _build_back_to_main_kb(user_lang)
 
+    if not isinstance(callback_query.message, Message):
+        return
+
     await callback_query.message.edit_text(LANGUAGES[user_lang]['feedback'], reply_markup=kb.as_markup())
 
 @router.callback_query(F.data == "support")
@@ -86,7 +105,10 @@ async def process_support(callback_query: CallbackQuery):
     kb = InlineKeyboardBuilder()
     kb.row(success_button(LANGUAGES[user_lang]['donate_button'], url="https://boosty.to/onlive/donate", emoji=EMOJI['support']))
     kb.row(primary_button(LANGUAGES[user_lang]['back'], 'back_to_main', emoji=EMOJI['back']))
-    
+
+    if not isinstance(callback_query.message, Message):
+        return
+
     await callback_query.message.edit_text(LANGUAGES[user_lang]['support_message'], reply_markup=kb.as_markup())
 
 @router.callback_query(F.data == "about")
@@ -99,7 +121,10 @@ async def process_about(callback_query: CallbackQuery):
     kb = InlineKeyboardBuilder()
     kb.row(primary_button(LANGUAGES[user_lang]['view_changelog'], 'view_changelog', emoji=EMOJI['changelog']))
     kb.row(primary_button(LANGUAGES[user_lang]['back'], 'back_to_main', emoji=EMOJI['back']))
-    
+
+    if not isinstance(callback_query.message, Message):
+        return
+
     await callback_query.message.edit_text(about_message, reply_markup=kb.as_markup())
 
 @router.callback_query(F.data == "view_changelog")
@@ -108,15 +133,22 @@ async def view_changelog(callback_query: CallbackQuery):
 
     kb = InlineKeyboardBuilder()
     kb.row(primary_button(LANGUAGES[user_lang]['back'], 'about', emoji=EMOJI['back']))
-    
+
+    if not isinstance(callback_query.message, Message):
+        return
+
     await callback_query.message.edit_text(read_changelog(), reply_markup=kb.as_markup())
 
 @router.callback_query(F.data == "back_to_main")
 async def back_to_main(callback_query: CallbackQuery):
     await callback_query.answer()
-    await user_data.update_user_data(callback_query.from_user.id)
-    user_lang = await user_data.get_user_language(callback_query.from_user.id)
-    
+    from_user = callback_query.from_user
+    if from_user is None or not isinstance(callback_query.message, Message):
+        return
+
+    await user_data.update_user_data(from_user.id)
+    user_lang = await user_data.get_user_language(from_user.id)
+
     kb = build_main_menu_kb(user_lang)
     await callback_query.message.edit_text(LANGUAGES[user_lang]['welcome'], reply_markup=kb.as_markup())
 

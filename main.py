@@ -1,13 +1,14 @@
 import asyncio
 import importlib
 import logging
+import sqlite3
 import signal
 import sys
 import warnings
 
 warnings.filterwarnings("ignore", message=".*iscoroutinefunction.*", category=DeprecationWarning)
 import ujson
-from aiohttp import ClientSession, ClientTimeout, TCPConnector
+from aiohttp import ClientError, ClientSession, ClientTimeout, TCPConnector
 
 from config.config import (
     LOG_LEVEL,
@@ -40,7 +41,7 @@ async def _warmup_rates():
     try:
         await get_exchange_rates()
         logger.info("Rates cache warmed up")
-    except Exception:
+    except (ClientError, asyncio.TimeoutError, RuntimeError, ValueError, TypeError, KeyError):
         logger.exception("Warmup failed")
 
 async def _periodic_refresh():
@@ -56,7 +57,7 @@ async def _periodic_refresh():
         except asyncio.TimeoutError:
             logger.warning("Periodic rate refresh timed out, retrying in %ds", error_interval)
             await asyncio.sleep(error_interval)
-        except Exception:
+        except (ClientError, RuntimeError, ValueError, TypeError, KeyError):
             logger.exception("Periodic rate refresh failed, retrying in %ds", error_interval)
             await asyncio.sleep(error_interval)
 
@@ -89,11 +90,11 @@ async def on_shutdown():
     _bg_tasks.clear()
     try:
         await close_http_session()
-    except Exception:
+    except RuntimeError:
         logger.exception("Error during HTTP session shutdown")
     try:
         await user_data.close()
-    except Exception:
+    except sqlite3.Error:
         logger.exception("Error closing database connection")
 
 async def main():

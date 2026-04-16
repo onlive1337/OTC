@@ -16,7 +16,12 @@ from loader import user_data
 
 
 async def _ensure_chat_admin_and_answer(callback_query: CallbackQuery, chat_id: int) -> bool:
-    user_id = callback_query.from_user.id
+    from_user = callback_query.from_user
+    if from_user is None:
+        await callback_query.answer()
+        return False
+
+    user_id = from_user.id
     if not await check_admin_rights(callback_query, user_id, chat_id):
         await show_not_admin_message(callback_query, user_id)
         return False
@@ -25,7 +30,7 @@ async def _ensure_chat_admin_and_answer(callback_query: CallbackQuery, chat_id: 
 
 
 async def _safe_edit_text(message: Any, text: str, reply_markup=None):
-    if message is None:
+    if not isinstance(message, Message):
         return
     try:
         await message.edit_text(text, reply_markup=reply_markup)
@@ -43,7 +48,12 @@ def _add_back_to_chat_settings_button(kb: InlineKeyboardBuilder, user_lang: str,
     kb.row(primary_button(LANGUAGES[user_lang]['back_to_settings'], f"back_to_chat_settings_{chat_id}", emoji=emoji))
 
 async def show_chat_currencies(callback_query: CallbackQuery):
-    parts = callback_query.data.split('_')
+    data = callback_query.data
+    if data is None:
+        await callback_query.answer()
+        return
+
+    parts = data.split('_')
     chat_id = int(parts[3])
     if not await _ensure_chat_admin_and_answer(callback_query, chat_id):
         return
@@ -79,7 +89,12 @@ async def show_chat_currencies(callback_query: CallbackQuery):
     await _safe_edit_text(callback_query.message, LANGUAGES[user_lang]['currencies'], reply_markup=kb.as_markup())
 
 async def show_chat_crypto(callback_query: CallbackQuery):
-    chat_id = int(callback_query.data.split('_')[3])
+    data = callback_query.data
+    if data is None:
+        await callback_query.answer()
+        return
+
+    chat_id = int(data.split('_')[3])
     if not await _ensure_chat_admin_and_answer(callback_query, chat_id):
         return
 
@@ -99,7 +114,12 @@ async def show_chat_crypto(callback_query: CallbackQuery):
     await _safe_edit_text(callback_query.message, LANGUAGES[user_lang]['cryptocurrencies'], reply_markup=kb.as_markup())
 
 async def toggle_chat_currency(callback_query: CallbackQuery):
-    parts = callback_query.data.split('_')
+    data = callback_query.data
+    if data is None:
+        await callback_query.answer()
+        return
+
+    parts = data.split('_')
     chat_id = int(parts[3])
     if not await _ensure_chat_admin_and_answer(callback_query, chat_id):
         return
@@ -123,7 +143,12 @@ async def toggle_chat_currency(callback_query: CallbackQuery):
     await show_chat_currencies(new_callback_query)
 
 async def toggle_chat_crypto(callback_query: CallbackQuery):
-    chat_id, crypto = callback_query.data.split('_')[3:]
+    data = callback_query.data
+    if data is None:
+        await callback_query.answer()
+        return
+
+    chat_id, crypto = data.split('_')[3:]
     chat_id = int(chat_id)
     if not await _ensure_chat_admin_and_answer(callback_query, chat_id):
         return
@@ -142,7 +167,12 @@ async def toggle_chat_crypto(callback_query: CallbackQuery):
     await show_chat_crypto(callback_query)
 
 async def toggle_chat_quote_format(callback_query: CallbackQuery):
-    parts = callback_query.data.split('_')
+    data = callback_query.data
+    if data is None:
+        await callback_query.answer()
+        return
+
+    parts = data.split('_')
     chat_id = int(parts[4])
     if not await _ensure_chat_admin_and_answer(callback_query, chat_id):
         return
@@ -161,7 +191,11 @@ async def toggle_chat_quote_format(callback_query: CallbackQuery):
     )
 
 async def show_chat_settings(message: Message):
-    user_id = message.from_user.id
+    from_user = message.from_user
+    if from_user is None:
+        return
+
+    user_id = from_user.id
     chat_id = message.chat.id
     
     if not await check_admin_rights(message, user_id, chat_id):
@@ -174,8 +208,14 @@ async def show_chat_settings(message: Message):
     await message.answer(format_settings_text(user_lang, use_quote, is_chat=True), reply_markup=kb.as_markup())
 
 async def save_chat_settings(callback_query: CallbackQuery):
-    chat_id = int(callback_query.data.split('_')[3])
-    user_id = callback_query.from_user.id
+    data = callback_query.data
+    from_user = callback_query.from_user
+    if data is None or from_user is None:
+        await callback_query.answer()
+        return
+
+    chat_id = int(data.split('_')[3])
+    user_id = from_user.id
     if not await check_admin_rights(callback_query, user_id, chat_id):
         await show_not_admin_message(callback_query, user_id)
         return
@@ -185,7 +225,12 @@ async def save_chat_settings(callback_query: CallbackQuery):
     await callback_query.answer()
 
 async def back_to_chat_settings(callback_query: CallbackQuery):
-    parts = callback_query.data.split('_')
+    data = callback_query.data
+    if data is None:
+        await callback_query.answer("Error. Please try again.")
+        return
+
+    parts = data.split('_')
     chat_id = next((part for part in parts if part.lstrip('-').isdigit()), None)
     
     if chat_id is None:
@@ -208,7 +253,12 @@ async def back_to_chat_settings(callback_query: CallbackQuery):
     )
 
 async def change_chat_language(callback_query: CallbackQuery):
-    parts = callback_query.data.split('_')
+    data = callback_query.data
+    if data is None:
+        await callback_query.answer()
+        return
+
+    parts = data.split('_')
     chat_id = int(parts[3])
     if not await _ensure_chat_admin_and_answer(callback_query, chat_id):
         return
@@ -225,10 +275,16 @@ async def change_chat_language(callback_query: CallbackQuery):
     await _safe_edit_text(callback_query.message, LANGUAGES[user_lang]['language'], reply_markup=kb.as_markup())
 
 async def set_chat_language(callback_query: CallbackQuery):
-    parts = callback_query.data.split('_')
+    data = callback_query.data
+    from_user = callback_query.from_user
+    if data is None or from_user is None:
+        await callback_query.answer()
+        return
+
+    parts = data.split('_')
     chat_id = int(parts[3])
     new_lang = parts[4]
-    user_id = callback_query.from_user.id
+    user_id = from_user.id
     
     if not await check_admin_rights(callback_query, user_id, chat_id):
         await show_not_admin_message(callback_query, user_id)

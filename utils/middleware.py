@@ -6,7 +6,7 @@ from datetime import datetime
 from typing import Any, Awaitable, Callable, Dict
 
 from aiogram import BaseMiddleware
-from aiogram.types import TelegramObject, Message
+from aiogram.types import TelegramObject, Message, User
 from aiogram.exceptions import TelegramRetryAfter, TelegramAPIError
 
 logger = logging.getLogger(__name__)
@@ -77,7 +77,7 @@ class RateLimitMiddleware(BaseMiddleware):
             self._cleanup()
             self._cleanup_counter = 0
             
-        if user is None:
+        if not isinstance(user, User):
             return await handler(event, data)
 
         uid = user.id
@@ -145,9 +145,9 @@ class ErrorBoundaryMiddleware(BaseMiddleware):
                         user_lang = await user_data.get_chat_language(event.chat.id)
                     else:
                         user = data.get("event_from_user")
-                        user_lang = await user_data.get_user_language(user.id) if user else 'en'
+                        user_lang = await user_data.get_user_language(user.id) if isinstance(user, User) else 'en'
                     await event.answer(LANGUAGES[user_lang].get('error', '⚠️ Error'))
-            except Exception:
+            except TelegramAPIError:
                 pass
 
             return None

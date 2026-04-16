@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 
 ## Changelog
 
+## [1.8.3] - 2026-04-16
+
+### 🧹 Cleanup
+- Cleaned up IDE/type warnings across handlers and repository mixins with safer null guards and local type narrowing.
+- Removed a few cosmetic inspection triggers in conversion and logging helpers without changing runtime behavior.
+
 ## [1.8.2] - 2026-04-16
 
 ### ♻️ Refactor

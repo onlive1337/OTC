@@ -25,7 +25,11 @@ router = Router()
 
 @router.message(Command("settings"))
 async def cmd_settings(message: Message):
-    user_id = message.from_user.id
+    from_user = message.from_user
+    if from_user is None:
+        return
+
+    user_id = from_user.id
     chat_id = message.chat.id
 
     if message.chat.type == 'private':
@@ -47,7 +51,14 @@ async def cmd_settings(message: Message):
 @router.callback_query(F.data == "settings")
 async def process_settings(callback_query: CallbackQuery):
     await callback_query.answer()
-    user_id = callback_query.from_user.id
+    if not isinstance(callback_query.message, Message):
+        return
+
+    from_user = callback_query.from_user
+    if from_user is None:
+        return
+
+    user_id = from_user.id
     user_lang = await user_data.get_user_language(user_id)
     use_quote = await user_data.get_user_quote_format(user_id)
     
@@ -59,8 +70,15 @@ async def process_settings(callback_query: CallbackQuery):
 @router.callback_query(F.data == "back_to_settings")
 async def back_to_settings(callback_query: CallbackQuery):
     await callback_query.answer()
-    await user_data.update_user_data(callback_query.from_user.id)
-    user_id = callback_query.from_user.id
+    if not isinstance(callback_query.message, Message):
+        return
+
+    from_user = callback_query.from_user
+    if from_user is None:
+        return
+
+    await user_data.update_user_data(from_user.id)
+    user_id = from_user.id
     user_lang = await user_data.get_user_language(user_id)
     use_quote = await user_data.get_user_quote_format(user_id)
     

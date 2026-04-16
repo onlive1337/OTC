@@ -21,8 +21,12 @@ router = Router()
 
 @router.message(Command("stats"))
 async def cmd_stats(message: Message):
-    user_lang = await user_data.get_user_language(message.from_user.id)
-    if message.from_user.id not in ADMIN_IDS:
+    from_user = message.from_user
+    if from_user is None:
+        return
+
+    user_lang = await user_data.get_user_language(from_user.id)
+    if from_user.id not in ADMIN_IDS:
         await message.answer(LANGUAGES[user_lang]['no_admin_rights'])
         return
 
@@ -38,8 +42,12 @@ async def cmd_stats(message: Message):
 
 @router.message(Command("health"))
 async def cmd_health(message: Message):
-    user_lang = await user_data.get_user_language(message.from_user.id)
-    if message.from_user.id not in ADMIN_IDS:
+    from_user = message.from_user
+    if from_user is None:
+        return
+
+    user_lang = await user_data.get_user_language(from_user.id)
+    if from_user.id not in ADMIN_IDS:
         await message.answer(LANGUAGES[user_lang]['no_admin_rights'])
         return
 
@@ -62,10 +70,11 @@ async def cmd_health(message: Message):
 
 @router.message(Command("broadcast"))
 async def cmd_broadcast(message: Message, state: FSMContext):
-    if message.from_user.id not in ADMIN_IDS:
+    from_user = message.from_user
+    if from_user is None or from_user.id not in ADMIN_IDS:
         return
 
-    user_lang = await user_data.get_user_language(message.from_user.id)
+    user_lang = await user_data.get_user_language(from_user.id)
     lang = LANGUAGES[user_lang]
 
     kb = InlineKeyboardBuilder()
@@ -80,7 +89,16 @@ async def cmd_broadcast(message: Message, state: FSMContext):
 
 @router.callback_query(F.data == "broadcast_cancel")
 async def broadcast_cancel(callback_query: CallbackQuery, state: FSMContext):
-    user_lang = await user_data.get_user_language(callback_query.from_user.id)
+    from_user = callback_query.from_user
+    if from_user is None:
+        await callback_query.answer()
+        return
+
+    if not isinstance(callback_query.message, Message):
+        await callback_query.answer()
+        return
+
+    user_lang = await user_data.get_user_language(from_user.id)
     await state.clear()
     await callback_query.message.edit_text(LANGUAGES[user_lang].get('broadcast_cancelled', '❌ Broadcast canceled.'))
     await callback_query.answer()
@@ -88,15 +106,26 @@ async def broadcast_cancel(callback_query: CallbackQuery, state: FSMContext):
 
 @router.callback_query(F.data == "broadcast_confirm")
 async def broadcast_confirm(callback_query: CallbackQuery, state: FSMContext):
-    user_lang = await user_data.get_user_language(callback_query.from_user.id)
+    from_user = callback_query.from_user
+    if from_user is None:
+        await callback_query.answer()
+        return
+
+    if not isinstance(callback_query.message, Message):
+        await callback_query.answer()
+        return
+
+    user_lang = await user_data.get_user_language(from_user.id)
     lang = LANGUAGES[user_lang]
     data = await state.get_data()
     await state.clear()
 
-    msg_data = data.get("broadcast_msg")
-    if not msg_data:
+    msg_data_raw = data.get("broadcast_msg")
+    if not isinstance(msg_data_raw, dict):
         await callback_query.message.edit_text(lang.get('broadcast_msg_not_found', '⚠️ Message not found. Please try again.'))
         return
+
+    msg_data = msg_data_raw
 
     await callback_query.message.edit_text(lang.get('broadcast_started', '📤 Broadcast started...'))
     await callback_query.answer()
@@ -104,7 +133,7 @@ async def broadcast_confirm(callback_query: CallbackQuery, state: FSMContext):
     user_ids = await user_data.get_all_user_ids()
     counters = {"sent": 0, "failed": 0, "blocked": 0}
     total = len(user_ids)
-    progress_msg = callback_query.message
+    progress_msg: Message = callback_query.message
     broadcast_sem = asyncio.Semaphore(25)
 
     async def send_one(uid):
@@ -148,13 +177,9 @@ async def broadcast_confirm(callback_query: CallbackQuery, state: FSMContext):
                     counters["failed"] += 1
                     logger.warning("Broadcast to %s API error: %s", uid, e)
                     break
-                except Exception as e:
-                    err_msg = str(e).lower()
-                    if any(x in err_msg for x in ["blocked", "deactivated", "not found", "forbidden", "cannot initiate", "entity"]):
-                        counters["blocked"] += 1
-                    else:
-                        counters["failed"] += 1
-                        logger.warning("Broadcast to %s failed: %s", uid, e)
+                except (KeyError, TypeError, ValueError) as send_error:
+                    counters["failed"] += 1
+                    logger.warning("Broadcast to %s failed: %s", uid, send_error)
                     break
             await asyncio.sleep(0.05)
 
@@ -176,7 +201,7 @@ async def broadcast_confirm(callback_query: CallbackQuery, state: FSMContext):
                         percent=processed * 100 // total,
                     )
                 )
-            except Exception:
+            except TelegramAPIError:
                 pass
 
     report = lang.get('broadcast_done', '📢 <b>Broadcast completed</b>\n\n✅ Sent: {sent}\n🚫 Blocked: {blocked}\n❌ Failed: {failed}\n📊 Total: {total}').format(
@@ -190,11 +215,12 @@ async def broadcast_confirm(callback_query: CallbackQuery, state: FSMContext):
 
 @router.message(AdminStates.waiting_broadcast)
 async def process_broadcast_message(message: Message, state: FSMContext):
-    if message.from_user.id not in ADMIN_IDS:
+    from_user = message.from_user
+    if from_user is None or from_user.id not in ADMIN_IDS:
         await state.clear()
         return
 
-    user_lang = await user_data.get_user_language(message.from_user.id)
+    user_lang = await user_data.get_user_language(from_user.id)
     lang = LANGUAGES[user_lang]
 
     if message.photo:

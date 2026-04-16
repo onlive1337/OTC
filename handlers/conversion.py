@@ -92,11 +92,11 @@ def _find_similar_currencies(text: str, max_results: int = 3) -> List[str]:
 def _extract_unknown_currency(text: str) -> Optional[str]:
     text = text.strip()
 
-    pattern = re.compile(
+    unknown_currency_pattern = re.compile(
         r'^([\d\s.,]+)\s+([a-zA-Zа-яА-ЯёЁ]{2,10})$'
         r'|^([a-zA-Zа-яА-ЯёЁ]{2,10})\s+([\d\s.,]+)$'
     )
-    m = pattern.match(text)
+    m = unknown_currency_pattern.match(text)
     if m:
         if m.group(2):
             return m.group(2)
@@ -188,7 +188,18 @@ async def _get_rates_or_reply(message: types.Message, user_lang: str):
 
 
 async def _resolve_chat_user_prefs(message: types.Message):
-    user_id = message.from_user.id
+    from_user = message.from_user
+    if from_user is None:
+        return (
+            'ru',
+            [],
+            [],
+            False if message.chat.type in ('group', 'supergroup') else True,
+            0,
+            message.chat.id,
+        )
+
+    user_id = from_user.id
     if message.chat.type in ('group', 'supergroup'):
         data = await user_data.get_chat_data(message.chat.id)
         return (
@@ -334,8 +345,9 @@ async def process_conversion(message: types.Message, amount: float, from_currenc
         if rates is None:
             return
         
-        response_parts = []
-        response_parts.append(f"{format_large_number(amount, is_original_amount=True)} {get_currency_symbol(from_currency)}{from_currency}\n")
+        response_parts = [
+            f"{format_large_number(amount, is_original_amount=True)} {get_currency_symbol(from_currency)}{from_currency}\n"
+        ]
 
         if user_currencies:
             response_parts.append(f"\n{LANGUAGES[user_lang]['fiat_currencies']}\n")
@@ -383,20 +395,25 @@ async def process_conversion(message: types.Message, amount: float, from_currenc
 
 @router.message()
 async def handle_message(message: types.Message):
-    logger.debug("Received message: %s from user %s in chat %s", message.text, message.from_user.id, message.chat.id)
-    
-    if message.text is None:
-        logger.debug("Received message without text from user %s in chat %s", message.from_user.id, message.chat.id)
+    from_user = message.from_user
+    if from_user is None:
+        logger.debug("Received message without user in chat %s", message.chat.id)
         return
 
-    if message.from_user.is_bot:
+    logger.debug("Received message: %s from user %s in chat %s", message.text, from_user.id, message.chat.id)
+    
+    if message.text is None:
+        logger.debug("Received message without text from user %s in chat %s", from_user.id, message.chat.id)
+        return
+
+    if from_user.is_bot:
         return
 
     if len(message.text) > 500:
-        logger.debug("Message too long from user %s, ignoring", message.from_user.id)
+        logger.debug("Message too long from user %s, ignoring", from_user.id)
         return
 
-    user_id = message.from_user.id
+    user_id = from_user.id
 
     if message.text.startswith('/'):
         return 
@@ -419,7 +436,7 @@ async def handle_message(message: types.Message):
             valid_requests.append((parsed_result, request))
     
     if valid_requests:
-        await user_data.update_user_data(user_id, language_code=message.from_user.language_code)
+        await user_data.update_user_data(user_id, language_code=from_user.language_code)
 
         if len(valid_requests) > 10:
             valid_requests = valid_requests[:10]
@@ -540,7 +557,7 @@ async def inline_query_handler(query: InlineQuery):
         await user_data.update_user_data(query.from_user.id, language_code=query.from_user.language_code)
         data = await user_data.get_user_data(query.from_user.id)
         user_lang = data.get('language', 'ru')
-        
+
         text = query.query.strip()
         
         math_operators = {'+', '-', '*', '/', '^', '×', '÷', ':', 'х'}
@@ -650,6 +667,28 @@ async def inline_query_handler(query: InlineQuery):
 
         rates = await get_exchange_rates()
         if not rates:
+            return
+
+        inline_target = _find_target_currency(query.query, from_currency)
+        if inline_target is not None and inline_target in ALL_CURRENCIES and inline_target != from_currency:
+            target_currency = inline_target
+            assert target_currency is not None
+            converted = convert_currency(amount, from_currency, target_currency, rates)
+            is_crypto = target_currency in CRYPTO_CURRENCIES
+            targeted_content = (
+                f"{format_large_number(amount, is_original_amount=True)} {get_currency_symbol(from_currency)}{from_currency}\n"
+                f"= {format_large_number(converted, is_crypto)} {get_currency_symbol(target_currency)}{target_currency}"
+            )
+            targeted_result = InlineQueryResultArticle(
+                id=f"{from_currency}_{target_currency}",
+                title=f"{from_currency} -> {target_currency}",
+                description=LANGUAGES[user_lang].get('conversion_result', "Conversion Result"),
+                input_message_content=InputTextMessageContent(
+                    message_text=targeted_content,
+                    parse_mode="HTML"
+                )
+            )
+            await query.answer(results=[targeted_result], cache_time=60)
             return
 
         if not user_currencies and not user_crypto:

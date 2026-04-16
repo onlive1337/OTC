@@ -57,6 +57,11 @@ _URL_REGEX = re.compile(
     r'http[s]?://(?:[a-zA-Z0-9]|[$-_@.&+]|[!*(),]|%[0-9a-fA-F][0-9a-fA-F])+'
 )
 
+_QUERY_LIKE_TEXT_REGEX = re.compile(
+    r'\b\S+\.(?:php|aspx?|jsp|html?)\?\S*\b|\b[a-zA-Z]{2,10}\?\d+\b',
+    re.IGNORECASE,
+)
+
 
 def smart_number_parse(text: str) -> str:
     text = text.strip()
@@ -156,6 +161,9 @@ def parse_amount_and_currency(text: str) -> Tuple[Optional[float], Optional[str]
         return None, None
 
     text = text.replace('−', '-').replace('–', '-').replace('—', '-').replace('‑', '-')
+
+    if _QUERY_LIKE_TEXT_REGEX.search(text):
+        return None, None
 
     text = _URL_REGEX.sub('', text)
     if not text:

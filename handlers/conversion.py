@@ -46,6 +46,10 @@ _KNOWN_CURRENCY_REGEX = re.compile('|'.join(_KNOWN_CURRENCY_REGEX_PARTS), re.IGN
 
 _SPLIT_TOKENS_REGEX = re.compile(r'[\s,]+')
 _SKIP_TOKENS_REGEX = re.compile(r'^[\d.,+\-*/()^×÷:хk]+$')
+_QUERY_LIKE_TEXT_REGEX = re.compile(
+    r'https?://\S+|\b\S+\.(?:php|aspx?|jsp|html?)\?\S*\b|\b[a-zA-Z]{2,10}\?\d+\b',
+    re.IGNORECASE,
+)
 
 _SEPARATORS = [
     r'\s+и\s+', r'\s+and\s+', r'\s+а\s+также\s+', 
@@ -121,6 +125,8 @@ def _find_target_currency(text: str, from_currency: str) -> Optional[str]:
 
 
 def _contains_known_currency(text: str) -> bool:
+    if _QUERY_LIKE_TEXT_REGEX.search(text):
+        return False
     return _KNOWN_CURRENCY_REGEX.search(text.lower()) is not None
 
 
@@ -413,6 +419,10 @@ async def handle_message(message: types.Message):
         logger.debug("Message too long from user %s, ignoring", from_user.id)
         return
 
+    if _QUERY_LIKE_TEXT_REGEX.search(message.text):
+        logger.debug("Ignoring query-like text from user %s: %s", from_user.id, message.text)
+        return
+
     user_id = from_user.id
 
     if message.text.startswith('/'):
@@ -534,6 +544,9 @@ async def inline_query_handler(query: InlineQuery):
         return
 
     user_lang = 'en'
+
+    if _QUERY_LIKE_TEXT_REGEX.search(query.query):
+        return
 
     if not query.query.strip():
         await user_data.update_user_data(query.from_user.id, language_code=query.from_user.language_code)

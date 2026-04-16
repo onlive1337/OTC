@@ -167,6 +167,21 @@ class TestParseAmountAndCurrency:
         assert amount == -10.0
         assert currency == "USD"
 
+    def test_query_like_php_path_is_ignored(self):
+        amount, currency = parse_amount_and_currency("index.php?100")
+        assert amount is None
+        assert currency is None
+
+    def test_query_like_currency_token_is_ignored(self):
+        amount, currency = parse_amount_and_currency("PHP?100")
+        assert amount is None
+        assert currency is None
+
+    def test_valid_targeted_pair_still_parses(self):
+        amount, currency = parse_amount_and_currency("100 usd eur")
+        assert amount == 100.0
+        assert currency == "USD"
+
 
 class TestConvertCurrency:
     RATES = {

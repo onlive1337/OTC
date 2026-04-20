@@ -61,6 +61,10 @@ _MATH_ONLY_REGEX = re.compile(
     r'^[\d\s.,+\-*/()^×÷:хk]+$'
 )
 
+_BARE_NUMBER_REGEX = re.compile(
+    r'^[+\-]?\s*[\d\s.,]+$'
+)
+
 _MAX_SAFE_CONVERSION_AMOUNT = MAX_CONVERSION_AMOUNT
 _MIN_SAFE_CONVERSION_AMOUNT = MIN_CONVERSION_AMOUNT
 
@@ -473,7 +477,7 @@ async def handle_message(message: types.Message):
 
         text_cleaned = message.text.strip()
         math_operators = {'+', '-', '*', '/', '^', '×', '÷', ':', 'х'}
-        if _MATH_ONLY_REGEX.match(text_cleaned) and any(op in text_cleaned for op in math_operators):
+        if _MATH_ONLY_REGEX.match(text_cleaned) and any(op in text_cleaned for op in math_operators) and not _BARE_NUMBER_REGEX.match(text_cleaned):
             expr_normalized = text_cleaned.replace(' ', '').replace(',', '.')
             math_result = parse_mathematical_expression(expr_normalized)
             if math_result is not None:
@@ -574,7 +578,7 @@ async def inline_query_handler(query: InlineQuery):
         text = query.query.strip()
         
         math_operators = {'+', '-', '*', '/', '^', '×', '÷', ':', 'х'}
-        if _MATH_ONLY_REGEX.match(text) and any(op in text for op in math_operators):
+        if _MATH_ONLY_REGEX.match(text) and any(op in text for op in math_operators) and not _BARE_NUMBER_REGEX.match(text):
             expr_normalized = text.replace(' ', '').replace(',', '.')
             math_result = parse_mathematical_expression(expr_normalized)
             if math_result is not None:

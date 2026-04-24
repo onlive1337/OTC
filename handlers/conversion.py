@@ -317,7 +317,7 @@ async def process_multiple_conversions(message: types.Message, requests: List[Tu
                     if to_cur != from_currency:
                         try:
                             converted = convert_currency(amount, from_currency, to_cur, rates)
-                            crypto_parts.append(f"{format_large_number(converted, True)} {to_cur}")
+                            crypto_parts.append(f"{format_large_number(converted, True)} {get_currency_symbol(to_cur)}{to_cur}")
                         except (KeyError, OverflowError):
                             continue
                 if crypto_parts:
@@ -382,7 +382,7 @@ async def process_conversion(message: types.Message, amount: float, from_currenc
                 if to_cur != from_currency:
                     try:
                         converted = convert_currency(amount, from_currency, to_cur, rates)
-                        conversion_line = f"{format_large_number(converted, True)} {to_cur}"
+                        conversion_line = f"{format_large_number(converted, True)} {get_currency_symbol(to_cur)}{to_cur}"
                         crypto_conversions.append(conversion_line)
                     except KeyError:
                         continue
@@ -746,7 +746,7 @@ async def inline_query_handler(query: InlineQuery):
                 if to_cur != from_currency:
                     try:
                         converted = convert_currency(amount, from_currency, to_cur, rates)
-                        result_content += f"{format_large_number(converted, True)} {get_currency_symbol(to_cur)}\n"
+                        result_content += f"{format_large_number(converted, True)} {get_currency_symbol(to_cur)}{to_cur}\n"
                     except (KeyError, OverflowError):
                         continue
             if use_quote:

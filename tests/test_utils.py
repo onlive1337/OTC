@@ -182,6 +182,22 @@ class TestParseAmountAndCurrency:
         assert amount == 100.0
         assert currency == "USD"
 
+    def test_spaces_in_number(self):
+        amount, currency = parse_amount_and_currency("10 000 USD")
+        assert amount == 10000.0
+        assert currency == "USD"
+
+    def test_user_dumplings_case(self):
+        amount, currency = parse_amount_and_currency("сибирские пельмехи 4 евро 3кг")
+        assert amount == 4.0
+        assert currency == "EUR"
+
+    def test_invalid_spaces_not_merged(self):
+        # 4  3 EUR should parse as 4.0 EUR (first number found) rather than 43.0 EUR
+        amount, currency = parse_amount_and_currency("4  3 EUR")
+        assert amount == 4.0
+        assert currency == "EUR"
+
 
 class TestConvertCurrency:
     RATES = {

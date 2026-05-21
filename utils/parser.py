@@ -50,7 +50,7 @@ _MULTIPLIER_REGEXES = {
     for txt, val in _MULTIPLIERS.items()
 }
 
-_FIND_NUMBERS_REGEX = re.compile(r'[-+]?(?:\d[\d\s,.]*\d|\d|[.,]\d+)(?:[eE][-+]?\d+)?')
+_FIND_NUMBERS_REGEX = re.compile(r'[-+]?(?:\d(?:\d|[.,]|\s(?=\d{3}))*\d|\d|[.,]\d+)(?:[eE][-+]?\d+)?')
 _SIMPLE_NUMBER_REGEX = re.compile(r'[^\d.]')
 
 _URL_REGEX = re.compile(
@@ -218,15 +218,5 @@ def parse_amount_and_currency(text: str) -> Tuple[Optional[float], Optional[str]
                 return amount, currency
         except (ValueError, TypeError):
             continue
-    
-    if not _CONTAINS_SCI_NOTATION_REGEX.search(amount_text):
-        try:
-            simple_number = _SIMPLE_NUMBER_REGEX.sub('', amount_text)
-            if simple_number:
-                amount = float(simple_number)
-                if _is_valid_amount(amount):
-                    return amount, currency
-        except (ValueError, TypeError):
-            pass
 
     return None, None

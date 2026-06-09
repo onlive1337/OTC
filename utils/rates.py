@@ -26,13 +26,6 @@ def _as_rates_dict(payload: Any) -> Optional[Dict[str, float]]:
 
 
 def normalize_fiat_payload(fiat_data: Any) -> Optional[Dict[str, float]]:
-    """Normalize a fiat-rates API response into a {CODE: rate} dict, or None.
-
-    Handles the three source shapes we query:
-    - open.er-api.com:        {"result": "success", "rates": {...}}
-    - exchangerate-api.com:   {"rates": {...}}
-    - fawazahmed currency-api: {"usd": {"eur": 0.9, ...}}  (lowercase codes)
-    """
     if not isinstance(fiat_data, dict):
         return None
 
@@ -65,6 +58,20 @@ def get_cached_data(key: str) -> Optional[Any]:
 
 def set_cached_data(key: str, data: Dict[str, float]):
     cache[key] = (data, time.time())
+
+
+def _store_rates(new_rates: Dict[str, float]) -> Dict[str, float]:
+    prev_item = cache.get('exchange_rates')
+    prev_rates = _as_rates_dict(prev_item[0]) if prev_item else None
+
+    if not new_rates:
+        logger.error("No rates fetched, keeping previous cache untouched")
+        return prev_rates or {}
+
+    merged = {**prev_rates, **new_rates} if prev_rates else new_rates
+    set_cached_data('exchange_rates', merged)
+    logger.info(f"Successfully cached {len(merged)} exchange rates ({len(new_rates)} freshly fetched)")
+    return merged
 
 
 async def get_exchange_rates() -> Dict[str, float]:
@@ -311,12 +318,12 @@ async def _fetch_rates_unlocked() -> Dict[str, float]:
                         except (RuntimeError, asyncio.TimeoutError, aiohttp.ClientError, ValueError, TypeError, KeyError) as gecko_error:
                             logger.warning(f"Failed to fetch {crypto_symbol} from CoinGecko: {gecko_error}")
 
+        rates = _store_rates(rates)
+
         final_missing = all_currencies - set(rates.keys())
         if final_missing:
             logger.error(f"Still missing currencies after all attempts: {final_missing}")
 
-        set_cached_data('exchange_rates', rates)
-        logger.info(f"Successfully cached {len(rates)} exchange rates")
         return rates
 
     except (RuntimeError, asyncio.TimeoutError, aiohttp.ClientError, ValueError, TypeError, KeyError) as refresh_error:

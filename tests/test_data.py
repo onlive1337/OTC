@@ -1,5 +1,6 @@
 import asyncio
 import os
+import sqlite3
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -11,19 +12,12 @@ from data.user_data import UserData
 
 
 def _run(coro):
-    """Run a coroutine on a fresh event loop.
-
-    Each test must do all of its DB work inside a single _run() call: the
-    aiosqlite connections opened by UserData are bound to the loop that created
-    them, so they cannot be reused across separate asyncio.run() invocations.
-    """
     return asyncio.run(coro)
 
 
 @pytest.fixture
 def db_path(monkeypatch, tmp_path):
     path = str(tmp_path / "test.db")
-    # connection.py binds DB_PATH at import time; point it at a temp file.
     monkeypatch.setattr(connection, "DB_PATH", path)
     return path
 
@@ -151,6 +145,97 @@ class TestChatRepo:
                 assert sorted(await db.get_chat_currencies(-100)) == ["JPY", "USD"]
                 await db.set_chat_language(-100, "ru")
                 assert await db.get_chat_language(-100) == "ru"
+            finally:
+                await db.close()
+
+        _run(scenario())
+
+
+class TestBackups:
+    def test_backup_db_creates_valid_copy(self, db_path, monkeypatch):
+        monkeypatch.setattr(connection, "DB_BACKUP_INTERVAL_HOURS", 0)
+
+        async def scenario():
+            db = UserData()
+            await db.init_db()
+            try:
+                await db.set_user_language(777, "en")
+                return await db.backup_db()
+            finally:
+                await db.close()
+
+        target = _run(scenario())
+        assert os.path.exists(target)
+
+        backup_conn = sqlite3.connect(target)
+        try:
+            row = backup_conn.execute("SELECT language FROM users WHERE user_id=777").fetchone()
+        finally:
+            backup_conn.close()
+        assert row == ("en",)
+
+    def test_backup_pruning_keeps_newest(self, db_path, monkeypatch):
+        monkeypatch.setattr(connection, "DB_BACKUP_INTERVAL_HOURS", 0)
+        monkeypatch.setattr(connection, "DB_BACKUP_KEEP", 2)
+
+        async def scenario():
+            db = UserData()
+            await db.init_db()
+            try:
+                return [await db.backup_db() for _ in range(3)]
+            finally:
+                await db.close()
+
+        made = _run(scenario())
+        assert connection.DatabaseMixin._list_backups() == sorted(made)[-2:]
+
+    def test_periodic_backup_runs_on_startup_when_none_exists(self, db_path):
+        async def scenario():
+            db = UserData()
+            await db.init_db()
+            try:
+                for _ in range(50):
+                    if connection.DatabaseMixin._list_backups():
+                        break
+                    await asyncio.sleep(0.05)
+            finally:
+                await db.close()
+
+        _run(scenario())
+        assert len(connection.DatabaseMixin._list_backups()) == 1
+
+
+class TestFlushFailureRecovery:
+    def test_failed_flush_restores_pending(self, db_path):
+        async def scenario():
+            db = UserData()
+            await db.init_db()
+            try:
+                await db.get_user_data(99)
+                await db.update_user_data(99)
+                await db.update_user_data(99)
+
+                # force the write to fail once
+                conn = await db._get_write_conn()
+                original = conn.executemany
+
+                async def boom(*args, **kwargs):
+                    raise sqlite3.OperationalError("disk I/O error")
+
+                conn.executemany = boom
+                with pytest.raises(sqlite3.OperationalError):
+                    await db._flush_interactions()
+                conn.executemany = original
+
+                # counters must survive the failure and flush on retry
+                assert db._pending_interactions.get(99) == 2
+                await db._flush_interactions()
+                read_conn = await db._get_read_conn()
+                async with read_conn.execute(
+                    "SELECT interactions FROM users WHERE user_id=?", (99,)
+                ) as cur:
+                    row = await cur.fetchone()
+                assert row[0] == 2
             finally:
                 await db.close()
 

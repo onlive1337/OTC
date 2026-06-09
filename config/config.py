@@ -20,6 +20,8 @@ if not COINCAP_API_KEY:
 
 # Storage
 DB_PATH = os.getenv('DB_PATH', 'otc.db')
+DB_BACKUP_INTERVAL_HOURS = int(os.getenv('DB_BACKUP_INTERVAL_HOURS', '24'))  # 0 disables backups
+DB_BACKUP_KEEP = int(os.getenv('DB_BACKUP_KEEP', '3'))
 
 CURRENT_VERSION = "1.8.3"
 

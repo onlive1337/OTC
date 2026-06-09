@@ -61,9 +61,39 @@ class TestRateCache:
         assert rates.get_cached_data("does_not_exist") is None
 
 
+class TestStoreRates:
+    def setup_method(self):
+        rates.cache.clear()
+
+    def test_full_fetch_is_cached(self):
+        result = rates._store_rates({"USD": 1.0, "EUR": 0.9})
+        assert result == {"USD": 1.0, "EUR": 0.9}
+        assert rates.cache["exchange_rates"][0] == result
+
+    def test_empty_fetch_keeps_previous_cache(self):
+        rates.set_cached_data("exchange_rates", {"USD": 1.0, "EUR": 0.9})
+        result = rates._store_rates({})
+        assert result == {"USD": 1.0, "EUR": 0.9}
+        assert rates.cache["exchange_rates"][0] == {"USD": 1.0, "EUR": 0.9}
+
+    def test_empty_fetch_does_not_refresh_timestamp(self):
+        stale_ts = time.time() - rates.CACHE_EXPIRATION_TIME - 10
+        rates.cache["exchange_rates"] = ({"USD": 1.0}, stale_ts)
+        rates._store_rates({})
+        assert rates.cache["exchange_rates"][1] == stale_ts
+
+    def test_empty_fetch_with_no_cache_returns_empty(self):
+        assert rates._store_rates({}) == {}
+        assert "exchange_rates" not in rates.cache
+
+    def test_partial_fetch_merges_over_previous(self):
+        rates.set_cached_data("exchange_rates", {"EUR": 0.9, "RUB": 90.0, "BTC": 0.00002})
+        result = rates._store_rates({"BTC": 0.00001})
+        assert result == {"EUR": 0.9, "RUB": 90.0, "BTC": 0.00001}
+        assert rates.cache["exchange_rates"][0] == result
+
+
 class TestConvertCurrency:
-    # rates are stored as "units per USD" for fiat, "USD per unit inverse" for crypto;
-    # here we just verify the USD-pivot arithmetic.
     RATES = {"EUR": 0.9, "RUB": 90.0, "GBP": 0.8}
 
     def test_from_usd(self):

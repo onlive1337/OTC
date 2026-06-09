@@ -30,7 +30,7 @@ Tests are pure-unit and live in `tests/`: `test_utils.py` (parser, `convert_curr
 
 ## Configuration
 
-All config is environment-driven via `config/config.py` (loads `.env`). `TELEGRAM_BOT_TOKEN` is required and raises at import if missing. Other vars: `ADMIN_IDS` (comma-separated, gates the admin handlers), `LOG_CHAT_ID` (Telegram chat to mirror logs into), `COINCAP_API_KEY` (optional crypto fallback), `DB_PATH`, `LOG_LEVEL`. `CURRENT_VERSION` in this file is bumped on release alongside `CHANGELOG.md`.
+All config is environment-driven via `config/config.py` (loads `.env`). `TELEGRAM_BOT_TOKEN` is required and raises at import if missing. Other vars: `ADMIN_IDS` (comma-separated, gates the admin handlers), `LOG_CHAT_ID` (Telegram chat to mirror logs into), `COINCAP_API_KEY` (optional crypto fallback), `DB_PATH`, `LOG_LEVEL`, `DB_BACKUP_INTERVAL_HOURS`/`DB_BACKUP_KEEP` (SQLite auto-backup, see Operational constraints). `CURRENT_VERSION` in this file is bumped on release alongside `CHANGELOG.md`.
 
 The supported-currency universe is defined entirely in `config/config.py` as module-level dicts: `ALL_CURRENCIES`, `CRYPTO_CURRENCIES` (the rest are `ACTIVE_CURRENCIES`), `CURRENCY_SYMBOLS`, `CURRENCY_ABBREVIATIONS` (multilingual word forms), and `CRYPTO_ID_MAPPING` (symbol → CoinGecko/CoinCap IDs). To add a currency, update these together — the parser regexes and rate fetchers derive from them at import time.
 
@@ -55,6 +55,7 @@ The supported-currency universe is defined entirely in `config/config.py` as mod
 ## Operational constraints
 
 - **Single instance only.** The rate cache (`utils/rates.py` module-level `cache`), the per-user/per-chat caches (`data/connection.py`), and the rate limiter (`utils/middleware.py`) all live in process memory. Running a second replica would mean two pollers and divergent caches. To scale horizontally these would have to move to shared storage (e.g. Redis). For now, deploy exactly one container (`docker-compose.yml` is written for this).
+- **DB backups.** `DatabaseMixin` snapshots the DB via `VACUUM INTO` to `<db dir>/backups/` (so `./data/backups/` on the host) — every `DB_BACKUP_INTERVAL_HOURS` (default 24, `0` disables), keeping the newest `DB_BACKUP_KEEP` (default 7). The schedule keys off the newest backup file's mtime, not process uptime, so container restarts don't reset it.
 - **Broadcasts are not restart-safe.** `_execute_broadcast` (`handlers/admin.py`) iterates all users inside the callback task; a restart mid-broadcast aborts it with no resume and no final report. A module-level `_broadcast_in_progress` flag prevents two concurrent broadcasts, but durable/resumable broadcast would need persisted progress.
 - **Python version.** Prod runs on `python:3.11-slim` (`Dockerfile`); the local `.venv` is 3.14. Prefer running the test suite on 3.11 (matching prod) before release — don't bump the Docker base image without a container build + smoke test, since it's the prod runtime.
 

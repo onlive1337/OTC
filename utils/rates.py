@@ -25,6 +25,36 @@ def _as_rates_dict(payload: Any) -> Optional[Dict[str, float]]:
     return payload if isinstance(payload, dict) else None
 
 
+def normalize_fiat_payload(fiat_data: Any) -> Optional[Dict[str, float]]:
+    """Normalize a fiat-rates API response into a {CODE: rate} dict, or None.
+
+    Handles the three source shapes we query:
+    - open.er-api.com:        {"result": "success", "rates": {...}}
+    - exchangerate-api.com:   {"rates": {...}}
+    - fawazahmed currency-api: {"usd": {"eur": 0.9, ...}}  (lowercase codes)
+    """
+    if not isinstance(fiat_data, dict):
+        return None
+
+    rates = fiat_data.get('rates')
+    if isinstance(rates, dict):
+        return rates
+
+    usd_rates = fiat_data.get('usd')
+    if isinstance(usd_rates, dict):
+        normalized_rates: Dict[str, float] = {'USD': 1.0}
+        for curr_lower, rate in usd_rates.items():
+            try:
+                rate_f = float(rate)
+            except (TypeError, ValueError):
+                continue
+            if rate_f > 0:
+                normalized_rates[str(curr_lower).upper()] = rate_f
+        return normalized_rates
+
+    return None
+
+
 def get_cached_data(key: str) -> Optional[Any]:
     if key in cache:
         cached_data, timestamp = cache[key]
@@ -136,23 +166,10 @@ async def _fetch_rates_unlocked() -> Dict[str, float]:
 
             fiat_data = await _with_retries(_fiat, source_host)
 
-            if isinstance(fiat_data, dict):
-                if fiat_data.get('result') == 'success' and 'rates' in fiat_data:
-                    logger.info(f"Fetched fiat rates from {source_host}")
-                    return fiat_data['rates']
-                elif 'rates' in fiat_data:
-                    logger.info(f"Fetched fiat rates from {source_host}")
-                    return fiat_data['rates']
-                elif 'usd' in fiat_data:
-                    usd_rates = fiat_data['usd']
-                    normalized_rates = {'USD': 1.0}
-                    for curr_lower, rate in usd_rates.items():
-                        curr_upper = curr_lower.upper()
-                        if rate and rate > 0:
-                            normalized_rates[curr_upper] = float(rate)
-                    logger.info(f"Fetched fiat rates from {source_host}")
-                    return normalized_rates
-            return None
+            normalized = normalize_fiat_payload(fiat_data)
+            if normalized is not None:
+                logger.info(f"Fetched fiat rates from {source_host}")
+            return normalized
 
         async def _fetch_all_fiat():
             needed_fiat = set(ACTIVE_CURRENCIES)

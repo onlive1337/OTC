@@ -273,8 +273,8 @@ async def process_targeted_conversion(message: types.Message, amount: float, fro
         await message.reply(text=response, reply_markup=kb.as_markup())
     except KeyError:
         await message.answer(LANGUAGES[user_lang]['error'])
-    except Exception as e:
-        logger.error(f"Error in targeted conversion for user {user_id}: {e}")
+    except Exception:
+        logger.exception("Error in targeted conversion for user %s", user_id)
         await message.answer(LANGUAGES[user_lang]['error'])
 
 async def process_multiple_conversions(message: types.Message, requests: List[Tuple[float, str]]):
@@ -340,8 +340,8 @@ async def process_multiple_conversions(message: types.Message, requests: List[Tu
         elif skipped_too_large:
             await message.answer(_too_large_message(user_lang))
 
-    except Exception as e:
-        logger.error(f"Error in process_multiple_conversions for user {user_id}: {e}")
+    except Exception:
+        logger.exception("Error in process_multiple_conversions for user %s", user_id)
         await message.answer(LANGUAGES[user_lang]['error'])
 
 async def process_conversion(message: types.Message, amount: float, from_currency: str):
@@ -399,8 +399,8 @@ async def process_conversion(message: types.Message, amount: float, from_currenc
             text=final_response,
             reply_markup=kb.as_markup()
         )
-    except Exception as e:
-        logger.error(f"Error in process_conversion for user {user_id}: {e}")
+    except Exception:
+        logger.exception("Error in process_conversion for user %s", user_id)
         await message.answer(LANGUAGES[user_lang]['error'])
 
 @router.message()
@@ -775,8 +775,8 @@ async def inline_query_handler(query: InlineQuery):
             )
         )
         await query.answer(results=[error_result], cache_time=60)
-    except Exception as e:
-        logger.error(f"Error during inline conversion for user {query.from_user.id}: {str(e)}")
+    except Exception:
+        logger.exception("Error during inline conversion for user %s", query.from_user.id)
         error_result = InlineQueryResultArticle(
             id="error",
             title=LANGUAGES[user_lang].get('error', "Error"),
@@ -791,7 +791,7 @@ async def inline_query_handler(query: InlineQuery):
 @router.my_chat_member()
 async def handle_my_chat_member(event: ChatMemberUpdated, bot: Bot):
     logger.info(f"Bot status changed in chat {event.chat.id}")
-    logger.info(f"Event content: {event.model_dump_json()}")
+    logger.debug("Event content: %s", event.model_dump_json())
     
     if event.new_chat_member.status == "member":
         try:

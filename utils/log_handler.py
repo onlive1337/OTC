@@ -61,14 +61,19 @@ class TelegramLogHandler(logging.Handler):
         await self._flush_buffer()
 
     async def _flush_buffer(self):
+        global _dropped_count
         async with _buffer_lock:
             if not _log_buffer:
                 return
 
             messages = list(_log_buffer)
             _log_buffer.clear()
+            dropped = _dropped_count
+            _dropped_count = 0
 
         combined = "\n\n---\n\n".join(messages)
+        if dropped:
+            combined = f"⚠️ {dropped} log message(s) dropped due to rate limiting\n\n" + combined
         if len(combined) > MAX_TELEGRAM_LOG_LEN:
             combined = combined[:MAX_TELEGRAM_LOG_LEN] + "...\n\n[truncated]"
 

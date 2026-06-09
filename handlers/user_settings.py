@@ -141,7 +141,7 @@ async def toggle_currency(callback_query: CallbackQuery):
         return
 
     currency, page = data.split('_')[2:]
-    user_currencies = await user_data.get_user_currencies(from_user.id)
+    user_currencies = list(await user_data.get_user_currencies(from_user.id))
 
     if currency in user_currencies:
         user_currencies.remove(currency)
@@ -161,7 +161,7 @@ async def toggle_crypto(callback_query: CallbackQuery):
 
     crypto = data.split('_')[-1]
     user_id = from_user.id
-    user_crypto = await user_data.get_user_crypto(user_id)
+    user_crypto = list(await user_data.get_user_crypto(user_id))
     
     if crypto in user_crypto:
         user_crypto.remove(crypto)

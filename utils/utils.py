@@ -38,8 +38,8 @@ async def check_admin_rights(message_or_callback: Union[Message, CallbackQuery],
     try:
         chat_member = await bot.get_chat_member(chat_id, user_id)
         return chat_member.status in ['creator', 'administrator']
-    except TelegramAPIError as e:
-        logger.error(f"Error checking admin rights: {e}")
+    except TelegramAPIError:
+        logger.exception("Error checking admin rights")
         return False
 
 async def show_not_admin_message(message_or_callback: Union[Message, CallbackQuery], user_id: int):

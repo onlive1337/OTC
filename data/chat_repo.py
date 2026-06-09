@@ -27,9 +27,12 @@ class ChatRepoMixin:
             return
 
         async with self._write_lock:
+            if chat_id in self.chat_data:
+                return
             conn = await self._get_write_conn()
             async with conn.execute("SELECT chat_id FROM chats WHERE chat_id=?", (chat_id,)) as cursor:
                 if await cursor.fetchone() is not None:
+                    self.chat_data.setdefault(chat_id, {})
                     return
             default_currencies = ACTIVE_CURRENCIES[:5]
             default_crypto = CRYPTO_CURRENCIES[:5]
@@ -48,8 +51,8 @@ class ChatRepoMixin:
                 }
             except IntegrityError:
                 logger.debug("Chat %s already exists (race condition handled)", chat_id)
-            except Exception as e:
-                logger.error(f"Error registering chat {chat_id}: {e}")
+            except Exception:
+                logger.exception("Error registering chat %s", chat_id)
 
     async def get_chat_data(self: _ChatRepoDeps, chat_id: int) -> dict:
         cached = self.chat_data.get(chat_id)

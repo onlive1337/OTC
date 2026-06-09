@@ -9,14 +9,14 @@ from config.languages import LANGUAGES
 from loader import user_data
 from utils.keyboards import build_settings_kb, format_settings_text
 
-from data.chat_settings import (
+from handlers.chat_settings import (
     save_chat_settings, show_chat_currencies,
-    show_chat_crypto, toggle_chat_crypto, toggle_chat_currency, 
+    show_chat_crypto, toggle_chat_crypto, toggle_chat_currency,
     back_to_chat_settings, change_chat_language, set_chat_language,
     toggle_chat_quote_format
 )
-from data.user_settings import (
-    show_currencies, show_crypto, toggle_crypto, toggle_currency, 
+from handlers.user_settings import (
+    show_currencies, show_crypto, toggle_crypto, toggle_currency,
     toggle_quote_format, change_language, set_language
 )
 from utils.utils import save_settings

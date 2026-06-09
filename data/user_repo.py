@@ -40,9 +40,12 @@ class UserRepoMixin:
             return
 
         async with self._write_lock:
+            if user_id in self.user_data:
+                return
             conn = await self._get_write_conn()
             async with conn.execute("SELECT user_id FROM users WHERE user_id=?", (user_id,)) as cursor:
                 if await cursor.fetchone() is not None:
+                    self.user_data.setdefault(user_id, {})
                     return
             default_lang = self._detect_language(language_code)
             today = datetime.now().strftime('%Y-%m-%d')
@@ -70,8 +73,8 @@ class UserRepoMixin:
                 logger.info(f"New user {user_id} registered with language '{default_lang}'")
             except IntegrityError:
                 logger.debug("User %s already exists (race condition handled)", user_id)
-            except Exception as e:
-                logger.error(f"Error registering user {user_id}: {e}")
+            except Exception:
+                logger.exception("Error registering user %s", user_id)
 
     async def get_user_data(self: _UserRepoDeps, user_id: int) -> dict:
         self._cleanup_cache_if_needed()

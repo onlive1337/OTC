@@ -58,7 +58,6 @@ class DatabaseMixin:
                 await conn.execute(f"PRAGMA wal_autocheckpoint={SQLITE_WAL_AUTOCHECKPOINT_PAGES};")
                 if readonly:
                     await conn.execute("PRAGMA query_only=ON;")
-                    await conn.execute("PRAGMA read_uncommitted=ON;")
                 if attempt > 0:
                     logger.info(f"DB {'read' if readonly else 'write'} connection established after {attempt + 1} attempts")
                 return conn

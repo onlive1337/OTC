@@ -129,8 +129,8 @@ async def toggle_chat_currency(callback_query: CallbackQuery):
     
     await _ensure_chat_initialized(chat_id)
     
-    chat_currencies = await user_data.get_chat_currencies(chat_id)
-    
+    chat_currencies = list(await user_data.get_chat_currencies(chat_id))
+
     if currency in chat_currencies:
         chat_currencies.remove(currency)
     else:
@@ -155,8 +155,8 @@ async def toggle_chat_crypto(callback_query: CallbackQuery):
 
     await _ensure_chat_initialized(chat_id)
     
-    chat_crypto = await user_data.get_chat_crypto(chat_id)
-    
+    chat_crypto = list(await user_data.get_chat_crypto(chat_id))
+
     if crypto in chat_crypto:
         chat_crypto.remove(crypto)
     else:

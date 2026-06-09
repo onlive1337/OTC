@@ -19,6 +19,8 @@ logger = logging.getLogger(__name__)
 
 router = Router()
 
+_broadcast_in_progress = False
+
 @router.message(Command("stats"))
 async def cmd_stats(message: Message):
     from_user = message.from_user
@@ -127,13 +129,31 @@ async def broadcast_confirm(callback_query: CallbackQuery, state: FSMContext):
 
     msg_data = msg_data_raw
 
+    global _broadcast_in_progress
+    if _broadcast_in_progress:
+        await callback_query.message.edit_text(
+            lang.get('broadcast_already_running', '⚠️ A broadcast is already in progress. Please wait for it to finish.')
+        )
+        await callback_query.answer()
+        return
+
+    _broadcast_in_progress = True
     await callback_query.message.edit_text(lang.get('broadcast_started', '📤 Broadcast started...'))
     await callback_query.answer()
 
+    progress_msg: Message = callback_query.message
+    try:
+        report = await _execute_broadcast(msg_data, lang, progress_msg)
+    finally:
+        _broadcast_in_progress = False
+
+    await progress_msg.edit_text(report)
+
+
+async def _execute_broadcast(msg_data: dict, lang: dict, progress_msg: Message) -> str:
     user_ids = await user_data.get_all_user_ids()
     counters = {"sent": 0, "failed": 0, "blocked": 0}
     total = len(user_ids)
-    progress_msg: Message = callback_query.message
     broadcast_sem = asyncio.Semaphore(25)
 
     async def send_one(uid):
@@ -204,13 +224,12 @@ async def broadcast_confirm(callback_query: CallbackQuery, state: FSMContext):
             except TelegramAPIError:
                 pass
 
-    report = lang.get('broadcast_done', '📢 <b>Broadcast completed</b>\n\n✅ Sent: {sent}\n🚫 Blocked: {blocked}\n❌ Failed: {failed}\n📊 Total: {total}').format(
+    return lang.get('broadcast_done', '📢 <b>Broadcast completed</b>\n\n✅ Sent: {sent}\n🚫 Blocked: {blocked}\n❌ Failed: {failed}\n📊 Total: {total}').format(
         sent=counters['sent'],
         blocked=counters['blocked'],
         failed=counters['failed'],
         total=total,
     )
-    await progress_msg.edit_text(report)
 
 
 @router.message(AdminStates.waiting_broadcast)

@@ -1,0 +1,18 @@
+# Secrets and live data must never be baked into the image:
+# the token comes from compose environment, the DB from the ./data volume.
+.env
+**/*.db
+**/*.db-wal
+**/*.db-shm
+logs
+
+.git
+.venv
+__pycache__
+**/__pycache__
+*.pyc
+.pytest_cache
+.claude
+.dockerignore
+Dockerfile
+docker-compose.yml

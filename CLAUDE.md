@@ -9,7 +9,7 @@ OTC is an aiogram 3.x Telegram bot that converts between fiat currencies and cry
 ## Commands
 
 ```bash
-# Install deps (uses .venv with Python 3.14 locally; Docker uses 3.11)
+# Install deps (Python 3.14 both locally in .venv and in Docker)
 pip install -r requirements.txt
 
 # Run the bot (requires TELEGRAM_BOT_TOKEN in .env)
@@ -57,7 +57,7 @@ The supported-currency universe is defined entirely in `config/config.py` as mod
 - **Single instance only.** The rate cache (`utils/rates.py` module-level `cache`), the per-user/per-chat caches (`data/connection.py`), and the rate limiter (`utils/middleware.py`) all live in process memory. Running a second replica would mean two pollers and divergent caches. To scale horizontally these would have to move to shared storage (e.g. Redis). For now, deploy exactly one container (`docker-compose.yml` is written for this).
 - **DB backups.** `DatabaseMixin` snapshots the DB via `VACUUM INTO` to `<db dir>/backups/` (so `./data/backups/` on the host) — every `DB_BACKUP_INTERVAL_HOURS` (default 24, `0` disables), keeping the newest `DB_BACKUP_KEEP` (default 7). The schedule keys off the newest backup file's mtime, not process uptime, so container restarts don't reset it.
 - **Broadcasts are not restart-safe.** `_execute_broadcast` (`handlers/admin.py`) iterates all users inside the callback task; a restart mid-broadcast aborts it with no resume and no final report. A module-level `_broadcast_in_progress` flag prevents two concurrent broadcasts, but durable/resumable broadcast would need persisted progress.
-- **Python version.** Prod runs on `python:3.11-slim` (`Dockerfile`); the local `.venv` is 3.14. Prefer running the test suite on 3.11 (matching prod) before release — don't bump the Docker base image without a container build + smoke test, since it's the prod runtime.
+- **Python version.** Prod runs on `python:3.14-slim` (`Dockerfile`), matching the local `.venv` (3.14). Note that `aiogram` is pinned with `requires_python <3.15`. Don't bump the Docker base image without a container build + in-container `pytest` + smoke test, since it's the prod runtime. `.dockerignore` keeps `.env` and `*.db` out of the image — never weaken that.
 
 ## Conventions
 

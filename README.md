@@ -65,7 +65,6 @@ python main.py
 
 Install test dependencies with `pip install -r requirements-dev.txt`, then run `python -m pytest -q`.
 Tests use a dummy token and temporary databases; do not start a second polling process with the production token.
-See [UPGRADE.md](UPGRADE.md) for release validation and deployment notes.
 
 ### Contributing
 
@@ -134,7 +133,6 @@ python main.py
 
 Для тестов: `pip install -r requirements-dev.txt`, затем `python -m pytest -q`.
 Тесты используют тестовый токен и временные базы. Не запускайте второй экземпляр бота с продовым токеном.
-Порядок проверки и выкладки: [UPGRADE.md](UPGRADE.md).
 
 ### Вклад в проект
 

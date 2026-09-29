@@ -13,6 +13,7 @@ LOG_CHAT_ID = int(_log_chat_id_raw) if _log_chat_id_raw.strip() else None
 _admin_ids_raw = os.getenv('ADMIN_IDS', '')
 ADMIN_IDS = frozenset(int(x) for x in _admin_ids_raw.split(',') if x.strip()) if _admin_ids_raw.strip() else frozenset()
 LOG_LEVEL = os.getenv('LOG_LEVEL', 'INFO')
+COINGECKO_DEMO_API_KEY = os.getenv('COINGECKO_DEMO_API_KEY', '').strip()
 COINCAP_API_KEY = os.getenv('COINCAP_API_KEY')
 if not COINCAP_API_KEY:
     import logging as _log
@@ -23,7 +24,7 @@ DB_PATH = os.getenv('DB_PATH', 'otc.db')
 DB_BACKUP_INTERVAL_HOURS = int(os.getenv('DB_BACKUP_INTERVAL_HOURS', '24'))  # 0 disables backups
 DB_BACKUP_KEEP = int(os.getenv('DB_BACKUP_KEEP', '3'))
 
-CURRENT_VERSION = "1.8.4"
+CURRENT_VERSION = "1.8.5"
 
 # Cache
 CACHE_EXPIRATION_TIME = 600  # seconds

@@ -166,7 +166,7 @@ async def _fetch_rates_unlocked() -> Dict[str, float]:
     rates: Dict[str, float] = {}
 
     try:
-        from config.config import COINCAP_API_KEY
+        from config.config import COINCAP_API_KEY, COINGECKO_DEMO_API_KEY
 
         session_opt = get_http_session()
         if session_opt is None:
@@ -237,11 +237,13 @@ async def _fetch_rates_unlocked() -> Dict[str, float]:
         gecko_mapping = CRYPTO_ID_MAPPING['coingecko']
         crypto_ids = ','.join(gecko_mapping.values())
         url_cg = f'https://api.coingecko.com/api/v3/simple/price?ids={crypto_ids}&vs_currencies=usd'
+        # Keep the key out of URLs/logs and send it only to CoinGecko.
+        gecko_headers = {'x-cg-demo-api-key': COINGECKO_DEMO_API_KEY} if COINGECKO_DEMO_API_KEY else {}
 
         async def _fetch_coingecko():
             coingecko_host = _host_of(url_cg)
             async def _cg():
-                resp = await session.get(url_cg, timeout=timeout)
+                resp = await session.get(url_cg, timeout=timeout, headers=gecko_headers, allow_redirects=False)
                 async with resp:
                     resp.raise_for_status()
                     return await resp.json(loads=ujson.loads)
@@ -327,7 +329,7 @@ async def _fetch_rates_unlocked() -> Dict[str, float]:
                         rates[coincap_item[0]] = coincap_item[1]
 
             elif missing_crypto:
-                logger.info("Keeping cached crypto rates; CoinGecko batch already retried")
+                logger.info("CoinCap fallback is disabled; retaining any previously cached crypto rates")
 
         rates = _store_rates(rates)
 

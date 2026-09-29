@@ -251,3 +251,66 @@ def test_crypto_timeout_preserves_completed_fiat(monkeypatch, refresh_state):
         assert result['EUR'] == 1.0
         await rates.close_rate_refresh()
     asyncio.run(scenario())
+
+
+@pytest.mark.parametrize('api_key', ['', 'offline-demo-secret'])
+@pytest.mark.parametrize('forbidden', [False, True])
+def test_gecko_auth_is_scoped_and_fiat_survives_rejection(monkeypatch, refresh_state, caplog, api_key, forbidden):
+    import aiohttp
+    import config.config as config
+    from types import SimpleNamespace
+
+    calls = []
+
+    class Response:
+        def __init__(self, url):
+            self.url = url
+            self.gecko = 'api.coingecko.com/' in url
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *args):
+            pass
+
+        def raise_for_status(self):
+            if self.gecko and forbidden:
+                raise aiohttp.ClientResponseError(
+                    request_info=SimpleNamespace(real_url=self.url),
+                    history=(), status=403, message='Forbidden',
+                )
+
+        async def json(self, **kwargs):
+            if self.gecko:
+                return {coin: {'usd': 50000} for coin in rates.CRYPTO_ID_MAPPING['coingecko'].values()}
+            return {'rates': {currency: 1.0 for currency in rates.ACTIVE_CURRENCIES}}
+
+    async def get(url, **kwargs):
+        calls.append((url, kwargs))
+        return Response(url)
+
+    monkeypatch.setattr(config, 'COINGECKO_DEMO_API_KEY', api_key)
+    monkeypatch.setattr(config, 'COINCAP_API_KEY', '')
+    monkeypatch.setattr(rates, 'get_http_session', lambda: SimpleNamespace(get=get))
+
+    async def scenario():
+        result = await rates.refresh_rates()
+        assert result['EUR'] == 1.0
+        if forbidden:
+            assert 'BTC' not in result
+        else:
+            assert result['BTC'] == pytest.approx(1 / 50000)
+        await rates.close_rate_refresh()
+
+    asyncio.run(scenario())
+    gecko_calls = [(url, options) for url, options in calls if 'api.coingecko.com/' in url]
+    assert len(gecko_calls) == 1
+    url, options = gecko_calls[0]
+    assert options['headers'] == ({'x-cg-demo-api-key': api_key} if api_key else {})
+    assert options['allow_redirects'] is False
+    assert 'api_key' not in url
+    assert all('x-cg-demo-api-key' not in options.get('headers', {})
+               for url, options in calls if 'api.coingecko.com/' not in url)
+    if api_key:
+        assert api_key not in caplog.text
+        assert all(api_key not in url for url, _ in calls)

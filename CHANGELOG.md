@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 
 ## Changelog
 
+## [1.8.5] - 2026-09-30
+
+### Fixes
+- Added optional CoinGecko Demo API authentication through `COINGECKO_DEMO_API_KEY`, passed by Docker Compose and sent only in the CoinGecko request header.
+- Corrected the crypto fallback log so it no longer claims retries or cached crypto rates exist after a cold start.
+
 ## [1.8.4] - 2026-09-29
 
 ### Maintenance

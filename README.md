@@ -46,6 +46,8 @@ This Currency Converter Bot is a powerful Telegram bot that allows users to conv
 3. Set up your configuration:
    - Create `.env` file 
    - Fill `TELEGRAM_BOT_TOKEN=TOKEN`
+   - For crypto rates, add `COINGECKO_DEMO_API_KEY=your_demo_key` from the CoinGecko Developer Dashboard (free Demo plan, not Pro).
+     Docker Compose passes it to the bot; rebuild and recreate the container after updating the code and configuration.
 
 ### Usage
 
@@ -114,6 +116,8 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 3. Настройте конфигурацию:
   - Создайте файл `.env`
   -  Заполните токен вот так: `TELEGRAM_BOT_TOKEN=TOKEN` 
+  - Для криптокурсов добавьте `COINGECKO_DEMO_API_KEY=ваш_demo_ключ` из кабинета CoinGecko (бесплатный Demo, не Pro).
+    Docker Compose передаёт ключ боту; после обновления кода и настроек пересоберите и пересоздайте контейнер.
 
 ### Использование
 

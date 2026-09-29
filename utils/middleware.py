@@ -6,6 +6,7 @@ from datetime import datetime
 from typing import Any, Awaitable, Callable, Dict
 
 from aiogram import BaseMiddleware
+from aiogram.client.session.middlewares.base import BaseRequestMiddleware
 from aiogram.types import TelegramObject, Message, User
 from aiogram.exceptions import TelegramRetryAfter, TelegramAPIError
 
@@ -94,31 +95,22 @@ class RateLimitMiddleware(BaseMiddleware):
         return await handler(event, data)
 
 
-class RetryMiddleware(BaseMiddleware):
+class TelegramRetryMiddleware(BaseRequestMiddleware):
     def __init__(self, max_retries: int = 3):
         self.max_retries = max_retries
 
-    async def __call__(
-        self,
-        handler: Callable[[TelegramObject, Dict[str, Any]], Awaitable[Any]],
-        event: TelegramObject,
-        data: Dict[str, Any],
-    ) -> Any:
-        retries = 0
-        while True:
+    async def __call__(self, make_request, bot, method):
+        # Retry only the rejected API call, never the whole handler with its
+        # database writes, previous replies or broadcast progress.
+        for attempt in range(self.max_retries + 1):
             try:
-                return await handler(event, data)
+                return await make_request(bot, method)
             except TelegramRetryAfter as e:
-                retries += 1
-                if retries > self.max_retries:
-                    logger.error("Max retries exceeded for flood control")
-                    return None
+                if attempt == self.max_retries:
+                    raise
                 logger.warning("Telegram flood control, retrying after %ss (attempt %d/%d)",
-                             e.retry_after, retries, self.max_retries)
+                             e.retry_after, attempt + 1, self.max_retries)
                 await asyncio.sleep(e.retry_after)
-            except TelegramAPIError as e:
-                logger.error("Telegram API error: %s", e)
-                return None
 
 
 class ErrorBoundaryMiddleware(BaseMiddleware):

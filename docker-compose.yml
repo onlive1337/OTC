@@ -8,6 +8,7 @@ services:
       - ADMIN_IDS=${ADMIN_IDS}
       - LOG_CHAT_ID=${LOG_CHAT_ID}
       - COINCAP_API_KEY=${COINCAP_API_KEY:-}
+      - POLLING_CONCURRENCY=${POLLING_CONCURRENCY:-100}
       - TZ=Europe/Moscow
       - DB_PATH=/app/data/otc.db
     volumes:

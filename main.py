@@ -2,11 +2,7 @@ import asyncio
 import importlib
 import logging
 import sqlite3
-import signal
 import sys
-import warnings
-
-warnings.filterwarnings("ignore", message=".*iscoroutinefunction.*", category=DeprecationWarning)
 import ujson
 from aiohttp import ClientError, ClientSession, ClientTimeout, TCPConnector
 
@@ -18,13 +14,15 @@ from config.config import (
     HTTP_CONNECTOR_LIMIT,
     HTTP_CONNECTOR_LIMIT_PER_HOST,
     HTTP_DNS_CACHE_TTL,
+    POLLING_CONCURRENCY,
+    RATE_REFRESH_RETRY_INTERVAL,
 )
 from loader import bot, dp, user_data
 from utils.http import set_http_session, close_http_session, safe_bg_task
-from utils.rates import get_exchange_rates, refresh_rates
+from utils.rates import get_exchange_rates, refresh_rates, close_rate_refresh, get_cached_data
 from utils.log_handler import setup_telegram_logging
 
-from utils.middleware import RateLimitMiddleware, RetryMiddleware, ErrorBoundaryMiddleware
+from utils.middleware import RateLimitMiddleware, ErrorBoundaryMiddleware
 
 from handlers import general, admin, settings, conversion
 
@@ -35,31 +33,29 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 _bg_tasks = []
-_shutdown_event = asyncio.Event()
 
 async def _warmup_rates():
     try:
-        await get_exchange_rates()
-        logger.info("Rates cache warmed up")
+        if await get_exchange_rates():
+            logger.info("Rates cache warmed up")
+        else:
+            logger.warning("Rate warmup returned no rates")
     except (ClientError, asyncio.TimeoutError, RuntimeError, ValueError, TypeError, KeyError):
         logger.exception("Warmup failed")
 
 async def _periodic_refresh():
     normal_interval = max(CACHE_EXPIRATION_TIME - 60, 60)
-    error_interval = 30
+    interval = RATE_REFRESH_RETRY_INTERVAL
     while True:
-        await asyncio.sleep(normal_interval)
+        await asyncio.sleep(interval)
         try:
-            await asyncio.wait_for(refresh_rates(force=True), timeout=30.0)
-            logger.info("Periodic rate refresh completed")
+            await refresh_rates(force=True)
+            interval = normal_interval if get_cached_data('exchange_rates') else RATE_REFRESH_RETRY_INTERVAL
         except asyncio.CancelledError:
             raise
-        except asyncio.TimeoutError:
-            logger.warning("Periodic rate refresh timed out, retrying in %ds", error_interval)
-            await asyncio.sleep(error_interval)
-        except (ClientError, RuntimeError, ValueError, TypeError, KeyError):
-            logger.exception("Periodic rate refresh failed, retrying in %ds", error_interval)
-            await asyncio.sleep(error_interval)
+        except (ClientError, asyncio.TimeoutError, RuntimeError, ValueError, TypeError, KeyError):
+            interval = RATE_REFRESH_RETRY_INTERVAL
+            logger.exception("Periodic rate refresh failed, retrying in %ds", interval)
 
 async def on_startup():
     await setup_telegram_logging(bot)
@@ -88,6 +84,7 @@ async def on_shutdown():
         except asyncio.CancelledError:
             pass
     _bg_tasks.clear()
+    await close_rate_refresh()
     try:
         await close_http_session()
     except RuntimeError:
@@ -98,29 +95,13 @@ async def on_shutdown():
         logger.exception("Error closing database connection")
 
 async def main():
-    loop = asyncio.get_event_loop()
-
-    def handle_shutdown_signal():
-        logger.info("Received shutdown signal, initiating graceful shutdown...")
-        _shutdown_event.set()
-        asyncio.create_task(dp.stop_polling())
-
-    for sig in (signal.SIGTERM, signal.SIGINT):
-        try:
-            loop.add_signal_handler(sig, handle_shutdown_signal)  # type: ignore[call-arg]
-        except NotImplementedError:
-            pass
-
     dp.message.middleware(ErrorBoundaryMiddleware())
-    dp.message.middleware(RetryMiddleware())
     dp.message.middleware(RateLimitMiddleware(limit=5, window=3.0))
 
     dp.callback_query.middleware(ErrorBoundaryMiddleware())
-    dp.callback_query.middleware(RetryMiddleware())
     dp.callback_query.middleware(RateLimitMiddleware(limit=8, window=3.0))
 
     dp.inline_query.middleware(ErrorBoundaryMiddleware())
-    dp.inline_query.middleware(RetryMiddleware())
     dp.inline_query.middleware(RateLimitMiddleware(limit=5, window=3.0))
 
     dp.include_router(general.router)
@@ -131,7 +112,11 @@ async def main():
     dp.startup.register(on_startup)
     dp.shutdown.register(on_shutdown)
 
-    await dp.start_polling(bot, allowed_updates=dp.resolve_used_update_types())
+    await dp.start_polling(
+        bot,
+        allowed_updates=dp.resolve_used_update_types(),
+        tasks_concurrency_limit=POLLING_CONCURRENCY,
+    )
 
 def run_app():
     if sys.platform != 'win32':

@@ -16,18 +16,21 @@ LOG_LEVEL = os.getenv('LOG_LEVEL', 'INFO')
 COINCAP_API_KEY = os.getenv('COINCAP_API_KEY')
 if not COINCAP_API_KEY:
     import logging as _log
-    _log.getLogger(__name__).warning("COINCAP_API_KEY is not set. Fallback crypto sources will be used.")
+    _log.getLogger(__name__).info("COINCAP_API_KEY is not set. CoinCap crypto fallback is disabled.")
 
 # Storage
 DB_PATH = os.getenv('DB_PATH', 'otc.db')
 DB_BACKUP_INTERVAL_HOURS = int(os.getenv('DB_BACKUP_INTERVAL_HOURS', '24'))  # 0 disables backups
 DB_BACKUP_KEEP = int(os.getenv('DB_BACKUP_KEEP', '3'))
 
-CURRENT_VERSION = "1.8.3"
+CURRENT_VERSION = "1.8.4"
 
 # Cache
 CACHE_EXPIRATION_TIME = 600  # seconds
 STALE_WHILE_REVALIDATE = 300  # seconds
+RATE_REFRESH_TIMEOUT = 25  # whole refresh, including retries and fallbacks
+RATE_REFRESH_RETRY_INTERVAL = 30  # prevents request storms during outages
+POLLING_CONCURRENCY = max(1, int(os.getenv('POLLING_CONCURRENCY', '100')))
 MIN_CONVERSION_AMOUNT = float(os.getenv('MIN_CONVERSION_AMOUNT', '0.0001'))
 MAX_CONVERSION_AMOUNT = float(os.getenv('MAX_CONVERSION_AMOUNT', '1000000000000'))
 

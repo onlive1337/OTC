@@ -4,6 +4,22 @@ All notable changes to this project will be documented in this file.
 
 ## Changelog
 
+## [1.8.4] - 2026-09-29
+
+### Maintenance
+- Updated aiogram to 3.31.0 (Bot API 10.3), aiohttp to 3.14.3, python-dotenv to 1.2.3 and ujson to 6.0.0; retained Python 3.14.
+- Moved pytest to requirements-dev.txt and pinned it to 9.1.1.
+- Pinned the tested transitive dependencies in constraints.txt for repeatable builds.
+
+### Performance and reliability
+- Concurrent rate refreshes now share one task, with a 25-second deadline and a 30-second cooldown; cancellation of one caller no longer cancels other callers' refresh.
+- Removed individual CoinGecko requests after the batch request already exhausted its retries. Completed fiat results survive a crypto timeout.
+- HTTP retries now skip permanent client errors; invalid/non-finite fiat rates are rejected.
+- Telegram flood-control retries repeat only the rejected API call, avoiding replay of entire handlers.
+- Inline results use a per-user Telegram cache, preserving personal language and currency preferences.
+- Added a configurable limit of 100 concurrent polling updates and explicit rate-task cleanup at shutdown.
+- Added offline regression tests; production DB schema and user-facing features are unchanged.
+
 ## [1.8.3] - 2026-04-16
 
 ### 🧹 Cleanup

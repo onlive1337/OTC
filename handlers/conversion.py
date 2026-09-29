@@ -565,7 +565,7 @@ async def inline_query_handler(query: InlineQuery):
                 "Please enter an amount and currency code to convert, e.g., '100 USD' or '10,982 KZT'.")
             )
         )
-        await query.answer(results=[empty_input_result], cache_time=60)
+        await query.answer(results=[empty_input_result], cache_time=60, is_personal=True)
         return
 
     amount, from_currency = parse_amount_and_currency(query.query)
@@ -593,7 +593,7 @@ async def inline_query_handler(query: InlineQuery):
                         parse_mode="HTML"
                     )
                 )
-                await query.answer(results=[math_article], cache_time=60)
+                await query.answer(results=[math_article], cache_time=60, is_personal=True)
                 return
 
         unknown_cur = _extract_unknown_currency(text)
@@ -611,7 +611,7 @@ async def inline_query_handler(query: InlineQuery):
                             "Enter amount and currency code to convert.")
                         )
                     ))
-                await query.answer(results=results, cache_time=60)
+                await query.answer(results=results, cache_time=60, is_personal=True)
                 return
 
         if _contains_known_currency(text):
@@ -623,7 +623,7 @@ async def inline_query_handler(query: InlineQuery):
                     description=LANGUAGES[user_lang].get('invalid_input_description', 'Check your input format'),
                     input_message_content=InputTextMessageContent(message_text=_too_large_message(user_lang)),
                 )
-                await query.answer(results=[too_large_result], cache_time=30)
+                await query.answer(results=[too_large_result], cache_time=30, is_personal=True)
                 return
             if bounds_state == 'too_small':
                 too_small_result = InlineQueryResultArticle(
@@ -632,7 +632,7 @@ async def inline_query_handler(query: InlineQuery):
                     description=LANGUAGES[user_lang].get('invalid_input_description', 'Check your input format'),
                     input_message_content=InputTextMessageContent(message_text=_too_small_message(user_lang)),
                 )
-                await query.answer(results=[too_small_result], cache_time=30)
+                await query.answer(results=[too_small_result], cache_time=30, is_personal=True)
                 return
 
         error_result = InlineQueryResultArticle(
@@ -644,7 +644,7 @@ async def inline_query_handler(query: InlineQuery):
                 "Enter amount and currency code: 100 USD or 10,982 KZT.")
             )
         )
-        await query.answer(results=[error_result], cache_time=60)
+        await query.answer(results=[error_result], cache_time=60, is_personal=True)
         return
 
     try:
@@ -667,7 +667,7 @@ async def inline_query_handler(query: InlineQuery):
                     message_text=_too_large_message(user_lang)
                 )
             )
-            await query.answer(results=[too_large_result], cache_time=30)
+            await query.answer(results=[too_large_result], cache_time=30, is_personal=True)
             return
 
         if amount < _MIN_SAFE_CONVERSION_AMOUNT:
@@ -679,7 +679,7 @@ async def inline_query_handler(query: InlineQuery):
                     message_text=_too_small_message(user_lang)
                 )
             )
-            await query.answer(results=[too_small_result], cache_time=30)
+            await query.answer(results=[too_small_result], cache_time=30, is_personal=True)
             return
 
         rates = await get_exchange_rates()
@@ -705,7 +705,7 @@ async def inline_query_handler(query: InlineQuery):
                     parse_mode="HTML"
                 )
             )
-            await query.answer(results=[targeted_result], cache_time=60)
+            await query.answer(results=[targeted_result], cache_time=60, is_personal=True)
             return
 
         if not user_currencies and not user_crypto:
@@ -718,7 +718,7 @@ async def inline_query_handler(query: InlineQuery):
                     "You haven't selected any currencies. Please go to bot settings to select currencies for conversion.")
                 )
             )
-            await query.answer(results=[no_currency_result], cache_time=60)
+            await query.answer(results=[no_currency_result], cache_time=60, is_personal=True)
             return
 
         result_content = f"{format_large_number(amount, is_original_amount=True)} {get_currency_symbol(from_currency)}{from_currency}\n\n"
@@ -763,7 +763,7 @@ async def inline_query_handler(query: InlineQuery):
         )
 
         logger.info(f"Successful inline conversion for user {query.from_user.id}: {amount} {from_currency}")
-        await query.answer(results=[result], cache_time=60)
+        await query.answer(results=[result], cache_time=60, is_personal=True)
     except ValueError as ve:
         error_result = InlineQueryResultArticle(
             id="error",
@@ -774,7 +774,7 @@ async def inline_query_handler(query: InlineQuery):
                 "Invalid input. Please enter amount and currency code, e.g., '100 USD'.")
             )
         )
-        await query.answer(results=[error_result], cache_time=60)
+        await query.answer(results=[error_result], cache_time=60, is_personal=True)
     except Exception:
         logger.exception("Error during inline conversion for user %s", query.from_user.id)
         error_result = InlineQueryResultArticle(
@@ -786,7 +786,7 @@ async def inline_query_handler(query: InlineQuery):
                 "An error occurred. Please try again.")
             )
         )
-        await query.answer(results=[error_result], cache_time=60)
+        await query.answer(results=[error_result], cache_time=60, is_personal=True)
 
 @router.my_chat_member()
 async def handle_my_chat_member(event: ChatMemberUpdated, bot: Bot):

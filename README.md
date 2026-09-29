@@ -1,7 +1,7 @@
 # OTC bot
 
-[![Python](https://img.shields.io/badge/Python-3.7%2B-blue)](https://www.python.org/downloads/)
-[![aiogram](https://img.shields.io/badge/aiogram-3.0%2B-green)](https://docs.aiogram.dev/)
+[![Python](https://img.shields.io/badge/Python-3.14-blue)](https://www.python.org/downloads/)
+[![aiogram](https://img.shields.io/badge/aiogram-3.31.0-green)](https://docs.aiogram.dev/)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](https://opensource.org/licenses/MIT)
 
 [English](#english) | [Русский](#русский)
@@ -25,8 +25,8 @@ This Currency Converter Bot is a powerful Telegram bot that allows users to conv
 
 ### Requirements
 
-- Python 3.7+
-- aiogram 3.0+
+- Python 3.14
+- aiogram 3.31.0
 - aiohttp
 - Other dependencies (see `requirements.txt`)
 
@@ -61,6 +61,12 @@ python main.py
 - `/settings` - Adjust your preferences
 - `/stats` - View bot statistics (admin only)
 
+### Development and upgrades
+
+Install test dependencies with `pip install -r requirements-dev.txt`, then run `python -m pytest -q`.
+Tests use a dummy token and temporary databases; do not start a second polling process with the production token.
+See [UPGRADE.md](UPGRADE.md) for release validation and deployment notes.
+
 ### Contributing
 
 Contributions are welcome! Please feel free to submit a Pull Request.
@@ -88,8 +94,8 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ### Требования
 
-- Python 3.7+
-- aiogram 3.0+
+- Python 3.14
+- aiogram 3.31.0
 - aiohttp
 - Другие зависимости (см. `requirements.txt`)
 
@@ -123,6 +129,12 @@ python main.py
 - `/start` - Инициализировать бота и увидеть главное меню
 - `/settings` - Настроить ваши предпочтения
 - `/stats` - Просмотреть статистику бота (только для админов)
+
+### Разработка и обновление
+
+Для тестов: `pip install -r requirements-dev.txt`, затем `python -m pytest -q`.
+Тесты используют тестовый токен и временные базы. Не запускайте второй экземпляр бота с продовым токеном.
+Порядок проверки и выкладки: [UPGRADE.md](UPGRADE.md).
 
 ### Вклад в проект
 

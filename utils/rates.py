@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import math
 import time
 from typing import Dict, Any, Optional
 
@@ -10,15 +11,16 @@ from config.config import (
     CACHE_EXPIRATION_TIME, ACTIVE_CURRENCIES, CRYPTO_CURRENCIES,
     CRYPTO_ID_MAPPING, HTTP_TOTAL_TIMEOUT, HTTP_CONNECT_TIMEOUT,
     STALE_WHILE_REVALIDATE, HTTP_CONNECTOR_LIMIT,
-    HTTP_CONNECTOR_LIMIT_PER_HOST, HTTP_DNS_CACHE_TTL
+    HTTP_CONNECTOR_LIMIT_PER_HOST, HTTP_DNS_CACHE_TTL,
+    RATE_REFRESH_TIMEOUT, RATE_REFRESH_RETRY_INTERVAL,
 )
 from utils.http import _host_of, _with_retries, _safe_bg_task, get_http_session
 
 logger = logging.getLogger(__name__)
 
 cache: Dict[str, Any] = {}
-_revalidation_lock = asyncio.Lock()
-_rates_lock = asyncio.Lock()
+_refresh_task: Optional[asyncio.Task] = None
+_last_refresh_finished: Optional[float] = None
 
 
 def _as_rates_dict(payload: Any) -> Optional[Dict[str, float]]:
@@ -29,20 +31,22 @@ def normalize_fiat_payload(fiat_data: Any) -> Optional[Dict[str, float]]:
     if not isinstance(fiat_data, dict):
         return None
 
-    rates = fiat_data.get('rates')
-    if isinstance(rates, dict):
-        return rates
-
-    usd_rates = fiat_data.get('usd')
-    if isinstance(usd_rates, dict):
-        normalized_rates: Dict[str, float] = {'USD': 1.0}
-        for curr_lower, rate in usd_rates.items():
+    source = fiat_data.get('rates')
+    if not isinstance(source, dict):
+        source = fiat_data.get('usd')
+    if isinstance(source, dict):
+        normalized_rates: Dict[str, float] = {}
+        for currency, rate in source.items():
             try:
+                if isinstance(rate, bool):
+                    continue
                 rate_f = float(rate)
-            except (TypeError, ValueError):
+            except (TypeError, ValueError, OverflowError):
                 continue
-            if rate_f > 0:
-                normalized_rates[str(curr_lower).upper()] = rate_f
+            if math.isfinite(rate_f) and rate_f > 0:
+                normalized_rates[str(currency).upper()] = rate_f
+        if normalized_rates:
+            normalized_rates['USD'] = 1.0
         return normalized_rates
 
     return None
@@ -86,8 +90,7 @@ async def get_exchange_rates() -> Dict[str, float]:
         if stale_item:
             data, ts = stale_item
             if now - ts < (CACHE_EXPIRATION_TIME + STALE_WHILE_REVALIDATE):
-                if not _revalidation_lock.locked():
-                    _safe_bg_task(_bg_refresh_rates(), name="stale_refresh_rates")
+                _start_refresh()
                 logger.info("Returning stale exchange rates while refreshing in background")
                 return data
 
@@ -110,30 +113,57 @@ async def get_exchange_rates() -> Dict[str, float]:
         return {}
 
 
-async def _bg_refresh_rates():
-    async with _revalidation_lock:
-        try:
-            await refresh_rates(force=True)
-        except asyncio.CancelledError:
-            raise
-        except (RuntimeError, asyncio.TimeoutError, aiohttp.ClientError, ValueError, TypeError, KeyError):
-            logger.exception("Background rate refresh failed")
+def _previous_rates() -> Dict[str, float]:
+    item = cache.get('exchange_rates')
+    return (_as_rates_dict(item[0]) or {}) if item else {}
+
+
+def _start_refresh() -> Optional[asyncio.Task]:
+    global _refresh_task
+    # Assign before yielding: all concurrent callers share this exact task.
+    if _refresh_task is not None and not _refresh_task.done():
+        return _refresh_task
+    if (_last_refresh_finished is not None
+            and time.monotonic() - _last_refresh_finished < RATE_REFRESH_RETRY_INTERVAL):
+        return None
+    _refresh_task = _safe_bg_task(_run_refresh(), name="refresh_rates")
+    return _refresh_task
+
+
+async def _run_refresh() -> Dict[str, float]:
+    global _last_refresh_finished
+    try:
+        async with asyncio.timeout(RATE_REFRESH_TIMEOUT):
+            return await _fetch_rates_unlocked()
+    except (RuntimeError, asyncio.TimeoutError, aiohttp.ClientError, ValueError, TypeError, KeyError):
+        logger.exception("Rate refresh failed; keeping cached rates")
+        return _previous_rates()
+    finally:
+        _last_refresh_finished = time.monotonic()
 
 
 async def refresh_rates(force: bool = False) -> Dict[str, float]:
     if not force:
-        async with _rates_lock:
-            fresh = _as_rates_dict(get_cached_data('exchange_rates'))
-            if fresh:
-                return fresh
-            return await _fetch_rates_unlocked()
-    
-    async with _rates_lock:
-        return await _fetch_rates_unlocked()
+        fresh = _as_rates_dict(get_cached_data('exchange_rates'))
+        if fresh:
+            return fresh
+    task = _start_refresh()
+    # A disconnected caller must not cancel the refresh shared by other users.
+    return await asyncio.shield(task) if task is not None else _previous_rates()
+
+
+async def close_rate_refresh():
+    global _refresh_task, _last_refresh_finished
+    if _refresh_task is not None:
+        _refresh_task.cancel()
+        await asyncio.gather(_refresh_task, return_exceptions=True)
+        _refresh_task = None
+    _last_refresh_finished = None
 
 
 async def _fetch_rates_unlocked() -> Dict[str, float]:
     session_to_close = None
+    rates: Dict[str, float] = {}
 
     try:
         from config.config import COINCAP_API_KEY
@@ -153,7 +183,6 @@ async def _fetch_rates_unlocked() -> Dict[str, float]:
         assert session_opt is not None
         session = session_opt
 
-        rates: Dict[str, float] = {}
         timeout = aiohttp.ClientTimeout(total=HTTP_TOTAL_TIMEOUT, connect=HTTP_CONNECT_TIMEOUT)
 
         fiat_sources = [
@@ -201,6 +230,8 @@ async def _fetch_rates_unlocked() -> Dict[str, float]:
                     if not t.done():
                         t.cancel()
                 await asyncio.gather(*tasks, return_exceptions=True)
+                # Keep completed fiat data even if the crypto branch times out.
+                rates.update(merged)
             return merged or None
 
         gecko_mapping = CRYPTO_ID_MAPPING['coingecko']
@@ -227,9 +258,10 @@ async def _fetch_rates_unlocked() -> Dict[str, float]:
                             cg_usd_price = float(cg_usd_price)
                         except (TypeError, ValueError):
                             cg_usd_price = None
-                        if cg_usd_price and cg_usd_price > 0:
+                        if cg_usd_price and math.isfinite(cg_usd_price) and cg_usd_price > 0:
                             crypto_rates[cg_symbol] = 1.0 / cg_usd_price
                 logger.info("Fetched crypto rates from CoinGecko")
+                rates.update(crypto_rates)
                 return crypto_rates
             except (RuntimeError, asyncio.TimeoutError, aiohttp.ClientError, ValueError, TypeError, KeyError) as coingecko_error:
                 logger.error(f"CoinGecko failed: {coingecko_error}")
@@ -278,11 +310,12 @@ async def _fetch_rates_unlocked() -> Dict[str, float]:
                         alt_crypto_data = await _with_retries(_cap, coincap_host)
                         if isinstance(alt_crypto_data, dict) and 'data' in alt_crypto_data:
                             coincap_usd_price = float(alt_crypto_data['data'].get('priceUsd', 0))
-                            if coincap_usd_price > 0:
+                            if math.isfinite(coincap_usd_price) and coincap_usd_price > 0:
                                 logger.info(f"Fetched {crypto_sym} from CoinCap v3")
                                 return crypto_sym, 1.0 / coincap_usd_price
                     except (RuntimeError, asyncio.TimeoutError, aiohttp.ClientError, ValueError, TypeError, KeyError) as coincap_error:
-                        logger.warning(f"Failed to fetch {crypto_sym} from CoinCap v3: {coincap_error}")
+                        # ClientResponseError includes the request URL (and API key).
+                        logger.warning("Failed to fetch %s from CoinCap v3: %s", crypto_sym, type(coincap_error).__name__)
                     return crypto_sym, None
 
                 coincap_results = await asyncio.gather(
@@ -294,29 +327,7 @@ async def _fetch_rates_unlocked() -> Dict[str, float]:
                         rates[coincap_item[0]] = coincap_item[1]
 
             elif missing_crypto:
-                logger.info(f"Trying CoinGecko individual requests for: {missing_crypto}")
-
-                for crypto_symbol in missing_crypto:
-                    if crypto_symbol in gecko_mapping:
-                        coin_id = gecko_mapping[crypto_symbol]
-                        url_gecko = f'https://api.coingecko.com/api/v3/simple/price?ids={coin_id}&vs_currencies=usd'
-                        request_host = _host_of(url_gecko)
-
-                        async def _gecko(u=url_gecko):
-                            resp = await session.get(u, timeout=timeout)
-                            async with resp:
-                                resp.raise_for_status()
-                                return await resp.json(loads=ujson.loads)
-
-                        try:
-                            gecko_data = await _with_retries(_gecko, request_host)
-                            if isinstance(gecko_data, dict) and coin_id in gecko_data:
-                                single_gecko_usd_price = float(gecko_data[coin_id].get('usd', 0))
-                                if single_gecko_usd_price > 0:
-                                    rates[crypto_symbol] = 1.0 / single_gecko_usd_price
-                                    logger.info(f"Fetched {crypto_symbol} from CoinGecko")
-                        except (RuntimeError, asyncio.TimeoutError, aiohttp.ClientError, ValueError, TypeError, KeyError) as gecko_error:
-                            logger.warning(f"Failed to fetch {crypto_symbol} from CoinGecko: {gecko_error}")
+                logger.info("Keeping cached crypto rates; CoinGecko batch already retried")
 
         rates = _store_rates(rates)
 
@@ -326,9 +337,13 @@ async def _fetch_rates_unlocked() -> Dict[str, float]:
 
         return rates
 
+    except asyncio.CancelledError:
+        if rates:
+            _store_rates(rates)
+        raise
     except (RuntimeError, asyncio.TimeoutError, aiohttp.ClientError, ValueError, TypeError, KeyError) as refresh_error:
         logger.error(f"Critical error in _refresh_rates: {refresh_error}")
-        return {}
+        return _store_rates(rates)
     finally:
         if session_to_close is not None:
             await session_to_close.close()

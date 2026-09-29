@@ -1,6 +1,10 @@
 import os
 import sys
 import time
+import asyncio
+from unittest.mock import AsyncMock
+
+import pytest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -9,6 +13,15 @@ from utils.rates import normalize_fiat_payload, convert_currency
 
 
 class TestNormalizeFiatPayload:
+    @pytest.mark.parametrize('shape', ['rates', 'usd'])
+    def test_filters_nonfinite_and_invalid_rates(self, shape):
+        payload = {shape: {'EUR': '0.9', 'nan': float('nan'), 'inf': float('inf'),
+                           'negative': -1, 'zero': 0, 'boolean': True, 'bad': 'x'}}
+        assert normalize_fiat_payload(payload) == {'USD': 1.0, 'EUR': 0.9}
+
+    def test_empty_rates_are_not_a_success(self):
+        assert normalize_fiat_payload({'rates': {'EUR': float('nan')}}) == {}
+
     def test_er_api_shape(self):
         # open.er-api.com: {"result": "success", "rates": {...}}
         payload = {"result": "success", "rates": {"USD": 1.0, "EUR": 0.9}}
@@ -111,3 +124,130 @@ class TestConvertCurrency:
         import pytest
         with pytest.raises(KeyError):
             convert_currency(1, "USD", "XXX", self.RATES)
+
+
+@pytest.fixture
+def refresh_state(monkeypatch):
+    monkeypatch.setattr(rates, 'cache', {})
+    monkeypatch.setattr(rates, '_refresh_task', None)
+    monkeypatch.setattr(rates, '_last_refresh_finished', None)
+
+
+def test_concurrent_forced_refreshes_share_one_fetch(monkeypatch, refresh_state):
+    async def scenario():
+        fetch = AsyncMock(return_value={'USD': 1.0, 'EUR': 0.9})
+        monkeypatch.setattr(rates, '_fetch_rates_unlocked', fetch)
+        results = await asyncio.gather(*(rates.refresh_rates(force=True) for _ in range(100)))
+        assert all(result == {'USD': 1.0, 'EUR': 0.9} for result in results)
+        fetch.assert_awaited_once()
+        await rates.close_rate_refresh()
+    asyncio.run(scenario())
+
+
+def test_stale_reads_schedule_one_refresh(monkeypatch, refresh_state):
+    async def scenario():
+        rates.cache['exchange_rates'] = ({'EUR': 0.9}, time.time() - rates.CACHE_EXPIRATION_TIME - 1)
+        fetch = AsyncMock(return_value={'EUR': 0.95})
+        monkeypatch.setattr(rates, '_fetch_rates_unlocked', fetch)
+        results = await asyncio.gather(*(rates.get_exchange_rates() for _ in range(100)))
+        assert all(result == {'EUR': 0.9} for result in results)
+        await rates._refresh_task
+        fetch.assert_awaited_once()
+        await rates.close_rate_refresh()
+    asyncio.run(scenario())
+
+
+def test_cancelling_one_caller_does_not_cancel_shared_refresh(monkeypatch, refresh_state):
+    async def scenario():
+        started, finish = asyncio.Event(), asyncio.Event()
+        async def fetch():
+            started.set()
+            await finish.wait()
+            return {'EUR': 0.9}
+        monkeypatch.setattr(rates, '_fetch_rates_unlocked', fetch)
+        caller = asyncio.create_task(rates.refresh_rates())
+        await started.wait()
+        caller.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await caller
+        assert not rates._refresh_task.cancelled()
+        finish.set()
+        assert await rates.refresh_rates() == {'EUR': 0.9}
+        await rates.close_rate_refresh()
+    asyncio.run(scenario())
+
+
+def test_failed_refresh_has_cooldown_and_keeps_old_cache(monkeypatch, refresh_state):
+    async def scenario():
+        old_timestamp = time.time() - 10000
+        rates.cache['exchange_rates'] = ({'EUR': 0.9}, old_timestamp)
+        fetch = AsyncMock(side_effect=RuntimeError('source offline'))
+        monkeypatch.setattr(rates, '_fetch_rates_unlocked', fetch)
+        for _ in range(10):
+            assert await rates.refresh_rates(force=True) == {'EUR': 0.9}
+        fetch.assert_awaited_once()
+        assert rates.cache['exchange_rates'][1] == old_timestamp
+        monkeypatch.setattr(rates, '_last_refresh_finished', time.monotonic() - 31)
+        await rates.refresh_rates(force=True)
+        assert fetch.await_count == 2
+        await rates.close_rate_refresh()
+    asyncio.run(scenario())
+
+
+def test_refresh_timeout_and_shutdown_cancel_the_fetch(monkeypatch, refresh_state):
+    async def scenario():
+        cancelled = asyncio.Event()
+        async def fetch():
+            try:
+                await asyncio.Event().wait()
+            finally:
+                cancelled.set()
+        monkeypatch.setattr(rates, '_fetch_rates_unlocked', fetch)
+        monkeypatch.setattr(rates, 'RATE_REFRESH_TIMEOUT', 0.01)
+        assert await rates.refresh_rates() == {}
+        assert cancelled.is_set()
+        await rates.close_rate_refresh()
+        cancelled.clear()
+        monkeypatch.setattr(rates, 'RATE_REFRESH_TIMEOUT', 100)
+        task = rates._start_refresh()
+        await asyncio.sleep(0)
+        await rates.close_rate_refresh()
+        assert task.cancelled()
+        assert cancelled.is_set()
+    asyncio.run(scenario())
+
+
+def test_crypto_failure_does_not_fan_out_to_individual_requests(monkeypatch, refresh_state):
+    import aiohttp
+    import config.config as config
+
+    async def scenario():
+        hosts = []
+        async def fetch(factory, host, **kwargs):
+            hosts.append(host)
+            if host == 'api.coingecko.com':
+                raise aiohttp.ClientConnectionError('offline')
+            return {'rates': {currency: 1.0 for currency in rates.ACTIVE_CURRENCIES}}
+        monkeypatch.setattr(rates, '_with_retries', fetch)
+        monkeypatch.setattr(rates, 'get_http_session', lambda: object())
+        monkeypatch.setattr(config, 'COINCAP_API_KEY', '')
+        result = await rates.refresh_rates()
+        assert result['EUR'] == 1.0
+        assert hosts.count('api.coingecko.com') == 1
+        await rates.close_rate_refresh()
+    asyncio.run(scenario())
+
+
+def test_crypto_timeout_preserves_completed_fiat(monkeypatch, refresh_state):
+    async def scenario():
+        async def fetch(factory, host, **kwargs):
+            if host == 'api.coingecko.com':
+                await asyncio.Event().wait()
+            return {'rates': {currency: 1.0 for currency in rates.ACTIVE_CURRENCIES}}
+        monkeypatch.setattr(rates, '_with_retries', fetch)
+        monkeypatch.setattr(rates, 'get_http_session', lambda: object())
+        monkeypatch.setattr(rates, 'RATE_REFRESH_TIMEOUT', 0.02)
+        result = await rates.refresh_rates()
+        assert result['EUR'] == 1.0
+        await rates.close_rate_refresh()
+    asyncio.run(scenario())

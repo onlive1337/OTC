@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import math
 import random
 import urllib.parse
 from typing import Dict, Optional
@@ -46,7 +47,9 @@ def _retry_delay_from_429(err: aiohttp.ClientResponseError, attempt: int) -> flo
     header_val = (err.headers or {}).get("Retry-After") if err.headers else None
     if header_val:
         try:
-            return max(float(header_val), 0.1)
+            delay = float(header_val)
+            if math.isfinite(delay):
+                return max(delay, 0.1)
         except (TypeError, ValueError):
             pass
     return 0.5 * (2 ** attempt) + random.random() * 0.2
@@ -61,7 +64,7 @@ async def _with_retries(coro_factory, host: str, retries: int = HTTP_RETRIES):
                 return await coro_factory()
         except aiohttp.ClientResponseError as e:
             last_exc = e
-            if attempt == retries:
+            if attempt == retries or (e.status not in (408, 429) and e.status < 500):
                 break
             if e.status == 429:
                 delay = _retry_delay_from_429(e, attempt)
@@ -93,4 +96,3 @@ def safe_bg_task(coro, name: str = "background"):
 
 def _safe_bg_task(coro, name: str = "background"):
     return safe_bg_task(coro, name=name)
-

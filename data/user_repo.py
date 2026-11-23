@@ -1,20 +1,21 @@
-import logging
+import asyncio
+from collections import OrderedDict
 from datetime import datetime
+import logging
+import sqlite3
 from typing import Any, List, Optional, Protocol
 
-import asyncio
-
 import aiosqlite
-
 from aiosqlite import IntegrityError
 
 from config.config import ACTIVE_CURRENCIES, CRYPTO_CURRENCIES
+from utils.formatter import flags_for_display_format, resolve_display_format
 
 logger = logging.getLogger(__name__)
 
 
 class _UserRepoDeps(Protocol):
-    user_data: dict[int, dict[str, Any]]
+    user_data: OrderedDict[int, dict[str, Any]]
     _write_lock: asyncio.Lock
     _pending_interactions: dict[int, int]
     _pending_last_seen: dict[int, str]
@@ -24,7 +25,11 @@ class _UserRepoDeps(Protocol):
     async def _ensure_user(self, user_id: int, language_code: Optional[str] = None): ...
     async def _get_read_conn(self) -> aiosqlite.Connection: ...
     async def _get_write_conn(self) -> aiosqlite.Connection: ...
+    def _touch_user_cache(self, user_id: int) -> None: ...
+    def _set_user_cache(self, user_id: int, value: dict[str, Any]) -> None: ...
     def _cleanup_cache_if_needed(self) -> None: ...
+    async def get_user_quote_format(self, user_id: int) -> bool: ...
+    async def get_user_rich_format(self, user_id: int) -> bool: ...
 
 
 class UserRepoMixin:
@@ -37,15 +42,17 @@ class UserRepoMixin:
 
     async def _ensure_user(self: _UserRepoDeps, user_id: int, language_code: Optional[str] = None):
         if user_id in self.user_data:
+            self._touch_user_cache(user_id)
             return
 
         async with self._write_lock:
             if user_id in self.user_data:
+                self._touch_user_cache(user_id)
                 return
             conn = await self._get_write_conn()
             async with conn.execute("SELECT user_id FROM users WHERE user_id=?", (user_id,)) as cursor:
                 if await cursor.fetchone() is not None:
-                    self.user_data.setdefault(user_id, {})
+                    self._set_user_cache(user_id, {})
                     return
             default_lang = self._detect_language(language_code)
             today = datetime.now().strftime('%Y-%m-%d')
@@ -53,7 +60,7 @@ class UserRepoMixin:
             default_crypto = CRYPTO_CURRENCIES[:5]
             try:
                 await conn.execute(
-                    "INSERT INTO users(user_id, interactions, last_seen, first_seen, language, use_quote_format) VALUES(?, 0, ?, ?, ?, 1)",
+                    "INSERT INTO users(user_id, interactions, last_seen, first_seen, language, use_quote_format, use_rich_format) VALUES(?, 0, ?, ?, ?, 1, 0)",
                     (user_id, today, today, default_lang)
                 )
                 currencies_data = [(user_id, c) for c in default_currencies]
@@ -61,7 +68,7 @@ class UserRepoMixin:
                 crypto_data = [(user_id, s) for s in default_crypto]
                 await conn.executemany("INSERT OR IGNORE INTO user_crypto(user_id, symbol) VALUES(?, ?)", crypto_data)
                 await conn.commit()
-                self.user_data[user_id] = {
+                self._set_user_cache(user_id, {
                     "interactions": 0,
                     "last_seen": today,
                     "first_seen": today,
@@ -69,23 +76,24 @@ class UserRepoMixin:
                     "selected_crypto": list(default_crypto),
                     "language": default_lang,
                     "use_quote_format": True,
-                }
+                    "use_rich_format": False,
+                })
                 logger.info(f"New user {user_id} registered with language '{default_lang}'")
             except IntegrityError:
                 logger.debug("User %s already exists (race condition handled)", user_id)
-            except Exception:
+            except sqlite3.Error:
                 logger.exception("Error registering user %s", user_id)
 
     async def get_user_data(self: _UserRepoDeps, user_id: int) -> dict:
-        self._cleanup_cache_if_needed()
         cached = self.user_data.get(user_id)
         if cached and 'selected_currencies' in cached and 'language' in cached:
+            self._touch_user_cache(user_id)
             return cached
         await self._ensure_user(user_id)
         conn = await self._get_read_conn()
         async with conn.execute("""
             SELECT 
-                u.interactions, u.last_seen, u.first_seen, u.language, u.use_quote_format,
+                u.interactions, u.last_seen, u.first_seen, u.language, u.use_quote_format, u.use_rich_format,
                 (SELECT GROUP_CONCAT(currency) FROM user_currencies WHERE user_id = u.user_id) as currencies,
                 (SELECT GROUP_CONCAT(symbol) FROM user_crypto WHERE user_id = u.user_id) as crypto
             FROM users u WHERE u.user_id = ?
@@ -93,7 +101,7 @@ class UserRepoMixin:
             row = await cursor.fetchone()
         if not row:
             return {}
-        interactions, last_seen, first_seen, language, use_quote, currencies_str, crypto_str = row
+        interactions, last_seen, first_seen, language, use_quote, use_rich, currencies_str, crypto_str = row
         currencies = currencies_str.split(',') if currencies_str else []
         crypto = crypto_str.split(',') if crypto_str else []
         data = {
@@ -104,15 +112,17 @@ class UserRepoMixin:
             "language": language or 'ru',
             "first_seen": first_seen,
             "use_quote_format": bool(use_quote),
+            "use_rich_format": bool(use_rich),
         }
-        self.user_data[user_id] = data
+        self._set_user_cache(user_id, data)
         return data
 
     async def update_user_data(self: _UserRepoDeps, user_id: int, language_code: Optional[str] = None):
         await self._ensure_user(user_id, language_code=language_code)
         today = datetime.now().strftime('%Y-%m-%d')
-        self._cleanup_cache_if_needed()
         user_cache = self.user_data.get(user_id)
+        if user_cache is not None:
+            self._touch_user_cache(user_id)
         is_today = user_cache and user_cache.get("last_seen") == today
         self._pending_interactions[user_id] = self._pending_interactions.get(user_id, 0) + 1
         if not is_today:
@@ -121,16 +131,22 @@ class UserRepoMixin:
             user_cache["interactions"] = user_cache.get("interactions", 0) + 1
             if not is_today:
                 user_cache["last_seen"] = today
+        self._cleanup_cache_if_needed()
 
     async def get_user_currencies(self: _UserRepoDeps, user_id: int) -> list:
         cached = self.user_data.get(user_id)
         if cached and "selected_currencies" in cached:
+            self._touch_user_cache(user_id)
             return cached["selected_currencies"]
         await self._ensure_user(user_id)
         conn = await self._get_read_conn()
         async with conn.execute("SELECT currency FROM user_currencies WHERE user_id=?", (user_id,)) as cursor:
             rows = await cursor.fetchall()
-        return [r[0] for r in rows]
+        currencies = [r[0] for r in rows]
+        if user_id in self.user_data and isinstance(self.user_data[user_id], dict):
+            self.user_data[user_id]["selected_currencies"] = currencies
+            self._touch_user_cache(user_id)
+        return currencies
 
     async def set_user_currencies(self: _UserRepoDeps, user_id: int, currencies: List[str]):
         await self._ensure_user(user_id)
@@ -141,16 +157,22 @@ class UserRepoMixin:
             await conn.commit()
         if user_id in self.user_data:
             self.user_data[user_id]["selected_currencies"] = currencies
+            self._touch_user_cache(user_id)
 
     async def get_user_crypto(self: _UserRepoDeps, user_id: int) -> List[str]:
         cached = self.user_data.get(user_id)
         if cached and "selected_crypto" in cached:
+            self._touch_user_cache(user_id)
             return cached["selected_crypto"]
         await self._ensure_user(user_id)
         conn = await self._get_read_conn()
         async with conn.execute("SELECT symbol FROM user_crypto WHERE user_id=?", (user_id,)) as cursor:
             rows = await cursor.fetchall()
-        return [r[0] for r in rows]
+        crypto = [r[0] for r in rows]
+        if user_id in self.user_data and isinstance(self.user_data[user_id], dict):
+            self.user_data[user_id]["selected_crypto"] = crypto
+            self._touch_user_cache(user_id)
+        return crypto
 
     async def set_user_crypto(self: _UserRepoDeps, user_id: int, crypto_list: List[str]):
         await self._ensure_user(user_id)
@@ -161,16 +183,22 @@ class UserRepoMixin:
             await conn.commit()
         if user_id in self.user_data:
             self.user_data[user_id]["selected_crypto"] = crypto_list
+            self._touch_user_cache(user_id)
 
     async def get_user_language(self: _UserRepoDeps, user_id: int) -> str:
         cached = self.user_data.get(user_id)
         if cached and "language" in cached:
+            self._touch_user_cache(user_id)
             return cached["language"]
         await self._ensure_user(user_id)
         conn = await self._get_read_conn()
         async with conn.execute("SELECT language FROM users WHERE user_id=?", (user_id,)) as cursor:
             row = await cursor.fetchone()
-        return row[0] if row and row[0] else 'ru'
+        lang = row[0] if row and row[0] else 'ru'
+        if user_id in self.user_data and isinstance(self.user_data[user_id], dict):
+            self.user_data[user_id]["language"] = lang
+            self._touch_user_cache(user_id)
+        return lang
 
     async def set_user_language(self: _UserRepoDeps, user_id: int, language: str):
         await self._ensure_user(user_id)
@@ -180,25 +208,99 @@ class UserRepoMixin:
             await conn.commit()
         if user_id in self.user_data:
             self.user_data[user_id]["language"] = language
+            self._touch_user_cache(user_id)
 
     async def get_user_quote_format(self: _UserRepoDeps, user_id: int) -> bool:
         cached = self.user_data.get(user_id)
         if cached and "use_quote_format" in cached:
+            self._touch_user_cache(user_id)
             return cached["use_quote_format"]
         await self._ensure_user(user_id)
         conn = await self._get_read_conn()
         async with conn.execute("SELECT use_quote_format FROM users WHERE user_id=?", (user_id,)) as cursor:
             row = await cursor.fetchone()
-        return bool(row[0]) if row else True
+        result = bool(row[0]) if row else True
+        if user_id in self.user_data and isinstance(self.user_data[user_id], dict):
+            self.user_data[user_id]["use_quote_format"] = result
+            self._touch_user_cache(user_id)
+        return result
 
     async def set_user_quote_format(self: _UserRepoDeps, user_id: int, use_quote: bool):
         await self._ensure_user(user_id)
         async with self._write_lock:
             conn = await self._get_write_conn()
-            await conn.execute("UPDATE users SET use_quote_format=? WHERE user_id=?", (1 if use_quote else 0, user_id))
+            if use_quote:
+                await conn.execute(
+                    "UPDATE users SET use_quote_format=1, use_rich_format=0 WHERE user_id=?",
+                    (user_id,),
+                )
+            else:
+                await conn.execute(
+                    "UPDATE users SET use_quote_format=0 WHERE user_id=?",
+                    (user_id,),
+                )
             await conn.commit()
         if user_id in self.user_data:
             self.user_data[user_id]["use_quote_format"] = use_quote
+            if use_quote:
+                self.user_data[user_id]["use_rich_format"] = False
+            self._touch_user_cache(user_id)
+
+    async def get_user_rich_format(self: _UserRepoDeps, user_id: int) -> bool:
+        cached = self.user_data.get(user_id)
+        if cached and "use_rich_format" in cached:
+            self._touch_user_cache(user_id)
+            return cached["use_rich_format"]
+        await self._ensure_user(user_id)
+        conn = await self._get_read_conn()
+        async with conn.execute("SELECT use_rich_format FROM users WHERE user_id=?", (user_id,)) as cursor:
+            row = await cursor.fetchone()
+        result = bool(row[0]) if row else False
+        if user_id in self.user_data and isinstance(self.user_data[user_id], dict):
+            self.user_data[user_id]["use_rich_format"] = result
+            self._touch_user_cache(user_id)
+        return result
+
+    async def set_user_rich_format(self: _UserRepoDeps, user_id: int, use_rich: bool):
+        await self._ensure_user(user_id)
+        async with self._write_lock:
+            conn = await self._get_write_conn()
+            if use_rich:
+                await conn.execute(
+                    "UPDATE users SET use_rich_format=1, use_quote_format=0 WHERE user_id=?",
+                    (user_id,),
+                )
+            else:
+                await conn.execute(
+                    "UPDATE users SET use_rich_format=0 WHERE user_id=?",
+                    (user_id,),
+                )
+            await conn.commit()
+        if user_id in self.user_data:
+            self.user_data[user_id]["use_rich_format"] = use_rich
+            if use_rich:
+                self.user_data[user_id]["use_quote_format"] = False
+            self._touch_user_cache(user_id)
+
+    async def get_user_display_format(self: _UserRepoDeps, user_id: int) -> str:
+        use_quote = await self.get_user_quote_format(user_id)
+        use_rich = await self.get_user_rich_format(user_id)
+        return resolve_display_format(use_quote, use_rich)
+
+    async def set_user_display_format(self: _UserRepoDeps, user_id: int, display_format: str) -> None:
+        use_quote, use_rich = flags_for_display_format(display_format)
+        await self._ensure_user(user_id)
+        async with self._write_lock:
+            conn = await self._get_write_conn()
+            await conn.execute(
+                "UPDATE users SET use_quote_format=?, use_rich_format=? WHERE user_id=?",
+                (1 if use_quote else 0, 1 if use_rich else 0, user_id),
+            )
+            await conn.commit()
+        if user_id in self.user_data:
+            self.user_data[user_id]["use_quote_format"] = use_quote
+            self.user_data[user_id]["use_rich_format"] = use_rich
+            self._touch_user_cache(user_id)
 
     async def get_statistics(self: _UserRepoDeps) -> dict:
         today = datetime.now().strftime('%Y-%m-%d')

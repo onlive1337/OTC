@@ -7,6 +7,7 @@ from typing import Any, Awaitable, Callable, Dict
 
 from aiogram import BaseMiddleware
 from aiogram.client.session.middlewares.base import BaseRequestMiddleware
+from aiogram.enums import ChatType
 from aiogram.types import TelegramObject, Message, User
 from aiogram.exceptions import TelegramRetryAfter, TelegramAPIError
 
@@ -133,7 +134,7 @@ class ErrorBoundaryMiddleware(BaseMiddleware):
                 if isinstance(event, Message) and event.chat:
                     from loader import user_data
                     from config.languages import LANGUAGES
-                    if event.chat.type in ('group', 'supergroup'):
+                    if event.chat.type in (ChatType.GROUP, ChatType.SUPERGROUP):
                         user_lang = await user_data.get_chat_language(event.chat.id)
                     else:
                         user = data.get("event_from_user")

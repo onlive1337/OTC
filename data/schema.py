@@ -13,7 +13,8 @@ INIT_SQL = [
         last_seen TEXT,
         first_seen TEXT,
         language TEXT NOT NULL DEFAULT 'ru',
-        use_quote_format INTEGER NOT NULL DEFAULT 1
+        use_quote_format INTEGER NOT NULL DEFAULT 1,
+        use_rich_format INTEGER NOT NULL DEFAULT 0
     );
     """,
     """
@@ -34,7 +35,8 @@ INIT_SQL = [
     CREATE TABLE IF NOT EXISTS chats (
         chat_id INTEGER PRIMARY KEY,
         quote_format INTEGER NOT NULL DEFAULT 0,
-        language TEXT NOT NULL DEFAULT 'ru'
+        language TEXT NOT NULL DEFAULT 'ru',
+        rich_format INTEGER NOT NULL DEFAULT 0
     );
     """,
     """
@@ -62,4 +64,6 @@ INIT_SQL = [
 
 MIGRATIONS = [
     (1, "ALTER TABLE chats ADD COLUMN language TEXT NOT NULL DEFAULT 'ru'"),
+    (2, "ALTER TABLE users ADD COLUMN use_rich_format INTEGER NOT NULL DEFAULT 0"),
+    (3, "ALTER TABLE chats ADD COLUMN rich_format INTEGER NOT NULL DEFAULT 0"),
 ]

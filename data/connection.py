@@ -1,4 +1,5 @@
 import asyncio
+from collections import OrderedDict
 import logging
 import os
 import sqlite3
@@ -24,8 +25,8 @@ class DatabaseMixin:
     FLUSH_INTERVAL = 30
 
     def __init__(self):
-        self.user_data: Dict[int, Any] = {}
-        self.chat_data: Dict[int, Any] = {}
+        self.user_data: OrderedDict[int, Dict[str, Any]] = OrderedDict()
+        self.chat_data: OrderedDict[int, Dict[str, Any]] = OrderedDict()
         self.bot_launch_date = datetime.now().strftime('%Y-%m-%d')
         self._read_conn: Optional[aiosqlite.Connection] = None
         self._write_conn: Optional[aiosqlite.Connection] = None
@@ -35,21 +36,43 @@ class DatabaseMixin:
         self._flush_task: Optional[asyncio.Task] = None
         self._backup_task: Optional[asyncio.Task] = None
 
-    def _cleanup_cache_if_needed(self):
-        if len(self.user_data) > self.MAX_CACHE_SIZE:
-            sorted_users = sorted(
-                self.user_data.items(),
-                key=lambda x: x[1].get('last_seen', '1970-01-01') if isinstance(x[1], dict) else '1970-01-01'
-            )
-            for key, _ in sorted_users[:len(sorted_users) // 2]:
-                del self.user_data[key]
-            logger.info(f"User cache cleanup: reduced from {len(sorted_users)} to {len(self.user_data)}")
+    def _touch_user_cache(self, user_id: int) -> None:
+        if user_id in self.user_data:
+            self.user_data.move_to_end(user_id)
 
-        if len(self.chat_data) > self.MAX_CHAT_CACHE_SIZE:
-            items = list(self.chat_data.items())
-            for key, _ in items[:len(items) // 2]:
-                del self.chat_data[key]
-            logger.info(f"Chat cache cleanup: reduced from {len(items)} to {len(self.chat_data)}")
+    def _evict_user_cache(self) -> None:
+        evicted = 0
+        while len(self.user_data) > self.MAX_CACHE_SIZE:
+            self.user_data.popitem(last=False)
+            evicted += 1
+        if evicted:
+            logger.info("User cache LRU eviction: removed %d entries, size=%d", evicted, len(self.user_data))
+
+    def _set_user_cache(self, user_id: int, value: Dict[str, Any]) -> None:
+        self.user_data[user_id] = value
+        self.user_data.move_to_end(user_id)
+        self._evict_user_cache()
+
+    def _touch_chat_cache(self, chat_id: int) -> None:
+        if chat_id in self.chat_data:
+            self.chat_data.move_to_end(chat_id)
+
+    def _evict_chat_cache(self) -> None:
+        evicted = 0
+        while len(self.chat_data) > self.MAX_CHAT_CACHE_SIZE:
+            self.chat_data.popitem(last=False)
+            evicted += 1
+        if evicted:
+            logger.info("Chat cache LRU eviction: removed %d entries, size=%d", evicted, len(self.chat_data))
+
+    def _set_chat_cache(self, chat_id: int, value: Dict[str, Any]) -> None:
+        self.chat_data[chat_id] = value
+        self.chat_data.move_to_end(chat_id)
+        self._evict_chat_cache()
+
+    def _cleanup_cache_if_needed(self) -> None:
+        self._evict_user_cache()
+        self._evict_chat_cache()
 
     @staticmethod
     async def _open_connection(readonly: bool = False) -> aiosqlite.Connection:

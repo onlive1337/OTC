@@ -1,7 +1,7 @@
 # OTC bot
 
 [![Python](https://img.shields.io/badge/Python-3.14-blue)](https://www.python.org/downloads/)
-[![aiogram](https://img.shields.io/badge/aiogram-3.31.0-green)](https://docs.aiogram.dev/)
+[![aiogram](https://img.shields.io/badge/aiogram-3.34.0-green)](https://docs.aiogram.dev/)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](https://opensource.org/licenses/MIT)
 
 [English](#english) | [Русский](#русский)
@@ -18,15 +18,17 @@ This Currency Converter Bot is a powerful Telegram bot that allows users to conv
 
 - Real-time currency and cryptocurrency conversion
 - Support for multiple fiat currencies and cryptocurrencies
+- Interactive HTML Widget currency calculator (`ENABLE_WIDGET_CALC=true` enables `/calc` in private chats; disabled by default while restricted on Telegram production)
+- Unified 3-way output format (plain text, expandable quotes, or Rich Messages tables) synchronized across DMs, groups, and inline mode
 - Inline mode for quick conversions in any chat
-- Customizable user settings (preferred currencies, language, quote format)
-- Group chat support with separate settings for each group
+- Customizable user settings (preferred currencies, language, quote & table format)
+- Group chat support with separate settings and ephemeral command/error replies
 - Caching system for efficient API usage
 
 ### Requirements
 
 - Python 3.14
-- aiogram 3.31.0
+- aiogram 3.34.0
 - aiohttp
 - Other dependencies (see `requirements.txt`)
 
@@ -60,7 +62,9 @@ python main.py
 ### Commands
 
 - `/start` - Initialize the bot and see the main menu
+- `/calc` - Open the interactive currency calculator widget (DM)
 - `/settings` - Adjust your preferences
+- `/help` - Show usage examples
 - `/stats` - View bot statistics (admin only)
 
 ### Development and upgrades
@@ -88,15 +92,17 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 - Конвертация валют и криптовалют в реальном времени
 - Поддержка множества фиатных валют и криптовалют
+- Интерактивный HTML-виджет калькулятор валют (`ENABLE_WIDGET_CALC=true` включает `/calc` в ЛС; по умолчанию выключен из-за ограничений на продакшне Telegram)
+- Единый выбор формата вывода (обычный текст, цитаты или таблицы Rich Messages), синхронизированный для ЛС, групп и инлайн-режима
 - Инлайн-режим для быстрой конвертации в любом чате
-- Настраиваемые пользовательские настройки (предпочтительные валюты, язык, формат цитирования)
-- Поддержка групповых чатов с отдельными настройками для каждой группы
+- Настраиваемые пользовательские настройки (предпочтительные валюты, язык, формат цитирования и таблиц)
+- Поддержка групповых чатов с отдельными настройками и эфемерными ответами на команды/ошибки
 - Система кэширования для эффективного использования API
 
 ### Требования
 
 - Python 3.14
-- aiogram 3.31.0
+- aiogram 3.34.0
 - aiohttp
 - Другие зависимости (см. `requirements.txt`)
 
@@ -130,7 +136,9 @@ python main.py
 ### Команды
 
 - `/start` - Инициализировать бота и увидеть главное меню
+- `/calc` - Открыть интерактивный виджет-калькулятор валют (в ЛС)
 - `/settings` - Настроить ваши предпочтения
+- `/help` - Показать примеры использования
 - `/stats` - Просмотреть статистику бота (только для админов)
 
 ### Разработка и обновление

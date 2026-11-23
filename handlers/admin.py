@@ -2,6 +2,7 @@ import asyncio
 import logging
 
 from aiogram import Router, F
+from aiogram.enums import ContentType
 from aiogram.types import Message, CallbackQuery
 from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
@@ -12,6 +13,7 @@ from config.config import ADMIN_IDS
 from config.languages import LANGUAGES
 from loader import bot, user_data
 from states.states import AdminStates
+from utils.bot_setup import check_bot_diagnostics
 from utils.middleware import get_metrics
 from utils.button_styles import success_button, danger_button
 
@@ -58,6 +60,13 @@ async def cmd_health(message: Message):
 
     db_ok = "✅" if await user_data.ping_db() else "❌"
 
+    diag = None
+    if message.bot is not None:
+        try:
+            diag = await check_bot_diagnostics(message.bot)
+        except TelegramAPIError:
+            diag = None
+
     text = (
         f"🏥 <b>Bot Health</b>\n\n"
         f"⏱ Uptime: {metrics['uptime']}\n"
@@ -67,6 +76,14 @@ async def cmd_health(message: Message):
         f"👥 Active today: {stats['active_today']}\n"
         f"👤 Total users: {stats['total_users']}"
     )
+    if diag:
+        text += (
+            f"\n\n🤖 <b>Bot API (@{diag['username'] or '?'})</b>\n"
+            f"👥 Groups: {'✅' if diag['can_join_groups'] else '❌'} | "
+            f"Privacy OFF: {'✅' if diag['can_read_all_group_messages'] else '⚠️'}\n"
+            f"🔎 Inline: {'✅' if diag['supports_inline_queries'] else '❌'} | "
+            f"Guest: {'✅' if diag['supports_guest_queries'] else '❌'}"
+        )
     await message.answer(text)
 
 
@@ -161,7 +178,13 @@ async def _execute_broadcast(msg_data: dict, lang: dict, progress_msg: Message) 
             retries = 0
             while True:
                 try:
-                    if msg_data["type"] == "text":
+                    if "from_chat_id" in msg_data and "message_id" in msg_data:
+                        await bot.copy_message(
+                            chat_id=uid,
+                            from_chat_id=msg_data["from_chat_id"],
+                            message_id=msg_data["message_id"],
+                        )
+                    elif msg_data["type"] == "text":
                         await bot.send_message(uid, msg_data["text"])
                     elif msg_data["type"] == "photo":
                         await bot.send_photo(uid, msg_data["file_id"], caption=msg_data.get("caption"))
@@ -242,19 +265,39 @@ async def process_broadcast_message(message: Message, state: FSMContext):
     user_lang = await user_data.get_user_language(from_user.id)
     lang = LANGUAGES[user_lang]
 
-    if message.photo:
-        msg_data = {"type": "photo", "file_id": message.photo[-1].file_id, "caption": message.caption or ""}
-    elif message.video:
-        msg_data = {"type": "video", "file_id": message.video.file_id, "caption": message.caption or ""}
-    elif message.document:
-        msg_data = {"type": "document", "file_id": message.document.file_id, "caption": message.caption or ""}
-    elif message.sticker:
-        msg_data = {"type": "sticker", "file_id": message.sticker.file_id}
-    elif message.text:
-        msg_data = {"type": "text", "text": message.text}
-    else:
+    if message.content_type == ContentType.WIDGET or message.widget is not None:
         await message.answer(lang.get('broadcast_unsupported_type', '⚠️ This message type is not supported.'))
         return
+
+    has_copyable_content = any(
+        (
+            message.text,
+            message.caption,
+            message.photo,
+            message.video,
+            message.animation,
+            message.audio,
+            message.document,
+            message.sticker,
+            message.voice,
+            message.video_note,
+            message.poll,
+            message.location,
+            message.venue,
+            message.contact,
+            message.dice,
+            message.rich_message,
+        )
+    )
+    if not has_copyable_content:
+        await message.answer(lang.get('broadcast_unsupported_type', '⚠️ This message type is not supported.'))
+        return
+
+    msg_data = {
+        "from_chat_id": message.chat.id,
+        "message_id": message.message_id,
+        "type": str(message.content_type),
+    }
 
     await state.update_data(broadcast_msg=msg_data)
 

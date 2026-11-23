@@ -4,6 +4,28 @@ All notable changes to this project will be documented in this file.
 
 ## Changelog
 
+## [1.9.0] - 2026-11-23
+
+### Added
+- **Interactive Calculator Widget (Feature-Flagged)**: Implemented `/calc` and `?start=calc` interactive Telegram HTML Widget (`sendWidget`) with keypad, currency selector, tap-to-copy, local state, and live rate refresh (`widget_query`). Disabled by default via `ENABLE_WIDGET_CALC=false` while Telegram blocks `sendWidget` in production (`INPUT_MEDIA_WIDGET_NOT_ALLOWED`).
+- **Unified Output Format & Rich Messages**: Replaced overlapping quote/table toggles with a single mutually exclusive 3-way output format selector (`plain` / `quote` / `table`) in `/settings` (SQLite schema migrations v2 and v3), synchronized across DM, groups (`sendRichMessage`), and inline mode (`InputRichMessageContent` with HTML fallback).
+- **Ephemeral Group Responses**: Enabled ephemeral replies (`EphemeralMessageParameters`) in groups for `/settings`, `/help`, `/calc` redirects, and amount errors with automatic fallback to regular replies, plus ephemeral `is_ephemeral` group command menus.
+- **Bot API 10.5 Diagnostics & Settings Sync**: Added startup sync via `setMySettings` and `setMyCommands`, configurable via `SYNC_BOT_SETTINGS`, `INLINE_QUERY_PLACEHOLDER`, and `CALLBACK_QUERY_MODE`, plus `BotFullInfo` checks in logs and `/health`.
+- **Pagination Indicator & Inline Settings Button**: Added non-interactive `1 / 8` page indicators (`DisabledButton`) in currency pagination and `InlineQueryResultsButton` linking to `/start settings` when query or currency preferences are empty.
+- **Integration Testing**: Added real-dispatcher integration tests with `aiogram.test` (`tests/test_integration.py`) and widget/rich builder tests (`tests/test_widget.py`).
+
+### Changed
+- **Upgraded `/broadcast`**: Switched broadcast delivery to `copy_message` to preserve all media types, formatting entities, and spoilers (excluding widgets).
+- **Session & Enums**: Switched `AiohttpSession` to direct `pydantic_core` JSON parsing (`json_loads=None`) and migrated Telegram string literals and `ButtonStyle` to `aiogram.enums` (`StrEnum`).
+- **Graceful Polling Shutdown**: Added `POLLING_SHUTDOWN_TIMEOUT` (default 8s) passed to `tasks_shutdown_timeout` in `start_polling` and explicit Telegram log handler flush/cleanup on shutdown.
+- **Architecture & Code Quality**: Extracted inline queries into `handlers/inline.py`, consolidated shared currency/formatting helpers into `utils/parser.py` and `utils/formatter.py`, migrated settings callbacks to typed `CallbackData` (`utils/callbacks.py`) with shared keyboard builders, switched in-memory user/chat caches to O(1) `OrderedDict` LRU eviction, narrowed exception handlers, removed dead code, and simplified `Dockerfile` to `--only-binary=:all:` wheel installs.
+
+### Fixed
+- **HTML Changelog & Widget Timeout**: Escaped HTML characters and capped changelog length in `read_changelog()`, bounded widget refresh calls to 10s with cached fallback before Telegram's 15s `answerWidgetQuery` limit, and answered the `change_language` callback query.
+
+### Maintenance
+- Updated dependencies to `aiogram 3.34.0` (Bot API 10.5; security fixes GHSA-52j5-qrwv-2vf2, GHSA-fvpw-9jw8-rj3h, GHSA-hv98-r5fx-wc83), `aiohttp 3.14.5`, `uvloop 0.23.0`, `ujson 6.1.0`, `python-dotenv 1.2.4`, `pydantic 2.14.4`, `pytest 9.2.0`, and refreshed `constraints.txt`.
+
 ## [1.8.5] - 2026-09-30
 
 ### Fixes

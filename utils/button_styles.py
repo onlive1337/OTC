@@ -1,11 +1,5 @@
-from enum import Enum
-from aiogram.types import InlineKeyboardButton
-
-
-class ButtonStyle(str, Enum):
-    PRIMARY = "primary"
-    SUCCESS = "success"
-    DANGER = "danger"
+from aiogram.enums import ButtonStyle
+from aiogram.types import DisabledButton, InlineKeyboardButton
 
 
 EMOJI = {
@@ -29,14 +23,14 @@ EMOJI = {
 
 def styled_button(
     text: str,
-    callback_data: str = None,
-    style: ButtonStyle = None,
-    url: str = None,
-    emoji: str = None
+    callback_data: str | None = None,
+    style: ButtonStyle | None = None,
+    url: str | None = None,
+    emoji: str | None = None,
 ) -> InlineKeyboardButton:
-    kwargs = {"text": text}
+    kwargs: dict = {"text": text}
 
-    if style:
+    if style is not None:
         kwargs["style"] = style.value
     if emoji:
         kwargs["icon_custom_emoji_id"] = emoji
@@ -48,13 +42,33 @@ def styled_button(
     return InlineKeyboardButton(**kwargs)
 
 
-def primary_button(text: str, callback_data: str = None, url: str = None, emoji: str = None) -> InlineKeyboardButton:
+def primary_button(
+    text: str,
+    callback_data: str | None = None,
+    url: str | None = None,
+    emoji: str | None = None,
+) -> InlineKeyboardButton:
     return styled_button(text, callback_data, ButtonStyle.PRIMARY, url, emoji)
 
 
-def success_button(text: str, callback_data: str = None, url: str = None, emoji: str = None) -> InlineKeyboardButton:
+def success_button(
+    text: str,
+    callback_data: str | None = None,
+    url: str | None = None,
+    emoji: str | None = None,
+) -> InlineKeyboardButton:
     return styled_button(text, callback_data, ButtonStyle.SUCCESS, url, emoji)
 
 
-def danger_button(text: str, callback_data: str = None, url: str = None, emoji: str = None) -> InlineKeyboardButton:
+def danger_button(
+    text: str,
+    callback_data: str | None = None,
+    url: str | None = None,
+    emoji: str | None = None,
+) -> InlineKeyboardButton:
     return styled_button(text, callback_data, ButtonStyle.DANGER, url, emoji)
+
+
+def disabled_button(text: str) -> InlineKeyboardButton:
+    """Build a non-interactive inline button (e.g., pagination indicator)."""
+    return InlineKeyboardButton(text=text, disabled=DisabledButton())

@@ -4,12 +4,18 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import pytest
 from utils.parser import (
+    contains_known_currency,
+    detect_amount_bounds_from_text,
+    extract_unknown_currency,
+    find_similar_currencies,
+    find_target_currency,
+    is_math_expression,
     parse_amount_and_currency,
     smart_number_parse,
     parse_mathematical_expression,
 )
 from utils.rates import convert_currency
-from utils.formatter import format_large_number
+from utils.formatter import format_large_number, read_changelog
 
 
 class TestSmartNumberParse:
@@ -294,4 +300,40 @@ class TestFormatLargeNumber:
     def test_billion(self):
         result = format_large_number(1500000000, is_crypto=True)
         assert "B" in result
+
+
+class TestChangelogAndSharedParser:
+    def test_read_changelog_escapes_html_and_caps_length(self, tmp_path):
+        md = tmp_path / "CHANGELOG.md"
+        md.write_text(
+            "# Changelog\n\n## [2.0.0]\n- Supports >1e100 & <script>alert(1)</script>\n\n"
+            "## [1.0.0]\n- Old\n\n## [0.9.0]\n- Older",
+            encoding="utf-8",
+        )
+        rendered = read_changelog(md)
+        assert "<script>" not in rendered
+        assert "&lt;script&gt;" in rendered
+        assert "&gt;1e100" in rendered
+        assert "&amp;" in rendered
+
+        huge = tmp_path / "HUGE.md"
+        huge.write_text("# Changelog\n\n## [1.0.0]\n" + ("<item> & " * 1200), encoding="utf-8")
+        capped = read_changelog(huge)
+        assert len(capped) <= 4000
+        assert "<item>" not in capped
+        assert capped.endswith("...")
+
+    def test_shared_parser_helpers(self):
+        assert find_target_currency("100 USD EUR", "USD") == "EUR"
+        assert find_target_currency("100 USD", "USD") is None
+        assert extract_unknown_currency("300 bny") == "bny"
+        assert extract_unknown_currency("abc") is None
+        assert "BYN" in find_similar_currencies("bny")
+        assert contains_known_currency("1000000000000 USD") is True
+        assert contains_known_currency("index.php?USD=1") is False
+        assert is_math_expression("50+50") is True
+        assert is_math_expression("100 USD") is False
+        assert is_math_expression("12345") is False
+        assert detect_amount_bounds_from_text("1e200 USD") == "too_large"
+        assert detect_amount_bounds_from_text("1e-30 USD") == "too_small"
 

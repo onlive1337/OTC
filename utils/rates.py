@@ -118,6 +118,11 @@ def _previous_rates() -> Dict[str, float]:
     return (_as_rates_dict(item[0]) or {}) if item else {}
 
 
+def get_cached_rates_fallback() -> Dict[str, float]:
+    """Return any cached exchange rates (fresh or stale) without triggering I/O."""
+    return _previous_rates()
+
+
 def _start_refresh() -> Optional[asyncio.Task]:
     global _refresh_task
     # Assign before yielding: all concurrent callers share this exact task.

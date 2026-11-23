@@ -75,6 +75,57 @@ class TestUserRepo:
                 assert await db.get_user_quote_format(7) is False
                 await db.set_user_quote_format(7, True)
                 assert await db.get_user_quote_format(7) is True
+                await db.set_user_rich_format(7, True)
+                assert await db.get_user_rich_format(7) is True
+                assert await db.get_user_quote_format(7) is False
+                await db.set_user_rich_format(7, False)
+                assert await db.get_user_rich_format(7) is False
+            finally:
+                await db.close()
+
+        _run(scenario())
+
+    def test_display_format_mutual_exclusivity_and_legacy_normalization(self, db_path):
+        async def scenario():
+            db = UserData()
+            await db.init_db()
+            try:
+                assert await db.get_user_display_format(7) == "quote"
+                await db.set_user_display_format(7, "plain")
+                assert await db.get_user_display_format(7) == "plain"
+                assert await db.get_user_quote_format(7) is False
+                assert await db.get_user_rich_format(7) is False
+
+                await db.set_user_display_format(7, "table")
+                assert await db.get_user_display_format(7) == "table"
+                assert await db.get_user_quote_format(7) is False
+                assert await db.get_user_rich_format(7) is True
+
+                await db.set_user_quote_format(7, True)
+                assert await db.get_user_display_format(7) == "quote"
+                assert await db.get_user_rich_format(7) is False
+
+                assert await db.get_chat_display_format(-100) == "plain"
+                await db.set_chat_display_format(-100, "quote")
+                assert await db.get_chat_display_format(-100) == "quote"
+                assert await db.get_chat_rich_format(-100) is False
+                await db.set_chat_display_format(-100, "table")
+                assert await db.get_chat_display_format(-100) == "table"
+                assert await db.get_chat_quote_format(-100) is False
+
+                # Simulate legacy DB row where both flags were 1
+                conn = await db._get_write_conn()
+                await conn.execute(
+                    "UPDATE users SET use_quote_format=1, use_rich_format=1 WHERE user_id=7"
+                )
+                await conn.execute(
+                    "UPDATE chats SET quote_format=1, rich_format=1 WHERE chat_id=-100"
+                )
+                await conn.commit()
+                db.user_data.pop(7, None)
+                db.chat_data.pop(-100, None)
+                assert await db.get_user_display_format(7) == "table"
+                assert await db.get_chat_display_format(-100) == "table"
             finally:
                 await db.close()
 
@@ -145,6 +196,54 @@ class TestChatRepo:
                 assert sorted(await db.get_chat_currencies(-100)) == ["JPY", "USD"]
                 await db.set_chat_language(-100, "ru")
                 assert await db.get_chat_language(-100) == "ru"
+                assert await db.get_chat_rich_format(-100) is False
+                await db.set_chat_rich_format(-100, True)
+                assert await db.get_chat_rich_format(-100) is True
+            finally:
+                await db.close()
+
+        _run(scenario())
+
+    def test_migrations_v2_v3_upgrade_legacy_schema(self, db_path):
+        legacy = sqlite3.connect(db_path)
+        try:
+            legacy.executescript(
+                """
+                CREATE TABLE users (
+                    user_id INTEGER PRIMARY KEY,
+                    interactions INTEGER NOT NULL DEFAULT 0,
+                    last_seen TEXT,
+                    first_seen TEXT,
+                    language TEXT NOT NULL DEFAULT 'ru',
+                    use_quote_format INTEGER NOT NULL DEFAULT 1
+                );
+                CREATE TABLE chats (
+                    chat_id INTEGER PRIMARY KEY,
+                    quote_format INTEGER NOT NULL DEFAULT 0,
+                    language TEXT NOT NULL DEFAULT 'ru'
+                );
+                CREATE TABLE schema_version (version INTEGER NOT NULL);
+                INSERT INTO schema_version(version) VALUES (1);
+                INSERT INTO users(user_id, language, use_quote_format) VALUES (5, 'en', 1);
+                INSERT INTO chats(chat_id, quote_format, language) VALUES (-55, 0, 'ru');
+                """
+            )
+            legacy.commit()
+        finally:
+            legacy.close()
+
+        async def scenario():
+            db = UserData()
+            await db.init_db()
+            try:
+                u = await db.get_user_data(5)
+                c = await db.get_chat_data(-55)
+                assert u["use_rich_format"] is False
+                assert c["rich_format"] is False
+                await db.set_user_rich_format(5, True)
+                await db.set_chat_rich_format(-55, True)
+                assert await db.get_user_rich_format(5) is True
+                assert await db.get_chat_rich_format(-55) is True
             finally:
                 await db.close()
 
@@ -259,5 +358,50 @@ class TestPersistenceAcrossRestart:
                 assert await db2.get_user_language(777) == "en"
             finally:
                 await db2.close()
+
+        _run(scenario())
+
+
+class TestCacheLRU:
+    def test_user_cache_lru_eviction(self, db_path):
+        async def scenario():
+            db = UserData()
+            await db.init_db()
+            db.MAX_CACHE_SIZE = 2
+            try:
+                await db.get_user_data(1)
+                await db.get_user_data(2)
+                assert list(db.user_data.keys()) == [1, 2]
+
+                # Reading user 1 moves it to MRU so user 2 gets evicted next.
+                assert await db.get_user_language(1) == "ru"
+                assert list(db.user_data.keys()) == [2, 1]
+
+                await db.get_user_data(3)
+                assert list(db.user_data.keys()) == [1, 3]
+                assert 2 not in db.user_data
+            finally:
+                await db.close()
+
+        _run(scenario())
+
+    def test_chat_cache_lru_eviction(self, db_path):
+        async def scenario():
+            db = UserData()
+            await db.init_db()
+            db.MAX_CHAT_CACHE_SIZE = 2
+            try:
+                await db.get_chat_data(-10)
+                await db.get_chat_data(-20)
+                assert list(db.chat_data.keys()) == [-10, -20]
+
+                assert await db.get_chat_language(-10) == "en"
+                assert list(db.chat_data.keys()) == [-20, -10]
+
+                await db.get_chat_data(-30)
+                assert list(db.chat_data.keys()) == [-10, -30]
+                assert -20 not in db.chat_data
+            finally:
+                await db.close()
 
         _run(scenario())

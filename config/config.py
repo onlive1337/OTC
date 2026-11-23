@@ -24,7 +24,7 @@ DB_PATH = os.getenv('DB_PATH', 'otc.db')
 DB_BACKUP_INTERVAL_HOURS = int(os.getenv('DB_BACKUP_INTERVAL_HOURS', '24'))  # 0 disables backups
 DB_BACKUP_KEEP = int(os.getenv('DB_BACKUP_KEEP', '3'))
 
-CURRENT_VERSION = "1.8.5"
+CURRENT_VERSION = "1.9.0"
 
 # Cache
 CACHE_EXPIRATION_TIME = 600  # seconds
@@ -32,6 +32,14 @@ STALE_WHILE_REVALIDATE = 300  # seconds
 RATE_REFRESH_TIMEOUT = 25  # whole refresh, including retries and fallbacks
 RATE_REFRESH_RETRY_INTERVAL = 30  # prevents request storms during outages
 POLLING_CONCURRENCY = max(1, int(os.getenv('POLLING_CONCURRENCY', '100')))
+_polling_shutdown_timeout_raw = os.getenv('POLLING_SHUTDOWN_TIMEOUT', '8').strip()
+_polling_shutdown_timeout_val = float(_polling_shutdown_timeout_raw) if _polling_shutdown_timeout_raw else 0.0
+POLLING_SHUTDOWN_TIMEOUT = _polling_shutdown_timeout_val if _polling_shutdown_timeout_val > 0 else None
+SYNC_BOT_SETTINGS = os.getenv('SYNC_BOT_SETTINGS', 'true').strip().lower() in ('1', 'true', 'yes', 'on')
+ENABLE_WIDGET_CALC = os.getenv('ENABLE_WIDGET_CALC', 'false').strip().lower() in ('1', 'true', 'yes', 'on')
+INLINE_QUERY_PLACEHOLDER = os.getenv('INLINE_QUERY_PLACEHOLDER', '100 USD, 50+50, 100 USD EUR').strip()
+_callback_query_mode_raw = os.getenv('CALLBACK_QUERY_MODE', 'default').strip().lower()
+CALLBACK_QUERY_MODE = _callback_query_mode_raw if _callback_query_mode_raw in ('default', 'auto', 'inline') else 'default'
 MIN_CONVERSION_AMOUNT = float(os.getenv('MIN_CONVERSION_AMOUNT', '0.0001'))
 MAX_CONVERSION_AMOUNT = float(os.getenv('MAX_CONVERSION_AMOUNT', '1000000000000'))
 

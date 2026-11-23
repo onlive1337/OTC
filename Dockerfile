@@ -1,28 +1,9 @@
-# Builder stage
-FROM python:3.14-slim AS builder
-
-WORKDIR /app
-
-RUN apt-get update && apt-get install -y \
-  gcc \
-  g++ \
-  libffi-dev \
-  libssl-dev \
-  libjpeg-dev \
-  zlib1g-dev \
-  && rm -rf /var/lib/apt/lists/*
-
-COPY requirements.txt constraints.txt .
-
-RUN pip install --prefix=/install --no-cache-dir -r requirements.txt
-
-# Final stage
 FROM python:3.14-slim
 
 WORKDIR /app
 
-# Copy installed packages from builder
-COPY --from=builder /install /usr/local
+COPY requirements.txt constraints.txt ./
+RUN pip install --no-cache-dir --only-binary=:all: -r requirements.txt
 
 COPY . .
 

@@ -15,16 +15,18 @@ from config.config import (
     HTTP_CONNECTOR_LIMIT_PER_HOST,
     HTTP_DNS_CACHE_TTL,
     POLLING_CONCURRENCY,
+    POLLING_SHUTDOWN_TIMEOUT,
     RATE_REFRESH_RETRY_INTERVAL,
 )
 from loader import bot, dp, user_data
 from utils.http import set_http_session, close_http_session, safe_bg_task
 from utils.rates import get_exchange_rates, refresh_rates, close_rate_refresh, get_cached_data
-from utils.log_handler import setup_telegram_logging
+from utils.log_handler import close_telegram_logging, setup_telegram_logging
+from utils.bot_setup import sync_bot_settings
 
 from utils.middleware import RateLimitMiddleware, ErrorBoundaryMiddleware
 
-from handlers import general, admin, settings, conversion
+from handlers import admin, conversion, general, inline, settings, widget
 
 logging.basicConfig(
     level=getattr(logging, LOG_LEVEL.upper(), logging.INFO),
@@ -59,6 +61,7 @@ async def _periodic_refresh():
 
 async def on_startup():
     await setup_telegram_logging(bot)
+    await sync_bot_settings(bot)
     session = ClientSession(
         timeout=ClientTimeout(total=HTTP_TOTAL_TIMEOUT, connect=HTTP_CONNECT_TIMEOUT),
         connector=TCPConnector(
@@ -93,6 +96,7 @@ async def on_shutdown():
         await user_data.close()
     except sqlite3.Error:
         logger.exception("Error closing database connection")
+    await close_telegram_logging()
 
 async def main():
     dp.message.middleware(ErrorBoundaryMiddleware())
@@ -104,9 +108,14 @@ async def main():
     dp.inline_query.middleware(ErrorBoundaryMiddleware())
     dp.inline_query.middleware(RateLimitMiddleware(limit=5, window=3.0))
 
+    dp.widget_query.middleware(ErrorBoundaryMiddleware())
+    dp.widget_query.middleware(RateLimitMiddleware(limit=8, window=3.0))
+
     dp.include_router(general.router)
     dp.include_router(admin.router)
     dp.include_router(settings.router)
+    dp.include_router(widget.router)
+    dp.include_router(inline.router)
     dp.include_router(conversion.router)
 
     dp.startup.register(on_startup)
@@ -116,6 +125,7 @@ async def main():
         bot,
         allowed_updates=dp.resolve_used_update_types(),
         tasks_concurrency_limit=POLLING_CONCURRENCY,
+        tasks_shutdown_timeout=POLLING_SHUTDOWN_TIMEOUT,
     )
 
 def run_app():
